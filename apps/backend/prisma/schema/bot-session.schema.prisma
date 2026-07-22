@@ -1,0 +1,16 @@
+model BotSession {
+  chat_id   String  @id
+  state     String  @default("idle")
+  sms_id    String?
+  phone     String?
+  lat       Float?
+  lon       Float?
+  shop_q    String?
+  prod_q    String?
+  cart      String? @db.Text   // JSON: CartItem[]
+  chk       String? @db.Text   // JSON: CheckoutCtx
+
+  updatedAt DateTime @updatedAt
+
+  @@map("bot_session")
+}

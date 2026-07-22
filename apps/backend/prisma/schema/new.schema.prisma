@@ -1,0 +1,14 @@
+model New {
+    id       Int     @id @default(autoincrement())
+    title    String?     @db.Text
+    subtitle String?   @db.Text
+    image    String?
+
+    expired DateTime? 
+
+    createdt    DateTime    @default(now())
+    updatedAt   DateTime    @updatedAt
+    work_status WORK_STATUS @default(WORKING)
+
+    @@map("new")
+}

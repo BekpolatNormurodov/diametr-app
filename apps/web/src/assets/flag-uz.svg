@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20">
+  <!-- Blue stripe -->
+  <rect width="30" height="6.67" fill="#1EB2FF"/>
+  <!-- White stripe -->
+  <rect y="6.67" width="30" height="6.67" fill="#FFFFFF"/>
+  <!-- Green stripe -->
+  <rect y="13.33" width="30" height="6.67" fill="#1EC43C"/>
+  <!-- Blue stripe thin divider lines -->
+  <rect y="6.17" width="30" height="0.5" fill="#E8483A"/>
+  <rect y="13.33" width="30" height="0.5" fill="#E8483A"/>
+  <!-- Crescent moon on blue -->
+  <circle cx="7.5" cy="3.33" r="2.2" fill="#FFFFFF"/>
+  <circle cx="8.5" cy="3.33" r="1.7" fill="#1EB2FF"/>
+  <!-- Stars row 1 -->
+  <text x="11" y="5.2" font-size="2.5" fill="#FFFFFF">★★★</text>
+  <!-- Stars row 2 -->
+  <text x="11" y="4" font-size="2" fill="#FFFFFF">★★★★</text>
+</svg>

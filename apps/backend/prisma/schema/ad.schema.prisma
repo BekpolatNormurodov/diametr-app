@@ -1,0 +1,33 @@
+model Ad {
+    id       Int     @id @default(autoincrement())
+    title    String?
+    subtitle String?
+    image    String?
+
+    expired DateTime?
+
+    shop_id Int?
+    shop    Shop? @relation(fields: [shop_id], references: [id])
+
+    region_id Int?
+    region    Region? @relation(fields: [region_id], references: [id])
+
+
+    product_id Int?
+    product    Product? @relation(fields: [product_id], references: [id])
+
+
+    worker_id Int?
+    worker    Worker? @relation(fields: [worker_id], references: [id])
+
+
+    type AD_TYPE?
+
+    payments Payment[]
+
+    createdt    DateTime    @default(now())
+    updatedAt   DateTime    @updatedAt
+    work_status WORK_STATUS @default(WORKING)
+
+    @@map("ad")
+}

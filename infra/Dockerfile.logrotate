@@ -1,0 +1,11 @@
+FROM alpine:3.20
+
+# tar/gzip + timezone support
+RUN apk add --no-cache gzip tzdata
+
+# Copy our rotate script into Alpine's daily cron directory
+COPY scripts/rotate-nginx-logs.sh /etc/periodic/daily/rotate-logs
+RUN chmod +x /etc/periodic/daily/rotate-logs
+
+# Run crond in foreground, log level 2 (errors only)
+CMD ["crond", "-f", "-l", "2"]

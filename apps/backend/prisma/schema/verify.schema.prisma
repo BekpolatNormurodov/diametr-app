@@ -1,0 +1,29 @@
+model Verify {
+  id String @id @default(uuid())
+  phone  String?
+  code  String?
+  expired DateTime?
+  used Boolean @default(false)
+
+  // Eskiz integratsiya
+  eskiz_id      String?
+  eskiz_status  String?
+  eskiz_error   String?  @db.Text
+  sent_at       DateTime?
+  delivered_at  DateTime?
+
+  createdt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([eskiz_id])
+  @@map("verify")
+}
+
+model EskizToken {
+  id         Int      @id @default(autoincrement())
+  token      String   @db.Text
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  @@map("eskiz_token")
+}

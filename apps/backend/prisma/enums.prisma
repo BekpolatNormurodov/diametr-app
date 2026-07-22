@@ -1,0 +1,81 @@
+enum Role {
+   ADMIN
+   SUPER
+   USER
+   WORKER
+}
+
+
+
+enum WORK_STATUS {
+   WORKING
+   BLOCKED
+   DELETED
+}
+
+
+enum DELIVERY_TYPE {
+   YANDEX
+   MARKET
+   FIXED
+}
+
+enum PRODUCT_TYPE {
+   COLOR
+   WEIGHT
+   LENGTH
+   SIZE
+   COUNTRY
+   LITR
+
+}
+
+enum AD_TYPE {
+   SHOP
+   WORKER
+   REGION
+   PRODUCT
+}
+
+
+
+enum DATE_TYPE {
+   ONCE
+   HOUR
+   DAY 
+   MONTH
+}
+
+enum ORDER_STATUS {
+   STARTED
+   FINISHED
+   CANCELED
+   CONFIRMED
+}
+
+enum ORDER_SOURCE {
+   MOBILE
+   SITE
+   STORE_BOT
+}
+
+
+enum PAYMENT_TYPE {
+   SHOP 
+   WORKER 
+   AD
+}
+
+enum BALANCE_TYPE {
+   TOP_UP_CLICK
+   TOP_UP_PAYME
+   TOP_UP_UZUM
+   TOP_UP_MANUAL
+   SUBSCRIPTION_DEDUCT
+   FREE_TRIAL
+}
+
+enum DISCOUNT_TYPE {
+   PERCENT
+   FIXED
+}

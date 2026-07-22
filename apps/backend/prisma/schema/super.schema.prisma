@@ -1,0 +1,13 @@
+model Super {
+  id    Int     @default(autoincrement()) @id
+  fullname  String?
+  image  String?
+  phone String  @unique
+  password String
+
+  role Role @default(SUPER)
+  createdt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@map("super")
+}

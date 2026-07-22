@@ -1,0 +1,24 @@
+model Payment {
+    id String @id @default(uuid())
+
+    type PAYMENT_TYPE?
+
+    ad_id Int?
+    ad    Ad?  @relation(fields: [ad_id], references: [id])
+
+    worker_id Int?
+    worker    Worker? @relation(fields: [worker_id], references: [id])
+
+    shop_id Int?
+    shop    Shop?  @relation(fields: [shop_id], references: [id])
+
+    amount     Int?
+    start_date DateTime?
+    end_date   DateTime?
+
+    createdt    DateTime    @default(now())
+    updatedAt   DateTime    @updatedAt
+    work_status WORK_STATUS @default(WORKING)
+
+    @@map("payment")
+}
