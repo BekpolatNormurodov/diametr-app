@@ -52,17 +52,17 @@ coverage/
 .packages
 .flutter-plugins
 .flutter-plugins-dependencies
-apps/mobile/build/
-apps/mobile/android/.gradle/
-apps/mobile/android/local.properties
-apps/mobile/android/app/debug/
-apps/mobile/android/app/profile/
-apps/mobile/android/app/release/
-apps/mobile/ios/Pods/
-apps/mobile/ios/.symlinks/
-apps/mobile/ios/Flutter/Flutter.framework
-apps/mobile/ios/Flutter/Generated.xcconfig
-apps/mobile/ios/Flutter/flutter_export_environment.sh
+apps/diametr_mobile/build/
+apps/diametr_mobile/android/.gradle/
+apps/diametr_mobile/android/local.properties
+apps/diametr_mobile/android/app/debug/
+apps/diametr_mobile/android/app/profile/
+apps/diametr_mobile/android/app/release/
+apps/diametr_mobile/ios/Pods/
+apps/diametr_mobile/ios/.symlinks/
+apps/diametr_mobile/ios/Flutter/Flutter.framework
+apps/diametr_mobile/ios/Flutter/Generated.xcconfig
+apps/diametr_mobile/ios/Flutter/flutter_export_environment.sh
 *.iml
 
 # ── Editors / OS ─────────────────────────────────────────────────────────────

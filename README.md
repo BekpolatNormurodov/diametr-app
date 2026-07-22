@@ -13,7 +13,7 @@ apps/
   web/          Create React App             -> diametr.uz
   dashboard/    Vite + React (super admin)   -> dashboard.diametr.uz, admin.diametr.uz
   shop-admin/   Vite + React (shop owners)   -> shop.diametr.uz
-  mobile/       Flutter (com.diametr.diametr_mobile, Play Store)
+  diametr_mobile/  Flutter (com.diametr.diametr_mobile, Play Store)
 infra/
   nginx/        reverse proxy + TLS + static image serving
   webpgen/      WebP companion generator (see "Images" below)
@@ -27,7 +27,7 @@ Runtime data — `logs/`, `mysql_data/`, `certbot/`, `apps/backend/public/*`,
 
 ## Mobile app
 
-`apps/mobile` is the published app. Identify the version from `pubspec.yaml`
+`apps/diametr_mobile` is the published app. Identify the version from `pubspec.yaml`
 (`version:`) and `android/local.properties` — **not** from the directory name.
 Three stale copies with the same `applicationId` existed before consolidation and
 were dropped; this is the only source of truth.
@@ -36,8 +36,8 @@ Building a release needs two files that are **not** in this repo and must be
 restored from a secure backup:
 
 ```
-apps/mobile/android/app/app.jks
-apps/mobile/android/key.properties
+apps/diametr_mobile/android/app/app.jks
+apps/diametr_mobile/android/key.properties
 ```
 
 Lose `app.jks` and you can no longer ship updates to the existing Play Store
