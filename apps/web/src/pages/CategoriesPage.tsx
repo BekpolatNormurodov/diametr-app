@@ -155,7 +155,7 @@ export default function CategoriesPage() {
             </p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
-              {filtered.map((cat) => {
+              {filtered.map((cat, i) => {
                 const count = productCounts[cat.id] || 0
                 return (
                   <div
@@ -168,6 +168,11 @@ export default function CategoriesPage() {
                         <img
                           src={`${BASE_URL}/static/categories/${cat.image}`}
                           alt={getName(cat)}
+                          width={228}
+                          height={144}
+                          loading={i < 4 ? 'eager' : 'lazy'}
+                          fetchPriority={i < 4 ? 'high' : undefined}
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                         />

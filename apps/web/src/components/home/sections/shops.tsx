@@ -160,6 +160,10 @@ export default function Shops() {
                     <img
                       src={`${BASE_URL}/static/shops/${shop.image}`}
                       alt={shop.name}
+                      width={384}
+                      height={192}
+                      decoding="async"
+                      loading="lazy"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                     />

@@ -299,6 +299,11 @@ export default function ShopsPage() {
                     <img
                       src={`${BASE_URL}/static/shops/${shop.image}`}
                       alt={shop.name}
+                      width={286}
+                      height={176}
+                      loading={i < 4 ? 'eager' : 'lazy'}
+                      fetchPriority={i < 4 ? 'high' : undefined}
+                      decoding="async"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                     />

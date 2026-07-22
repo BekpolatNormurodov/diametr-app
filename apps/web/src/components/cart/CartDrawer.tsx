@@ -517,7 +517,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                         </span>
                       )}
                       <div className="rounded-xl overflow-hidden flex items-center justify-center h-9">
-                        <img src="/images/payme.png" alt="Payme" className="h-8 w-auto object-contain drop-shadow-sm" />
+                        <img src="/images/payme.png" alt="Payme" width={32} height={32} decoding="async" className="h-8 w-auto object-contain drop-shadow-sm" />
                       </div>
                       <span className={`text-[11px] font-bold leading-none ${onlineMethod === 'payme' ? 'text-[#00BFFF]' : 'text-slate-500 dark:text-slate-400'}`}>Payme</span>
                     </button>
@@ -533,7 +533,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                         </span>
                       )}
                       <div className="rounded-xl overflow-hidden flex items-center justify-center h-9">
-                        <img src="/images/click.png" alt="Click" className="h-8 w-auto object-contain drop-shadow-sm" />
+                        <img src="/images/click.png" alt="Click" width={32} height={32} decoding="async" className="h-8 w-auto object-contain drop-shadow-sm" />
                       </div>
                       <span className={`text-[11px] font-bold leading-none ${onlineMethod === 'click' ? 'text-[#0056FD]' : 'text-slate-500 dark:text-slate-400'}`}>Click</span>
                     </button>
@@ -549,7 +549,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                         </span>
                       )}
                       <div className="rounded-xl overflow-hidden flex items-center justify-center h-9">
-                        <img src="/images/uzum.png" alt="Uzum" className="h-8 w-auto object-contain drop-shadow-sm" />
+                        <img src="/images/uzum.png" alt="Uzum" width={32} height={32} decoding="async" className="h-8 w-auto object-contain drop-shadow-sm" />
                       </div>
                       <span className={`text-[11px] font-bold leading-none ${onlineMethod === 'uzum' ? 'text-[#7000FF]' : 'text-slate-500 dark:text-slate-400'}`}>Uzum</span>
                     </button>
@@ -583,6 +583,10 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                         <img
                           src={`${BASE_URL}/static/products/${item.productImage}`}
                           alt={item.productName}
+                          width={64}
+                          height={64}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover"
                           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                         />

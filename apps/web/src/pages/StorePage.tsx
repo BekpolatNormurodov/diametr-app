@@ -467,10 +467,10 @@ export default function StorePage() {
                     <p className="text-slate-400 text-sm py-4">{lang === 'ru' ? 'Нет совпадений' : 'Topilmadi'}</p>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                      {filteredProducts.map(prod => (
+                      {filteredProducts.map((prod, i) => (
                         <div key={prod.id} onClick={() => prod.category?.id && navigate(`/category/${prod.category.id}`)} className="group flex flex-col bg-white dark:bg-slate-800 border border-primary/20 dark:border-slate-700 rounded-2xl overflow-hidden hover:border-primary hover:shadow-lg hover:shadow-primary/10 transition-all duration-200 cursor-pointer hover:-translate-y-0.5">
                           <div className="relative h-28 sm:h-32 bg-gradient-to-br from-primary/5 to-slate-100 dark:from-primary/10 dark:to-slate-700 overflow-hidden">
-                            {prod.image ? (<img src={`${BASE_URL}/static/products/${prod.image}`} alt={getProductName(prod)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={e => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />) : (<div className="w-full h-full flex items-center justify-center"><span className="text-4xl">📦</span></div>)}
+                            {prod.image ? (<img src={`${BASE_URL}/static/products/${prod.image}`} alt={getProductName(prod)} width={288} height={128} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={e => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />) : (<div className="w-full h-full flex items-center justify-center"><span className="text-4xl">📦</span></div>)}
                           </div>
                           <div className="px-3 py-2.5 flex flex-col gap-0.5">
                             <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 leading-snug group-hover:text-primary transition-colors line-clamp-2">{getProductName(prod)}</span>
@@ -517,7 +517,7 @@ export default function StorePage() {
               </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {filteredShops.map(shop => (
+                {filteredShops.map((shop, i) => (
                   <div
                     key={shop.id}
                     onClick={() => navigate(`/shop/${shop.id}`)}
@@ -529,6 +529,11 @@ export default function StorePage() {
                         <img
                           src={`${BASE_URL}/static/shops/${shop.image}`}
                           alt={shop.name}
+                          width={384}
+                          height={160}
+                          loading={i < 4 ? 'eager' : 'lazy'}
+                          fetchPriority={i < 4 ? 'high' : undefined}
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={e => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
                         />

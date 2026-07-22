@@ -93,7 +93,7 @@ export default function CategoryGrid() {
           </p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
-            {categories.slice(0, 8).map((cat) => {
+            {categories.slice(0, 8).map((cat, i) => {
               const count = productCounts[cat.id] || 0
               return (
               <div
@@ -104,10 +104,17 @@ export default function CategoryGrid() {
               >
                 {/* Image area */}
                 <div className="relative h-32 sm:h-36 bg-gradient-to-br from-primary/5 to-slate-100 dark:from-primary/10 dark:to-slate-700 overflow-hidden">
+                  {/* Always lazy: this grid sits below the navbar, the banner slider
+                      and the full-height hero — roughly 1000px down the page. Loading
+                      it eagerly would make it compete with the hero for bandwidth. */}
                   {cat.image ? (
                     <img
                       src={`${BASE_URL}/static/categories/${cat.image}`}
                       alt={getName(cat)}
+                      width={288}
+                      height={144}
+                      decoding="async"
+                      loading="lazy"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                     />

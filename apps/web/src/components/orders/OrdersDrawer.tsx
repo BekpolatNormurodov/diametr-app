@@ -179,6 +179,10 @@ export default function OrdersDrawer({ open, onClose }: Props) {
                           <img
                             src={`${BASE_URL}/static/shops/${order.shop.image}`}
                             alt={order.shop.name}
+                            width={36}
+                            height={36}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover"
                             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                           />

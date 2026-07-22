@@ -171,6 +171,10 @@ export default function ProductMarketplace() {
                     <img
                       src={`${BASE_URL}/static/products/${p.image}`}
                       alt={getName(p)}
+                      width={288}
+                      height={176}
+                      decoding="async"
+                      loading="lazy"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       onError={e => { (e.currentTarget as HTMLImageElement).src = '' ; (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                     />

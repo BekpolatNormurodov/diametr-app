@@ -61,6 +61,10 @@ export default function Main() {
             <img
               src={phone}
               alt="Diametr App"
+              width={256}
+              height={504}
+              decoding="async"
+              fetchPriority="high"
               className="relative z-10 w-56 sm:w-64 drop-shadow-2xl"
               style={{ display: 'block' }}
             />
