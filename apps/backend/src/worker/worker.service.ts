@@ -7,6 +7,7 @@ import {
 
 import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
 import { generatePassword } from 'src/_utils/number.gen';
+import { hashPassword } from 'src/_utils/password';
 import { CreateWorkerDto } from './dto/create-worker.dto';
 import { UpdateWorkerDto } from './dto/update-worker.dto';
 
@@ -33,15 +34,15 @@ export class WorkerService {
       throw new NotFoundException('service not found');
     }
 
-    let password = generatePassword({
-      length: 8,
-    });
-    data.password = password;
+    // Store only the bcrypt hash; return the plain value once so the dashboard
+    // can show it to the worker. Not readable again — forgotten means reset.
+    const plainPassword = generatePassword({ length: 8 });
+    data.password = await hashPassword(plainPassword);
 
     worker = await this.prisma.worker.create({
       data: data,
     });
-    return worker;
+    return { ...worker, password: plainPassword };
   }
 
   async findAll() {

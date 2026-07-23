@@ -8,6 +8,7 @@ import { CreateAdminDto } from './dto/create-admin.dto';
 import { UpdateAdminDto } from './dto/update-admin.dto';
 import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
 import { generatePassword } from 'src/_utils/number.gen';
+import { hashPassword } from 'src/_utils/password';
 
 @Injectable()
 export class AdminService {
@@ -31,15 +32,16 @@ export class AdminService {
       throw new NotFoundException('Shop not found');
     }
 
-    let password = generatePassword({
-      length: 8,
-    });
-    data.password = password;
+    // Generate a one-time plain password, store only its bcrypt hash, and return
+    // the plain value ONCE so the dashboard can show it to the shop owner. It is
+    // never readable again — a forgotten password is reset, not looked up.
+    const plainPassword = generatePassword({ length: 8 });
+    data.password = await hashPassword(plainPassword);
 
     admin = await this.prisma.admin.create({
       data: data,
     });
-    return admin;
+    return { ...admin, password: plainPassword };
   }
 
   async findAll() {

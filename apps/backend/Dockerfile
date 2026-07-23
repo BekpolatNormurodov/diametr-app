@@ -56,22 +56,20 @@ RUN apk add --no-cache \
 COPY --from=builder /app/dist          ./dist
 COPY --from=builder /app/node_modules  ./node_modules
 COPY --from=builder /app/prisma        ./prisma
-COPY --from=builder /app/public        ./public
+RUN mkdir -p ./public
 COPY package*.json ./
 # tsconfig needed so ts-node can run seed scripts inside the container
 COPY tsconfig.json tsconfig.build.json ./
 
 # ── Telegram bot runtime environment ─────────────────────────────────
-# TELEGRAM_BOT_TOKEN    — BotFather dan olingan token
-# TELEGRAM_CHAT_IDS     — bildirishnoma VA command huquqi bor chat IDlar
-#                         (vergul bilan ajratilgan: 123456789,-100987654321)
-# BACKEND_URL           — webhook manzili (https://api.diametr.uz)
-# STORE_BOT_TOKEN       — do'kon boti tokeni
-# STORE_BOT_WEBHOOK_URL — do'kon boti webhook manzili
-#
-# Bu qiymatlar SHU YERDA berilmaydi. Dockerfile'dagi ENV image qatlamiga
-# yoziladi va image'ga kirgan har kim uni o'qiy oladi. Barchasi
-# docker-compose.yaml orqali .env dan uzatiladi — namuna: .env.example
+# TELEGRAM_BOT_TOKEN — BotFather dan olingan token
+# TELEGRAM_CHAT_IDS  — bildirishnoma VA command huquqi bor chat IDlar
+#                      (vergul bilan ajratilgan: 123456789,-100987654321)
+# BACKEND_URL        — webhook manzili (https://api.diametr.uz)
+# (haqiqiy qiymatlar docker-compose.yml yoki .env orqali beriladi)
+# These values are NOT set here. An ENV instruction is baked into the image
+# layers and readable by anyone who can pull the image. They come from
+# docker-compose (which reads .env). See .env.example.
 
 
 # Startup script:

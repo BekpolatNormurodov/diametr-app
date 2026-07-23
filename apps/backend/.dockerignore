@@ -7,3 +7,5 @@ logs
 .env
 coverage
 test
+public
+prisma/seed.ts
