@@ -229,11 +229,33 @@ class _ProductsTabState extends State<_ProductsTab> {
       builder: (context, state) {
         if (state is ProductAllWaitingState) return _shimmerGrid(context);
         if (state is ProductAllSuccessState) {
-          var all = (state.data ?? [])
-              .where((e) =>
-                  e["name"]?.toString().toLowerCase().contains(widget.query) ??
-                  false)
-              .toList();
+          final q = widget.query; // already lower-cased by the parent
+          bool matches(dynamic v) =>
+              v != null && v.toString().toLowerCase().contains(q);
+          // Search the product's own names AND its variant names. A product's
+          // display name lives in name_uz/name_ru (plain `name` is usually null),
+          // and shoppers search by variant too — e.g. "seyf" is a variant of
+          // "Xavfsizlik tizimlari", so matching only the product name found nothing.
+          var all = (state.data ?? []).where((e) {
+            if (matches(e["name"]) ||
+                matches(e["name_uz"]) ||
+                matches(e["name_ru"]) ||
+                matches(e["desc"])) {
+              return true;
+            }
+            final items = e["items"];
+            if (items is List) {
+              for (final it in items) {
+                if (matches(it["name"]) ||
+                    matches(it["name_uz"]) ||
+                    matches(it["name_ru"]) ||
+                    matches(it["desc"])) {
+                  return true;
+                }
+              }
+            }
+            return false;
+          }).toList();
 
           if (all.isEmpty) return _empty(context);
 
@@ -953,9 +975,14 @@ class _CategoriesTab extends StatelessWidget {
       builder: (context, state) {
         if (state is CategoryAllWaitingState) return _shimmerList(context);
         if (state is CategoryAllSuccessState) {
+          bool matches(dynamic v) =>
+              v != null && v.toString().toLowerCase().contains(query);
+          // Category display name is in name_uz/name_ru, not `name`.
           final data = (state.data ?? [])
               .where((e) =>
-                  e["name"]?.toString().toLowerCase().contains(query) ?? false)
+                  matches(e["name"]) ||
+                  matches(e["name_uz"]) ||
+                  matches(e["name_ru"]))
               .toList();
           if (data.isEmpty) return _empty(context);
           return ListView.builder(

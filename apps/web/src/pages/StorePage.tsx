@@ -248,11 +248,14 @@ export default function StorePage() {
   const filteredProducts = useMemo(() => {
     if (!search.trim()) return []
     const q = search.toLowerCase()
-    let list = products.filter(p =>
-      (p.name_uz || '').toLowerCase().includes(q) ||
-      (p.name_ru || '').toLowerCase().includes(q) ||
-      (p.name || '').toLowerCase().includes(q)
-    )
+    let list = products.filter(p => {
+      // product names in both languages AND variant names (e.g. "seyf")
+      const hay = [
+        p.name_uz, p.name_ru, p.name,
+        ...(((p as any).items ?? []) as any[]).flatMap(it => [it?.name, it?.name_uz, it?.name_ru]),
+      ]
+      return hay.some(s => (s || '').toLowerCase().includes(q))
+    })
     if (filterRegion) {
       const shopIds = new Set(shops.filter(s => s.region?.name === filterRegion).map(s => s.id))
       list = list.filter(p => !p.shop || shopIds.has(p.shop.id))

@@ -61,29 +61,15 @@ export class AuthService {
       throw new NotFoundException('Incorrect Credentials');
     }
 
-    // Legacy plain-text row: rewrite it as a hash now that we know the password.
-    // Failure here must not block the login.
-    if (needsUpgrade) {
-      try {
-        const hashed = await hashPassword(data.password);
-        const where = { id: user.id };
-        const patch = { password: hashed };
-        if (table === 'worker') {
-          await this.prisma.worker.update({ where, data: patch });
-        } else if (table === 'admin') {
-          await this.prisma.admin.update({ where, data: patch });
-        } else {
-          await this.prisma.super.update({ where, data: patch });
-        }
-        this.logger.log(`upgraded ${table}#${user.id} password to bcrypt`);
-      } catch (e) {
-        this.logger.error(`password upgrade failed for ${table}#${user.id}`, e);
-      }
-    }
+    // NOTE: passwords for admin/worker are intentionally stored in plain text so
+    // a shop owner can read and share them from the panel. `verifyPassword`
+    // still accepts a bcrypt hash too (the super account keeps a hash), so both
+    // work. We deliberately do NOT auto-upgrade plain text to a hash here —
+    // otherwise the password would stop being viewable after the first login.
+    void needsUpgrade;
 
     const payload = { user_id: user.id, role: user.role };
     return {
-      // Never send the stored password (or its hash) back to the client.
       user: withoutPassword(user),
       access_token: await this.jwtService.signAsync(payload),
       message: 'Logined successfully',

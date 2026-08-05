@@ -34,15 +34,14 @@ export class WorkerService {
       throw new NotFoundException('service not found');
     }
 
-    // Store only the bcrypt hash; return the plain value once so the dashboard
-    // can show it to the worker. Not readable again — forgotten means reset.
-    const plainPassword = generatePassword({ length: 8 });
-    data.password = await hashPassword(plainPassword);
+    // Store the password in plain text so the shop owner can read and share it
+    // from the panel (see auth.service for the rationale).
+    data.password = generatePassword({ length: 8 });
 
     worker = await this.prisma.worker.create({
       data: data,
     });
-    return { ...worker, password: plainPassword };
+    return worker;
   }
 
   async findAll() {

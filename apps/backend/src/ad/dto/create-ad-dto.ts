@@ -26,6 +26,12 @@ export class CreateAdDto {
   @MinLength(4)
   title: string;
 
+  // Banner image filename returned by POST /ad/upload-image. Optional so an ad
+  // can be created without a banner, but the dashboard sends it.
+  @IsOptional()
+  @IsString()
+  image?: string;
+
   @IsOptional()
   @IsString()
   @MinLength(4)
@@ -46,26 +52,24 @@ export class CreateAdDto {
   @IsString()
   type: AD_TYPE;
 
-  @ValidateIf((o) => o.type === AD_TYPE.SHOP)
-  @IsNotEmpty({ message: 'shop_id is required when type is SHOP' })
+  // Link targets are OPTIONAL: a banner may be static (no target) or link to a
+  // shop / region / worker / product. When provided, the id must be valid.
+  @IsOptional()
   @IsNumber()
   @Min(1)
   shop_id?: number;
 
-  @ValidateIf((o) => o.type === AD_TYPE.REGION)
-  @IsNotEmpty({ message: 'region_id is required when type is REGION' })
+  @IsOptional()
   @IsNumber()
   @Min(1)
   region_id?: number;
 
-  @ValidateIf((o) => o.type === AD_TYPE.WORKER)
-  @IsNotEmpty({ message: 'worker_id is required when type is WORKER' })
+  @IsOptional()
   @IsNumber()
   @Min(1)
   worker_id?: number;
 
-  @ValidateIf((o) => o.type === AD_TYPE.PRODUCT)
-  @IsNotEmpty({ message: 'product_id is required when type is PRODUCT' })
+  @IsOptional()
   @IsNumber()
   @Min(1)
   product_id?: number;

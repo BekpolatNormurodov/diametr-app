@@ -15,6 +15,7 @@ interface Product {
   image?: string
   desc?: string
   type?: string
+  items?: Array<{ name?: string; name_uz?: string; name_ru?: string; desc?: string }>
   category?: { id?: number; name_uz?: string; name_ru?: string; name?: string }
 }
 
@@ -69,7 +70,14 @@ export default function ProductMarketplace() {
 
   const filtered = products.filter(p => {
     const matchCat = activeCatId === null || p.category?.id === activeCatId
-    const matchSearch = getName(p).toLowerCase().includes(search.toLowerCase())
+    const q = search.toLowerCase()
+    // Match the product's names AND its variant names — e.g. "seyf" is a variant
+    // of "Xavfsizlik tizimlari", so searching the product name alone missed it.
+    const haystack = [
+      p.name, p.name_uz, p.name_ru, p.desc,
+      ...(p.items ?? []).flatMap(it => [it.name, it.name_uz, it.name_ru, it.desc]),
+    ]
+    const matchSearch = q === '' || haystack.some(s => s?.toLowerCase().includes(q))
     return matchCat && matchSearch
   })
 

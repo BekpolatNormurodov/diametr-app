@@ -260,8 +260,16 @@ export default function ShopDetailPage() {
   }, [categories, lang, measureChips])
 
   const filtered = products.filter(p => {
-    const name = p.item?.name ?? ''
-    if (!name.toLowerCase().includes(search.toLowerCase())) return false
+    const q = search.toLowerCase()
+    if (q) {
+      const it: any = p.item
+      // variant names AND the parent product's names, both languages
+      const hay = [
+        it?.name, it?.name_uz, it?.name_ru, it?.desc,
+        it?.product?.name_uz, it?.product?.name_ru, it?.product?.name,
+      ]
+      if (!hay.some(s => (s || '').toLowerCase().includes(q))) return false
+    }
     if (activeCatId !== null && p.category?.id !== activeCatId) return false
     const price = p.price ?? 0
     if (minPrice !== '' && price < Number(minPrice.replace(/\s/g, ''))) return false

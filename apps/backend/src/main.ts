@@ -1,7 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { ConsoleLogger, Logger, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConsoleLogger,
+  Logger,
+  ValidationPipe,
+} from '@nestjs/common';
 import { GlobalExceptionFilter } from './_middlewares/error-handler';
 import { join } from 'path';
 import { ResponseLoggingInterceptor } from './_middlewares/reponse-logging-handler';
@@ -47,6 +52,18 @@ async function main() {
       whitelist: true,
       transformOptions: {
         enableImplicitConversion: true,
+      },
+      // Turn class-validator failures into a structured payload the exception
+      // filter can localize. We keep the field, the failed constraint (e.g.
+      // "min"), and any numeric args parsed from the raw English message.
+      exceptionFactory: (errors) => {
+        const validation = errors.map((e) => {
+          const constraint = Object.keys(e.constraints ?? {})[0] ?? 'invalid';
+          const raw = e.constraints?.[constraint] ?? '';
+          const args = raw.match(/-?\d+/g) ?? [];
+          return { field: e.property, constraint, args };
+        });
+        return new BadRequestException({ validation });
       },
     }),
   );

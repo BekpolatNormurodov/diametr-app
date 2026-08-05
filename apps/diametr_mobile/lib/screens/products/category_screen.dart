@@ -44,9 +44,30 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   List _filtered(List data) {
     if (_query.isEmpty) return data;
+    bool matches(dynamic v) =>
+        v != null && v.toString().toLowerCase().contains(_query);
     return data.where((c) {
-      final name = _localizedName(c as Map).toLowerCase();
-      return name.contains(_query);
+      final m = c as Map;
+      // Match the product's own names AND its variant names — a shopper can
+      // search by a variant (e.g. "seyf") that is not the product's own name.
+      if (matches(m['name']) ||
+          matches(m['name_uz']) ||
+          matches(m['name_ru']) ||
+          matches(m['desc'])) {
+        return true;
+      }
+      final items = m['items'];
+      if (items is List) {
+        for (final it in items) {
+          if (matches(it['name']) ||
+              matches(it['name_uz']) ||
+              matches(it['name_ru']) ||
+              matches(it['desc'])) {
+            return true;
+          }
+        }
+      }
+      return false;
     }).toList();
   }
 

@@ -153,12 +153,31 @@ class _MarketScreenState extends State<MarketScreen> {
         : allList
             .where((p) => p['category_id'] == _selectedCategoryId)
             .toList();
+    bool matches(dynamic v) =>
+        v != null && v.toString().toLowerCase().contains(_query);
     final List filtered = _query.isEmpty
         ? catFiltered
-        : catFiltered
-            .where((p) =>
-                (p['name']?.toString() ?? '').toLowerCase().contains(_query))
-            .toList();
+        : catFiltered.where((p) {
+            // Match names in either language AND variant names (e.g. "seyf").
+            if (matches(p['name']) ||
+                matches(p['name_uz']) ||
+                matches(p['name_ru']) ||
+                matches(p['desc'])) {
+              return true;
+            }
+            final items = p['items'];
+            if (items is List) {
+              for (final it in items) {
+                if (matches(it['name']) ||
+                    matches(it['name_uz']) ||
+                    matches(it['name_ru']) ||
+                    matches(it['desc'])) {
+                  return true;
+                }
+              }
+            }
+            return false;
+          }).toList();
     final List displayed = filtered.take(_visibleCount).toList();
 
     // collect unique categories from all products

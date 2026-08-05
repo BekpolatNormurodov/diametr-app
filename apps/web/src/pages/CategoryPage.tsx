@@ -303,6 +303,8 @@ export default function CategoryPage() {
       const haystack = [
         p.name_uz, p.name_ru, p.name, p.desc,
         cat?.name_uz, cat?.name_ru, cat?.name,
+        // variant names too — a shopper may search by a variant (e.g. "seyf")
+        ...(p.items ?? []).flatMap((it: any) => [it?.name, it?.name_uz, it?.name_ru, it?.desc]),
       ]
         .filter(Boolean)
         .join(' ')

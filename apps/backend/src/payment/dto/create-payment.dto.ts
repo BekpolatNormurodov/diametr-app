@@ -22,9 +22,12 @@ import { addHours, parse } from 'date-fns';
 // import { PaymentTypeConstraint } from './validations/payment-type-validation';
 
 export class CreatePaymentDto {
+  // 0 is a valid amount: a "Bepul" (free) subscription costs nothing. Paid
+  // tariffs are chosen from fixed buttons (100k+), so there is no risk of a
+  // stray tiny amount — Min(1000) wrongly rejected the free plan.
   @IsNotEmpty()
   @IsNumber()
-  @Min(1000)
+  @Min(0)
   amount: number;
 
   @Transform(({ value }) => addHours(parse(value, 'yyyy-MM-dd', new Date()), 5))

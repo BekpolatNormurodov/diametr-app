@@ -4,6 +4,7 @@ import 'package:stroymarket/bloc/news/news_state.dart';
 import 'package:stroymarket/bloc/orderAll/orderAll_bloc.dart';
 import 'package:stroymarket/bloc/orderAll/orderAll_state.dart';
 import 'package:stroymarket/export_files.dart';
+import 'package:stroymarket/services/update/app_update_service.dart';
 import 'package:stroymarket/manager/10_services_manager.dart';
 import 'package:stroymarket/manager/5_product_manager.dart';
 import 'package:stroymarket/manager/3_order_manager.dart';
@@ -48,6 +49,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    // Ask Google Play whether a newer version exists and, if so, run Play's
+    // own update flow. No-op on iOS / debug builds. See AppUpdateService.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppUpdateService.checkAndUpdate();
+    });
     OrderManager.getAll(context);
     CategoryManager.getAll(context);
     ShopManager.getAll(context);

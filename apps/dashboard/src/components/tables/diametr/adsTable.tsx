@@ -7,12 +7,13 @@ import TableToolbar from "./TableToolbar";
 import Badge from "../../ui/badge/Badge";
 import Button from "../../ui/button/Button";
 import { DeleteIcon, EditIcon, DownloadIcon } from "../../../icons";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useModal } from "../../../hooks/useModal";
 import Input from "../../form/input/InputField";
 import Label from "../../form/Label";
 import { Modal } from "../../ui/modal";
 import Select from "../../form/Select";
+import ImageField, { ImageFieldResult } from "../../common/ImageField";
 import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
@@ -39,7 +40,17 @@ const typeOptions = [
   { value: "REGION", label: "Region (REGION)" },
   { value: "PRODUCT", label: "Mahsulot (PRODUCT)" },
 ];
-const emptyForm = { title: "", subtitle: "", expired: "", type: "SHOP" };
+// targetId = the id of the object the banner links to (its meaning depends on
+// `type`: SHOP→shop, PRODUCT→product, WORKER→worker, REGION→region).
+const emptyForm = { title: "", subtitle: "", expired: "", type: "SHOP", targetId: "" };
+
+// Which type links to which endpoint + how to label each option.
+const TARGET_CONFIG: Record<string, { endpoint: string; label: (o: any) => string; heading: string }> = {
+  SHOP: { endpoint: "/shop/all", heading: "Do'kon", label: (o) => o.name ?? o.name_uz ?? `#${o.id}` },
+  PRODUCT: { endpoint: "/product/all", heading: "Mahsulot", label: (o) => o.name_uz ?? o.name_ru ?? o.name ?? `#${o.id}` },
+  WORKER: { endpoint: "/worker/all", heading: "Ishchi", label: (o) => o.name ?? o.fullname ?? o.phone ?? `#${o.id}` },
+  REGION: { endpoint: "/region/all", heading: "Hudud", label: (o) => o.name_uz ?? o.name_ru ?? o.name ?? `#${o.id}` },
+};
 
 export default function AdsTable({ data, onRefetch }: { data: AdItemProps[]; onRefetch: () => void }) {
   const [tableData, setTableData] = useState(data);
@@ -50,6 +61,26 @@ export default function AdsTable({ data, onRefetch }: { data: AdItemProps[]; onR
   const [optionValue, setOptionValue] = useState("10");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const imageResultRef = useRef<ImageFieldResult | null>(null);
+  const imgKey = useRef(0);
+  const staticUrl = import.meta.env.VITE_STATIC_PATH ?? "";
+  // Link-target lists, fetched lazily per type and cached.
+  const [targetOptions, setTargetOptions] = useState<Record<string, any[]>>({});
+  const [targetLoading, setTargetLoading] = useState(false);
+
+  const loadTargets = async (type: string) => {
+    if (!TARGET_CONFIG[type] || targetOptions[type]) return;
+    setTargetLoading(true);
+    try {
+      const res = await axiosClient.get(TARGET_CONFIG[type].endpoint);
+      const list = res.data?.data ?? res.data ?? [];
+      setTargetOptions((prev) => ({ ...prev, [type]: Array.isArray(list) ? list : [] }));
+    } catch {
+      setTargetOptions((prev) => ({ ...prev, [type]: [] }));
+    } finally {
+      setTargetLoading(false);
+    }
+  };
 
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
@@ -60,23 +91,65 @@ export default function AdsTable({ data, onRefetch }: { data: AdItemProps[]; onR
 
   const openEdit = (item: AdItemProps) => {
     setEditItem(item);
+    const t = item.type ?? "SHOP";
+    const it: any = item;
+    const tid =
+      t === "SHOP" ? it.shop_id
+      : t === "PRODUCT" ? it.product_id
+      : t === "WORKER" ? it.worker_id
+      : t === "REGION" ? it.region_id
+      : null;
     setForm({
       title: item.title,
       subtitle: item.subtitle ?? "",
       expired: item.expired ? item.expired.split("T")[0] : "",
-      type: item.type ?? "SHOP",
+      type: t,
+      targetId: tid != null ? String(tid) : "",
     });
+    loadTargets(t);
+    imageResultRef.current = null;
+    imgKey.current += 1;
     openModal();
+  };
+
+  // When the type changes in the form, fetch that type's options.
+  const onTypeChange = (v: string) => {
+    setForm((f) => ({ ...f, type: v, targetId: "" }));
+    loadTargets(v);
   };
 
   const handleSave = async () => {
     if (!form.title) { toast.error("Sarlavha kiritish shart"); return; }
     setSaving(true);
     try {
-      const payload = { title: form.title, subtitle: form.subtitle, expired: form.expired, type: form.type };
+      // Upload the banner image first (if a new one was picked), then send its
+      // filename with the ad. Reklama = banner, so the image matters most here.
+      let imageFilename: string | undefined;
+      const imgResult = imageResultRef.current;
+      if (imgResult?.mode === "upload" && imgResult.file) {
+        const fd = new FormData();
+        fd.append("image", imgResult.file);
+        const res = await axiosClient.post("/ad/upload-image", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        imageFilename = res.data?.data?.image ?? res.data?.image;
+      } else if (imgResult?.mode === "url" && imgResult.url) {
+        imageFilename = imgResult.url;
+      }
+      const payload: any = { title: form.title, subtitle: form.subtitle, expired: form.expired, type: form.type };
+      if (imageFilename) payload.image = imageFilename;
+      // Link target: the picked id goes into the field matching the type.
+      if (form.targetId) {
+        const idNum = Number(form.targetId);
+        if (form.type === "SHOP") payload.shop_id = idNum;
+        else if (form.type === "PRODUCT") payload.product_id = idNum;
+        else if (form.type === "WORKER") payload.worker_id = idNum;
+        else if (form.type === "REGION") payload.region_id = idNum;
+      }
       if (editItem) {
         await axiosClient.put(`/ad/${editItem.id}`, payload);
         toast.success("Reklama yangilandi");
+      } else {
+        await axiosClient.post(`/ad`, payload);
+        toast.success("Reklama qo'shildi");
       }
       onRefetch(); closeModal();
     } catch (e: any) {
@@ -177,7 +250,34 @@ export default function AdsTable({ data, onRefetch }: { data: AdItemProps[]; onR
             </div>
             <div>
               <Label>Tur</Label>
-              <Select options={typeOptions} defaultValue={form.type} onChange={(v) => setForm({ ...form, type: v })} />
+              <Select options={typeOptions} defaultValue={form.type} onChange={onTypeChange} />
+            </div>
+            <div>
+              <Label>{TARGET_CONFIG[form.type]?.heading ?? "Manzil"} — banner bosilganda shu sahifaga o'tadi</Label>
+              <select
+                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                value={form.targetId}
+                onChange={(e) => setForm({ ...form, targetId: e.target.value })}
+              >
+                <option value="">— Tanlanmagan (statik banner) —</option>
+                {targetLoading && !targetOptions[form.type] ? (
+                  <option disabled>Yuklanmoqda…</option>
+                ) : null}
+                {(targetOptions[form.type] ?? []).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {TARGET_CONFIG[form.type]?.label(o) ?? `#${o.id}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Banner rasmi</Label>
+              <ImageField
+                key={imgKey.current}
+                label="Reklama uchun rasm"
+                existingUrl={editItem?.image ? `${staticUrl}/static/ads/${editItem.image}` : undefined}
+                onChange={(r) => { imageResultRef.current = r; }}
+              />
             </div>
           </div>
           <div className="flex items-center gap-3 px-2 mt-6 justify-end">

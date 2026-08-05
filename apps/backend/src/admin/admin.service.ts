@@ -32,16 +32,14 @@ export class AdminService {
       throw new NotFoundException('Shop not found');
     }
 
-    // Generate a one-time plain password, store only its bcrypt hash, and return
-    // the plain value ONCE so the dashboard can show it to the shop owner. It is
-    // never readable again — a forgotten password is reset, not looked up.
-    const plainPassword = generatePassword({ length: 8 });
-    data.password = await hashPassword(plainPassword);
+    // Store the password in plain text so the shop owner can read and share it
+    // from the panel (see auth.service for the rationale).
+    data.password = generatePassword({ length: 8 });
 
     admin = await this.prisma.admin.create({
       data: data,
     });
-    return { ...admin, password: plainPassword };
+    return admin;
   }
 
   async findAll() {
