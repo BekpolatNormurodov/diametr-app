@@ -17,46 +17,21 @@ export class AdService {
   async create(data: CreateAdDto) {
     this.logger.log('create');
 
-    if (data.type == AD_TYPE.SHOP) {
-      let shop = await this.prisma.shop.findUnique({
-        where: {
-          id: data.shop_id,
-        },
-      });
-
-      if (!shop) {
-        throw new NotFoundException('shop not found');
-      }
-    } else if (data.type == AD_TYPE.REGION) {
-      let ad = await this.prisma.region.findUnique({
-        where: {
-          id: data.region_id,
-        },
-      });
-
-      if (!ad) {
-        throw new NotFoundException('region not found');
-      }
-    } else if (data.type == AD_TYPE.PRODUCT) {
-      let worker = await this.prisma.product.findUnique({
-        where: {
-          id: data.product_id,
-        },
-      });
-
-      if (!worker) {
-        throw new NotFoundException('product not found');
-      }
-    } else if (data.type == AD_TYPE.WORKER) {
-      let worker = await this.prisma.worker.findUnique({
-        where: {
-          id: data.worker_id,
-        },
-      });
-
-      if (!worker) {
-        throw new NotFoundException('worker not found');
-      }
+    // A banner may be static (no link target). Only validate the target when an
+    // id is actually provided — otherwise findUnique({ where: { id: undefined } })
+    // throws a Prisma validation error.
+    if (data.type == AD_TYPE.SHOP && data.shop_id != null) {
+      const shop = await this.prisma.shop.findUnique({ where: { id: data.shop_id } });
+      if (!shop) throw new NotFoundException('shop not found');
+    } else if (data.type == AD_TYPE.REGION && data.region_id != null) {
+      const region = await this.prisma.region.findUnique({ where: { id: data.region_id } });
+      if (!region) throw new NotFoundException('region not found');
+    } else if (data.type == AD_TYPE.PRODUCT && data.product_id != null) {
+      const product = await this.prisma.product.findUnique({ where: { id: data.product_id } });
+      if (!product) throw new NotFoundException('product not found');
+    } else if (data.type == AD_TYPE.WORKER && data.worker_id != null) {
+      const worker = await this.prisma.worker.findUnique({ where: { id: data.worker_id } });
+      if (!worker) throw new NotFoundException('worker not found');
     }
 
     return await this.prisma.ad.create({
@@ -104,47 +79,20 @@ export class AdService {
     if (!ad) {
       throw new NotFoundException('ad not found');
     }
+    // Validate the link target only when its id is present (static banner = none).
     if (data.type) {
-      if (data.type == AD_TYPE.SHOP) {
-        let shop = await this.prisma.shop.findUnique({
-          where: {
-            id: data.shop_id,
-          },
-        });
-
-        if (!shop) {
-          throw new NotFoundException('shop not found');
-        }
-      } else if (data.type == AD_TYPE.REGION) {
-        let region = await this.prisma.region.findUnique({
-          where: {
-            id: data.region_id,
-          },
-        });
-
-        if (!region) {
-          throw new NotFoundException('region not found');
-        }
-      } else if (data.type == AD_TYPE.PRODUCT) {
-        let worker = await this.prisma.product.findUnique({
-          where: {
-            id: data.product_id,
-          },
-        });
-
-        if (!worker) {
-          throw new NotFoundException('product not found');
-        }
-      } else if (data.type == AD_TYPE.WORKER) {
-        let worker = await this.prisma.worker.findUnique({
-          where: {
-            id: data.worker_id,
-          },
-        });
-
-        if (!worker) {
-          throw new NotFoundException('worker not found');
-        }
+      if (data.type == AD_TYPE.SHOP && data.shop_id != null) {
+        const shop = await this.prisma.shop.findUnique({ where: { id: data.shop_id } });
+        if (!shop) throw new NotFoundException('shop not found');
+      } else if (data.type == AD_TYPE.REGION && data.region_id != null) {
+        const region = await this.prisma.region.findUnique({ where: { id: data.region_id } });
+        if (!region) throw new NotFoundException('region not found');
+      } else if (data.type == AD_TYPE.PRODUCT && data.product_id != null) {
+        const product = await this.prisma.product.findUnique({ where: { id: data.product_id } });
+        if (!product) throw new NotFoundException('product not found');
+      } else if (data.type == AD_TYPE.WORKER && data.worker_id != null) {
+        const worker = await this.prisma.worker.findUnique({ where: { id: data.worker_id } });
+        if (!worker) throw new NotFoundException('worker not found');
       }
     }
 
