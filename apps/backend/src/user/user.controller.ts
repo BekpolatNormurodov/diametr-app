@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { editProfileUserDto } from './dto/edit-profile-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { UserService } from './user.service';
 import { AuthGuard } from 'src/_guard/auth.guard';
 import { RolesGuardFactory } from 'src/_guard/roles.guard';
@@ -43,6 +44,13 @@ export class UserController {
   @ApiParam({ name: 'id', type: Number })
   findOne(@Param('id') id: string) {
     return this.userService.findOne(+id);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Foydalanuvchini tahrirlash (admin)' })
+  @ApiParam({ name: 'id', type: Number })
+  update(@Param('id') id: string, @Body() data: UpdateUserDto) {
+    return this.userService.update(+id, data);
   }
 
   @Delete(':id')

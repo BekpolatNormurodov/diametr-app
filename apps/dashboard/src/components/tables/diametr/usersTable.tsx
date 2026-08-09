@@ -7,6 +7,10 @@ import { useState } from "react";
 import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
+import { useModal } from "../../../hooks/useModal";
+import { Modal } from "../../ui/modal";
+import Input from "../../form/input/InputField";
+import Label from "../../form/Label";
 
 export interface UserItemProps {
   id: number;
@@ -28,6 +32,34 @@ export default function UsersTable({
   const [search, setSearch]     = useState("");
   const [showValue, setShowValue] = useState("10");
   const [currentPage, setCurrentPage] = useState(1);
+  const { isOpen, openModal, closeModal } = useModal();
+  const [viewItem, setViewItem] = useState<UserItemProps | null>(null);
+  const [form, setForm] = useState({ fullname: "", phone: "" });
+  const [saving, setSaving] = useState(false);
+
+  const openView = (item: UserItemProps) => {
+    setViewItem(item);
+    setForm({ fullname: item.fullname ?? "", phone: item.phone ?? "" });
+    openModal();
+  };
+
+  const handleSaveUser = async () => {
+    if (!viewItem) return;
+    setSaving(true);
+    try {
+      await axiosClient.put(`/user/${viewItem.id}`, {
+        fullname: form.fullname || undefined,
+        phone: form.phone || undefined,
+      });
+      toast.success("Foydalanuvchi yangilandi");
+      onRefetch?.();
+      closeModal();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const filtered = search.trim()
     ? data.filter((u) =>
@@ -135,9 +167,9 @@ export default function UsersTable({
                 </TableCell>
                 <TableCell className="px-5 py-4">
                   <TableActions
-                    onEdit={() => {}}
+                    onEdit={() => openView(item)}
                     onDelete={() => handleDelete(item.id)}
-                    editLabel="Ko'rish"
+                    editLabel="Ko'rish / Tahrirlash"
                     deleteLabel="O'chirish"
                     confirmTitle="Foydalanuvchini o'chirasizmi?"
                     confirmDesc="Barcha buyurtmalari bilan o'chib ketadi."
@@ -174,6 +206,59 @@ export default function UsersTable({
           </button>
         </div>
       </div>
+
+      {/* Foydalanuvchi ma'lumotlari — Ko'rish / Tahrirlash */}
+      <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[480px] m-4">
+        <div className="relative w-full p-6 bg-white rounded-3xl dark:bg-gray-900 lg:p-8">
+          <h4 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">
+            Foydalanuvchini tahrirlash
+          </h4>
+          {viewItem && (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-4 mb-2">
+                <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl text-white font-semibold">
+                    {(form.fullname?.[0] ?? "?").toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">#{viewItem.id}</div>
+                  <Badge color="info" size="sm">{viewItem.role ?? "USER"}</Badge>
+                </div>
+              </div>
+              <div>
+                <Label>To'liq ism</Label>
+                <Input
+                  type="text"
+                  placeholder="Foydalanuvchi ismi"
+                  value={form.fullname}
+                  onChange={(e) => setForm({ ...form, fullname: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Telefon</Label>
+                <Input
+                  type="text"
+                  placeholder="+998..."
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                />
+              </div>
+              <div className="text-xs text-gray-400 dark:text-gray-500">
+                Ro'yxatdan o'tgan: {Moment(viewItem.createdt ?? viewItem.createdAt).format("DD.MM.YYYY HH:mm")}
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-3 mt-6">
+            <button onClick={closeModal} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-white/[0.08] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/[0.05] transition-colors">
+              Bekor qilish
+            </button>
+            <button onClick={handleSaveUser} disabled={saving} className="px-4 py-2 text-sm rounded-lg bg-brand-500 text-white font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors">
+              {saving ? "Saqlanmoqda..." : "Saqlash"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
