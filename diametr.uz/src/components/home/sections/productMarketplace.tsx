@@ -69,6 +69,8 @@ export default function ProductMarketplace() {
     lang === 'ru' ? c.name_ru || c.name_uz || c.name || '' : c.name_uz || c.name_ru || c.name || ''
 
   const filtered = products.filter(p => {
+    // Skip catalogue placeholders with no variants — nothing to buy, no price.
+    if (!(p.items ?? []).length) return false
     const matchCat = activeCatId === null || p.category?.id === activeCatId
     const q = search.toLowerCase()
     // Match the product's names AND its variant names — e.g. "seyf" is a variant

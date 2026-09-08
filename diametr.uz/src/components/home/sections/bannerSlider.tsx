@@ -133,7 +133,7 @@ export default function BannerSlider() {
               alt=""
               loading="eager"
               decoding="async"
-              className={`block w-full h-auto transition-opacity duration-350 ${
+              className={`block w-full h-[220px] sm:h-[300px] lg:h-[400px] object-cover object-center transition-opacity duration-350 ${
                 animating ? 'opacity-0' : 'opacity-100'
               }`}
             />

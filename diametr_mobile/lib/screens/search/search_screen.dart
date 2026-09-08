@@ -237,6 +237,11 @@ class _ProductsTabState extends State<_ProductsTab> {
           // and shoppers search by variant too — e.g. "seyf" is a variant of
           // "Xavfsizlik tizimlari", so matching only the product name found nothing.
           var all = (state.data ?? []).where((e) {
+            // Skip catalogue placeholders with no variants — they have no shop
+            // and no price, and tapping one lands on a dead "Do'kon topilmadi"
+            // page (e.g. an empty "Seyflar").
+            final variants = e["items"];
+            if (variants is! List || variants.isEmpty) return false;
             if (matches(e["name"]) ||
                 matches(e["name_uz"]) ||
                 matches(e["name_ru"]) ||

@@ -298,6 +298,9 @@ export default function CategoryPage() {
     ? (lang === 'uz' ? 'Barcha mahsulotlar' : 'Все товары')
     : (category ? getName(category) : '...')
   const filtered = products.filter(p => {
+    // Hide catalogue placeholders that have no variants — they have no price and
+    // nothing to buy, so a card like an empty "Seyflar" only clutters the list.
+    if (!(p.items ?? []).length) return false
     const q = search.trim().toLowerCase()
     if (q) {
       const cat = p.category
