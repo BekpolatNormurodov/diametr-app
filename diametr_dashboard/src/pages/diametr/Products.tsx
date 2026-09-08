@@ -301,6 +301,7 @@ export default function ProductsPage() {
               <div className="lg:col-span-2">
                 <ImageField
                   label="Rasm"
+                  allowUrl={false}
                   onChange={(result) => { imageResultRef.current = result; }}
                 />
               </div>

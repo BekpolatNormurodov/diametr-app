@@ -176,7 +176,7 @@ export default function ProductItemsPage() {
               <Input type="text" placeholder="Ixtiyoriy tavsif" value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} />
             </div>
             <div className="lg:col-span-2">
-              <ImageField label="Rasm (ixtiyoriy)" onChange={(r) => { imageResultRef.current = r; }} />
+              <ImageField label="Rasm (ixtiyoriy)" allowUrl={false} onChange={(r) => { imageResultRef.current = r; }} />
             </div>
           </div>
           <div className="flex items-center gap-3 px-2 mt-6 justify-end">
