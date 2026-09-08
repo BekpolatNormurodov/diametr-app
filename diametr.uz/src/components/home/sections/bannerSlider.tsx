@@ -80,12 +80,9 @@ export default function BannerSlider() {
       }))
     : []
 
-  // Keep the hero rotating even with a single ad: pad with the branded fallback
-  // slides until there are at least two. Once the admin adds 2+ real ads, the
-  // fallbacks drop away and only real ads cycle.
-  const banners = realBanners.length >= 2
-    ? realBanners
-    : [...realBanners, ...FALLBACK_BANNERS]
+  // Show only the real ad banners. The branded fallback slides appear ONLY when
+  // there are no ads at all — otherwise a single ad is the one main banner.
+  const banners = realBanners.length > 0 ? realBanners : FALLBACK_BANNERS
 
   const total = banners.length
 
@@ -136,7 +133,7 @@ export default function BannerSlider() {
               alt=""
               loading="eager"
               decoding="async"
-              className={`block w-full h-[200px] sm:h-[260px] lg:h-[320px] object-cover transition-opacity duration-350 ${
+              className={`block w-full h-auto transition-opacity duration-350 ${
                 animating ? 'opacity-0' : 'opacity-100'
               }`}
             />
