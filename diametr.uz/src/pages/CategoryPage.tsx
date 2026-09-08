@@ -140,11 +140,12 @@ export default function CategoryPage() {
 
     const isAll = id === 'all'
     const catId = Number(id)
-    // Let the server filter by category instead of pulling the whole catalogue
-    const byCategory = !isAll && Number.isFinite(catId)
 
+    // Always pull the whole catalogue: we need it to know WHICH categories
+    // actually have a buyable product, so the chips don't advertise a category
+    // that opens to an empty page. It's nginx-cached + gzipped, so cheap.
     Promise.all([
-      axios.get(byCategory ? `${API_URL}/product?category_id=${catId}` : `${API_URL}/product/all`),
+      axios.get(`${API_URL}/product/all`),
       axios.get(`${API_URL}/category/all`),
     ])
       .then(([prodRes, catRes]) => {
@@ -157,10 +158,22 @@ export default function CategoryPage() {
 
         // Newest first by id
         allProds.sort((a, b) => (b.id ?? 0) - (a.id ?? 0))
-        // Category chips: newest first (id desc)
-        const sortedCats = [...allCats].sort((a, b) => (b.id ?? 0) - (a.id ?? 0))
+        // Build the category chips from the categories that stocked products are
+        // ACTUALLY linked to — /category/all lists a newer set most products
+        // aren't attached to yet, so using it would show chips that open to an
+        // empty page while hiding the real, navigable categories.
+        const catMap = new Map<number, Category>()
+        allProds.forEach(p => {
+          const c = p.category
+          if ((p.items?.length ?? 0) > 0 && c?.id != null && !catMap.has(c.id)) {
+            catMap.set(c.id, c as Category)
+          }
+        })
+        // Fall back to /category/all only if no product carried a category.
+        const sortedCats = (catMap.size > 0 ? Array.from(catMap.values()) : allCats)
+          .sort((a, b) => (b.id ?? 0) - (a.id ?? 0))
 
-        setProducts(byCategory || isAll ? allProds : allProds.filter(p => p.category?.id === catId))
+        setProducts(isAll ? allProds : allProds.filter(p => p.category?.id === catId))
         setCategory(isAll ? null : (allCats.find(c => c.id === catId) || null))
         setAllCategories(sortedCats)
       })
@@ -201,7 +214,9 @@ export default function CategoryPage() {
     }
 
     const timer = setTimeout(async () => {
-      const queue = products.filter(p => pricesMap[p.id] == null)
+      // Only prefetch prices for buyable products — the empty placeholders are
+      // hidden from the grid, so fetching their (non-existent) price is waste.
+      const queue = products.filter(p => (p.items?.length ?? 0) > 0 && pricesMap[p.id] == null)
       for (let i = 0; i < queue.length; i += 3) {
         if (cancelled) return
         const wave = queue.slice(i, i + 3)

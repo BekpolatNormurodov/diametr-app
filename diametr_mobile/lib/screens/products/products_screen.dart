@@ -72,7 +72,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
       body: BlocBuilder<ProductByCategoryBloc, ProductByCategoryState>(
           builder: (context, state) {
         if (state is ProductByCategorySuccessState) {
-          if (state.data.length == 0) {
+          // Skip catalogue placeholders with no variants — they have no shop or
+          // price and only lead to a dead "Do'kon topilmadi" page.
+          final list = (state.data ?? [])
+              .where((p) => (p["items"] as List?)?.isNotEmpty ?? false)
+              .toList();
+          if (list.isEmpty) {
             return EmptyState(
               icon: Iconsax.box,
               title: 'products_empty'.tr(),
@@ -80,7 +85,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
             );
           }
           // Backend orders by id desc → keep that order (newest first).
-          return productsScreenBody((state.data ?? []).toList());
+          return productsScreenBody(list);
         } else if (state is ProductByCategoryWaitingState) {
           return _buildShimmer();
         } else {

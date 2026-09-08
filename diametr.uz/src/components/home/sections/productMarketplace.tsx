@@ -83,6 +83,18 @@ export default function ProductMarketplace() {
     return matchCat && matchSearch
   })
 
+  // Build the chips from the categories stocked products are ACTUALLY linked to
+  // (a newer /category/all set most products aren't attached to yet would show
+  // chips opening to an empty page). Fall back to /category/all if none carried one.
+  const catMap = new Map<number, Category>()
+  products.forEach(p => {
+    const c = p.category
+    if ((p.items?.length ?? 0) > 0 && c?.id != null && !catMap.has(c.id)) {
+      catMap.set(c.id, { id: c.id, name: c.name, name_uz: c.name_uz, name_ru: c.name_ru })
+    }
+  })
+  const visibleCategories = catMap.size > 0 ? Array.from(catMap.values()) : categories
+
   return (
     <section id="Products" ref={ref} className="w-full bg-slate-50 dark:bg-slate-900 py-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
@@ -103,7 +115,7 @@ export default function ProductMarketplace() {
         </div>
 
         {/* Category filter chips */}
-        {categories.length > 0 && (
+        {visibleCategories.length > 0 && (
           <div className="reveal reveal-delay-1 flex flex-wrap gap-2 justify-center mb-8">
             <button
               onClick={() => setActiveCatId(null)}
@@ -115,7 +127,7 @@ export default function ProductMarketplace() {
             >
               {lang === 'uz' ? 'Hammasi' : 'Все'}
             </button>
-            {categories.map(c => (
+            {visibleCategories.map(c => (
               <button
                 key={c.id}
                 onClick={() => { setActiveCatId(prev => prev === c.id ? null : c.id); navigate(`/category/${c.id}`) }}
