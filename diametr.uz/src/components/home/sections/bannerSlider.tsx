@@ -117,7 +117,7 @@ export default function BannerSlider() {
     return (
       <section ref={ref} className="w-full px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto">
-          <div className="w-full rounded-3xl bg-gray-100 dark:bg-white/5 animate-pulse h-[160px] sm:h-[200px] lg:h-[240px]" />
+          <div className="w-full rounded-3xl bg-gray-100 dark:bg-white/5 animate-pulse h-[200px] sm:h-[260px] lg:h-[320px]" />
         </div>
       </section>
     )
@@ -127,9 +127,7 @@ export default function BannerSlider() {
     <section ref={ref} className="w-full px-4 sm:px-6 lg:px-8 py-6">
       <div className="max-w-7xl mx-auto">
         <div
-          className={`relative w-full rounded-3xl overflow-hidden transition-all duration-500 ${
-            banner.image ? 'bg-gray-100 dark:bg-white/5' : `bg-gradient-to-r ${banner.bg}`
-          }`}
+          className={`relative w-full rounded-3xl overflow-hidden transition-all duration-500 bg-gradient-to-r ${banner.bg}`}
         >
           {banner.image ? (
             /* Real ad banner — show the full designed image, uncropped, no overlay */
@@ -138,14 +136,14 @@ export default function BannerSlider() {
               alt=""
               loading="eager"
               decoding="async"
-              className={`block w-full h-[160px] sm:h-[200px] lg:h-[240px] object-cover transition-opacity duration-350 ${
+              className={`block w-full h-[200px] sm:h-[260px] lg:h-[320px] object-cover transition-opacity duration-350 ${
                 animating ? 'opacity-0' : 'opacity-100'
               }`}
             />
           ) : (
             /* Fallback hero — gradient background with text + CTA */
             <div
-              className={`flex flex-col justify-center h-[160px] sm:h-[200px] lg:h-[240px] px-8 sm:px-16 max-w-2xl transition-all duration-350 ${
+              className={`flex flex-col justify-center h-[200px] sm:h-[260px] lg:h-[320px] px-8 sm:px-16 max-w-2xl transition-all duration-350 ${
                 animating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
               }`}
             >
