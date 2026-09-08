@@ -30,16 +30,8 @@ FROM nginx:1.27-alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# SPA fallback: all routes → index.html
-RUN printf 'server {\n\
-    listen 80;\n\
-    root /usr/share/nginx/html;\n\
-    index index.html;\n\
-    location / {\n\
-        try_files $uri $uri/ /index.html;\n\
-    }\n\
-    gzip on;\n\
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;\n\
-}\n' > /etc/nginx/conf.d/default.conf
+# SPA config: index.html no-store (so deploys show up without a hard refresh),
+# hashed assets immutable, gzip. See nginx.conf.
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
