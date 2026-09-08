@@ -1,0 +1,11 @@
+node_modules
+dist
+logs
+*.log
+*.gz
+.git
+.env
+coverage
+test
+public
+prisma/seed.ts

@@ -1,0 +1,125 @@
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { CreateAdminDto } from './dto/create-admin.dto';
+import { UpdateAdminDto } from './dto/update-admin.dto';
+import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
+import { generatePassword } from 'src/_utils/number.gen';
+import { hashPassword, verifyPassword } from 'src/_utils/password';
+
+@Injectable()
+export class AdminService {
+  constructor(private readonly prisma: PrismaClientService) {}
+  private logger = new Logger('Admin service');
+  async create(data: CreateAdminDto) {
+    this.logger.log('create');
+    let admin = await this.prisma.admin.findUnique({
+      where: { phone: data.phone },
+    });
+    if (admin) {
+      throw new BadRequestException('This phone is used');
+    }
+
+    let shop = await this.prisma.shop.findUnique({
+      where: {
+        id: data.shop_id,
+      },
+    });
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    // Store the password in plain text so the shop owner can read and share it
+    // from the panel (see auth.service for the rationale).
+    data.password = generatePassword({ length: 8 });
+
+    admin = await this.prisma.admin.create({
+      data: data,
+    });
+    return admin;
+  }
+
+  async findAll() {
+    this.logger.log('findAll');
+    const admins = await this.prisma.admin.findMany({
+      include: { shop: true },
+    });
+    return admins;
+  }
+  async findOne(id: number) {
+    this.logger.log('findOne');
+    let admin = await this.prisma.admin.findUnique({
+      where: { id },
+    });
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    return admin;
+  }
+
+  async update(id: number, data: UpdateAdminDto) {
+    this.logger.log('update');
+    let admin = await this.prisma.admin.findUnique({
+      where: { id },
+    });
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    return await this.prisma.admin.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async updateMe(id: number, chat_id: string) {
+    this.logger.log('updateMe');
+    return await this.prisma.admin.update({
+      where: { id },
+      data: { chat_id },
+      include: { shop: true },
+    });
+  }
+
+  // A shop owner changing their OWN password. Passwords are stored in plain text
+  // by design (see auth.service) so the value stays viewable/shareable from the
+  // panel — keep it that way. verifyPassword accepts both plain text and a
+  // bcrypt hash, so the old-password check works either way.
+  async changeMyPassword(id: number, oldPassword: string, newPassword: string) {
+    this.logger.log('changeMyPassword');
+    if (!oldPassword || !newPassword) {
+      throw new BadRequestException('Eski va yangi parol kiritilishi shart');
+    }
+    const admin = await this.prisma.admin.findUnique({ where: { id } });
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+    const ok = await verifyPassword(oldPassword, admin.password);
+    if (!ok) {
+      throw new BadRequestException('Eski parol xato');
+    }
+    await this.prisma.admin.update({
+      where: { id },
+      data: { password: newPassword },
+    });
+    return { message: 'Parol yangilandi' };
+  }
+
+  async remove(id: number) {
+    this.logger.log('remove');
+    let admin = await this.prisma.admin.findUnique({
+      where: { id },
+    });
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    return await this.prisma.admin.delete({
+      where: { id },
+    });
+  }
+}

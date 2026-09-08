@@ -1,0 +1,27 @@
+model Worker {
+    id       Int     @id @default(autoincrement()) @unique
+    fullname String?
+    phone    String? @unique
+    image    String?
+    password String?
+
+    work_status WORK_STATUS @default(WORKING)
+
+    service_id Int?
+    service    Service? @relation(fields: [service_id], references: [id])
+
+    expired DateTime?
+
+    amount    Int?
+    date_type DATE_TYPE? @default(MONTH)
+
+    role Role @default(WORKER)
+
+    payments Payment[]
+    ads Ad[]
+
+    createdt  DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("worker")
+}

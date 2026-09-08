@@ -1,0 +1,540 @@
+body {
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family:
+    source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+/* ── Scroll-reveal animations ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(36px);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.reveal-left {
+  transform: translateX(-48px);
+}
+.reveal.reveal-right {
+  transform: translateX(48px);
+}
+.reveal.reveal-scale {
+  transform: scale(0.88) translateY(16px);
+}
+.reveal.visible {
+  opacity: 1 !important;
+  transform: none !important;
+}
+.reveal-delay-1 {
+  transition-delay: 0.07s;
+}
+.reveal-delay-2 {
+  transition-delay: 0.14s;
+}
+.reveal-delay-3 {
+  transition-delay: 0.21s;
+}
+.reveal-delay-4 {
+  transition-delay: 0.28s;
+}
+.reveal-delay-5 {
+  transition-delay: 0.35s;
+}
+.reveal-delay-6 {
+  transition-delay: 0.42s;
+}
+
+/* ── Banner slider ── */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(1.03) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes slideOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97) translateY(-6px);
+  }
+}
+.banner-enter {
+  animation: slideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.banner-exit {
+  animation: slideOut 0.4s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+/* ── Hero entrance animations ── */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes floatPhone {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+.hero-badge {
+  animation: fadeUp 0.6s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.hero-title {
+  animation: fadeUp 0.7s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.hero-desc {
+  animation: fadeUp 0.7s 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.hero-btns {
+  animation: fadeUp 0.7s 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.hero-stats {
+  animation: fadeUp 0.7s 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.hero-phone {
+  animation: fadeIn 0.9s 0.3s both;
+}
+.phone-float {
+  animation: floatPhone 3.5s ease-in-out infinite;
+}
+
+/* ── Auth Modal slide-up ── */
+@keyframes slideUpModal {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-slideUp {
+  animation: slideUpModal 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Cart button checkmark pop ── */
+@keyframes checkPop {
+  0% {
+    transform: scale(0) rotate(-20deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.3) rotate(5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+.animate-checkPop {
+  animation: checkPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ── Splash conic border spin ── */
+@keyframes splashConicSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Shimmer sweep: plays, pauses, repeats ── */
+@keyframes splashShimmer {
+  0% {
+    transform: translateX(-180%) skewX(-18deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  35% {
+    transform: translateX(280%) skewX(-18deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(280%) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+/* ── Vertical scanner line inside logo ── */
+@keyframes splashScanLine {
+  0% {
+    top: -4px;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 0.85;
+  }
+  100% {
+    top: 115%;
+    opacity: 0;
+  }
+}
+
+/* ── Logo box pulsing glow ── */
+@keyframes splashLogoGlow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 20px 4px rgba(0, 196, 140, 0.15),
+      0 24px 60px rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 52px 16px rgba(0, 196, 140, 0.45),
+      0 24px 60px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* ── Per-letter title reveal ── */
+@keyframes splashLetterIn {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.75);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+/* ── Progress bar shimmer ── */
+@keyframes splashBarShimmer {
+  0% {
+    transform: translateX(-200%);
+  }
+  100% {
+    transform: translateX(500%);
+  }
+}
+
+/* ── Logo entrance ── */
+@keyframes splashLogoIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(28px) rotate(-8deg);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.07) translateY(-7px) rotate(1.5deg);
+  }
+  75% {
+    transform: scale(0.96) translateY(3px) rotate(-0.5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0) rotate(0deg);
+  }
+}
+
+/* ── Tagline ── */
+@keyframes splashSubIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Rings ── */
+@keyframes splashRingPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.75);
+    opacity: 0;
+  }
+}
+
+/* ── Particles ── */
+@keyframes splashParticle {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1);
+  }
+  75% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.3);
+  }
+}
+
+/* ── Progress bar fill ── */
+@keyframes splashBarFill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+@keyframes splashBarIn {
+  from {
+    opacity: 0;
+    transform: scaleX(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+/* ── Class assignments ── */
+.splash-logo {
+  animation: splashLogoIn 0.8s 0.05s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.splash-logo-box {
+  animation: splashLogoGlow 2s 1s ease-in-out infinite;
+}
+.splash-shimmer {
+  animation: splashShimmer 2.8s 0.65s ease-in-out infinite;
+}
+.splash-scan {
+  animation: splashScanLine 2.2s 0.85s ease-in-out infinite;
+}
+.splash-sub {
+  animation: splashSubIn 0.55s 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.splash-ring-1 {
+  animation: splashRingPulse 2.2s 0.3s ease-out infinite;
+}
+.splash-ring-2 {
+  animation: splashRingPulse 2.2s 0.75s ease-out infinite;
+}
+.splash-ring-3 {
+  animation: splashRingPulse 2.2s 1.2s ease-out infinite;
+}
+.splash-particle {
+  animation: splashParticle 2.6s ease-in-out infinite;
+}
+.splash-bar {
+  animation: splashBarIn 0.4s 0.5s ease both;
+}
+.splash-bar-fill {
+  animation: splashBarFill 1.9s 0.65s cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+/* legacy */
+@keyframes splashDot {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* ── Navbar / Footer shimmer sweep ── */
+@keyframes navShimmer {
+  0% {
+    transform: translateX(-120%) skewX(-15deg);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  32% {
+    transform: translateX(260%) skewX(-15deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(260%) skewX(-15deg);
+    opacity: 0;
+  }
+}
+
+/* ── Hero section rings & badge floats ── */
+@keyframes heroRingPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.55);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.55);
+    opacity: 0;
+  }
+}
+.hero-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(0, 196, 140, 0.38);
+  pointer-events: none;
+}
+.hero-ring-1 {
+  width: 220px;
+  height: 220px;
+  animation: heroRingPulse 2.6s 0s ease-out infinite;
+}
+.hero-ring-2 {
+  width: 320px;
+  height: 320px;
+  animation: heroRingPulse 2.6s 0.6s ease-out infinite;
+}
+.hero-ring-3 {
+  width: 420px;
+  height: 420px;
+  animation: heroRingPulse 2.6s 1.2s ease-out infinite;
+}
+.hero-ring-4 {
+  width: 520px;
+  height: 520px;
+  animation: heroRingPulse 2.6s 1.8s ease-out infinite;
+}
+
+@keyframes badgeFloatLeft {
+  0% {
+    transform: translateY(0px) translateX(0px);
+  }
+  30% {
+    transform: translateY(-7px) translateX(-4px);
+  }
+  60% {
+    transform: translateY(-3px) translateX(3px);
+  }
+  100% {
+    transform: translateY(0px) translateX(0px);
+  }
+}
+@keyframes badgeFloatRight {
+  0% {
+    transform: translateY(0px) translateX(0px);
+  }
+  30% {
+    transform: translateY(6px) translateX(4px);
+  }
+  60% {
+    transform: translateY(-4px) translateX(-3px);
+  }
+  100% {
+    transform: translateY(0px) translateX(0px);
+  }
+}
+.badge-float-left {
+  animation: badgeFloatLeft 3.8s 0.5s ease-in-out infinite;
+}
+.badge-float-right {
+  animation: badgeFloatRight 3.4s 0.9s ease-in-out infinite;
+}
+
+/* ── react-toastify overrides ── */
+.Toastify__toast-container {
+  padding: 0 !important;
+  width: auto !important;
+  min-width: 300px !important;
+  max-width: 380px !important;
+}
+.Toastify__toast-container--bottom-right {
+  bottom: 1.5rem !important;
+  right: 1.5rem !important;
+}
+.Toastify__toast {
+  padding: 0 !important;
+  min-height: unset !important;
+  border-radius: 18px !important;
+  box-shadow:
+    0 20px 60px -10px rgba(0, 0, 0, 0.18),
+    0 4px 16px -4px rgba(0, 196, 140, 0.15) !important;
+  border: 1px solid rgba(0, 196, 140, 0.12) !important;
+  background: #ffffff !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: stretch !important;
+}
+/* Green left accent bar */
+.Toastify__toast::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #00c48c, #00a876);
+  border-radius: 18px 0 0 18px;
+  pointer-events: none;
+  z-index: 0;
+}
+.Toastify__toast-body {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  position: relative;
+  z-index: 1;
+}
+/* Progress bar is hidden via the `hideProgressBar` prop on <ToastContainer>.
+   Do NOT add `display: none` here — react-toastify needs the element in
+   the DOM for its internal lifecycle even when hidden. */
+.Toastify__close-button {
+  align-self: center !important;
+  margin: 0 10px 0 0 !important;
+  color: #94a3b8 !important;
+  opacity: 0.85 !important;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto !important;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.Toastify__close-button:hover {
+  opacity: 1 !important;
+  color: #475569 !important;
+}

@@ -1,0 +1,34 @@
+model PromoCode {
+    id                Int            @id @default(autoincrement())
+    code              String         @unique @db.VarChar(50)
+    discount_type     DISCOUNT_TYPE  @default(PERCENT)
+    discount_value    Decimal        @db.Decimal(10, 2)
+    min_order_amount  Decimal?       @db.Decimal(10, 2)
+    max_uses          Int?
+    is_active         Boolean        @default(true)
+    expires_at        DateTime?      // null = never expires
+
+    shop_id   Int?
+    shop      Shop? @relation(fields: [shop_id], references: [id])
+
+    uses       PromoCodeUse[]
+    orders     Order[]
+
+    createdAt  DateTime       @default(now())
+    updatedAt  DateTime       @updatedAt
+
+    @@map("promocode")
+}
+
+
+model PromoCodeUse {
+    id            Int       @id @default(autoincrement())
+    promo_code_id Int
+    promo_code    PromoCode @relation(fields: [promo_code_id], references: [id])
+    user_id       Int
+    user          User      @relation(fields: [user_id], references: [id])
+    createdAt     DateTime  @default(now())
+
+    @@unique([promo_code_id, user_id])
+    @@map("promocodeuse")
+}

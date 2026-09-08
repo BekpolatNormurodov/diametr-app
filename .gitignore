@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────
+#  SECRETS — never commit (this repo is PUBLIC)
+# ─────────────────────────────────────────────────────────────
+**/.env
+**/.env.*
+!**/.env.example
+**/key.properties
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pem
+**/google-services.json
+**/GoogleService-Info.plist
+**/serviceAccount*.json
+
+# ─────────────────────────────────────────────────────────────
+#  Dependencies & build output
+# ─────────────────────────────────────────────────────────────
+**/node_modules/
+**/dist/
+**/build/
+**/.next/
+**/out/
+
+# Flutter / Android / iOS
+diametr_mobile/.dart_tool/
+diametr_mobile/.flutter-plugins
+diametr_mobile/.flutter-plugins-dependencies
+diametr_mobile/**/generated_plugin_registrant.*
+diametr_mobile/android/.gradle/
+diametr_mobile/android/local.properties
+diametr_mobile/ios/Pods/
+diametr_mobile/ios/.symlinks/
+diametr_mobile/**/*.g.dart
+
+# ─────────────────────────────────────────────────────────────
+#  Runtime data (server-side, not source)
+# ─────────────────────────────────────────────────────────────
+mysql_data/
+certbot/conf/
+certbot/www/
+logs/
+**/logs/
+nginx/cache/
+nginx/cache-static/
+**/public/products/
+**/public/product-items/
+**/public/shops/
+**/public/ads/
+**/public/news/
+**/public/categories/
+
+# ─────────────────────────────────────────────────────────────
+#  OS / IDE
+# ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+**/.idea/
+**/.vscode/
+*.log

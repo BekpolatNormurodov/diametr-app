@@ -1,0 +1,22 @@
+model ShopProduct {
+    id          Int           @id @default(autoincrement())
+    price       Int?
+    bonus_price Int?          // Discounted/sale price (optional)
+    count       Int @default(0)
+
+    shop_id Int?
+    shop    Shop? @relation(fields: [shop_id], references: [id])
+
+    product_item_id Int?
+    product_item    ProductItem? @relation(fields: [product_item_id], references: [id])
+
+    
+    order_products OrderProduct[]
+
+    work_status WORK_STATUS   @default(WORKING)
+
+    createdt  DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("shopproduct")
+}

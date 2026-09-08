@@ -1,0 +1,18 @@
+model Admin {
+  id       Int     @id @default(autoincrement())
+  fullname String?
+  image    String?
+  phone    String  @unique
+  password String
+
+  chat_id String?  
+
+  shop_id Int?
+  shop    Shop? @relation(fields: [shop_id], references: [id])
+
+  role      Role     @default(ADMIN)
+  createdt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admin")
+}

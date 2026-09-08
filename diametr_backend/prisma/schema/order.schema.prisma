@@ -1,0 +1,60 @@
+model Order {
+    id     Int          @id @default(autoincrement())
+    status ORDER_STATUS @default(STARTED)
+
+    user_id Int?
+    user    User? @relation(fields: [user_id], references: [id])
+
+    shop_id Int?
+    shop    Shop? @relation(fields: [shop_id], references: [id])
+
+    lat Float?
+    lon Float?
+
+    // Text delivery address
+    address       String?  @db.Text
+
+    // Payment
+    payment_type  String?  @db.VarChar(20)
+
+    // Promo code
+    promo_code_id    Int?
+    promo_code       PromoCode? @relation(fields: [promo_code_id], references: [id])
+    discount_percent Int?   // e.g. 20 (means 20%)
+    discount_amount  Int?   // Actual discount in currency
+
+    amount        Int?
+    delivery_type DELIVERY_TYPE? @default(MARKET)
+    source        ORDER_SOURCE?  @default(SITE)
+    desc String?
+
+    products OrderProduct[]
+
+    createdt    DateTime    @default(now())
+    updatedAt   DateTime    @updatedAt
+    work_status WORK_STATUS @default(WORKING)
+
+    @@map("order")
+}
+
+model OrderProduct {
+    id              Int          @id @default(autoincrement())
+    count           Int          @default(1)
+    amount          Int
+    shop_product_id Int?
+    shop_product    ShopProduct? @relation(fields: [shop_product_id], references: [id])
+
+    order_id Int?
+    order    Order? @relation(fields: [order_id], references: [id])
+
+    // ── Snapshot fields (preserved at order time) ──
+    product_name  String? @db.VarChar(255)
+    category_name String? @db.VarChar(255)
+    variant_name  String? @db.VarChar(255)
+    variant_color String? @db.VarChar(50)
+    variant_value String? @db.VarChar(50)
+    variant_size  String? @db.VarChar(50)
+    unit_symbol   String? @db.VarChar(20)
+
+    @@map("orderproduct")
+}

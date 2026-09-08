@@ -1,0 +1,13 @@
+model ShopBalanceLog {
+  id            Int          @id @default(autoincrement())
+  shop_id       Int
+  shop          Shop         @relation(fields: [shop_id], references: [id])
+  amount        Int
+  type          BALANCE_TYPE
+  note          String?
+  balance_after Int
+
+  createdt DateTime @default(now())
+
+  @@map("shop_balance_log")
+}

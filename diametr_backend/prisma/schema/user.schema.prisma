@@ -1,0 +1,20 @@
+model User {
+  id    Int     @default(autoincrement()) @id
+  fullname  String?
+  image  String?
+  phone String  @unique
+
+
+  orders Order[]
+  promo_code_uses PromoCodeUse[]
+
+  role Role @default(USER)
+
+  chat_id String?
+  lang    String? @default("uz")
+
+  createdt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user")
+}

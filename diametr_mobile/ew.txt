@@ -1,0 +1,53 @@
+﻿warning - Dead code - lib\core\network\dio_client.dart:116:7 - dead_code
+warning - Dead code - lib\core\network\dio_client.dart:155:7 - dead_code
+warning - Dead code - lib\core\network\dio_client.dart:197:7 - dead_code
+warning - This default clause is covered by the previous cases - lib\core\network\dio_exception.dart:37:7 - unreachable_switch_default
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\10_services_manager.dart:28:48 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\10_services_manager.dart:28:48 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\10_services_manager.dart:47:53 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\10_services_manager.dart:47:53 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\10_services_manager.dart:67:44 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\10_services_manager.dart:67:44 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\11_shop_product_manager.dart:24:49 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\11_shop_product_manager.dart:24:49 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\11_shop_product_manager.dart:41:49 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\11_shop_product_manager.dart:41:49 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\1_phone_manager.dart:21:45 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\1_phone_manager.dart:21:45 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\1_phone_manager.dart:37:44 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\1_phone_manager.dart:37:44 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\3_order_manager.dart:20:46 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\3_order_manager.dart:20:46 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\3_order_manager.dart:31:46 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\3_order_manager.dart:31:46 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\3_order_manager.dart:66:12 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\3_order_manager.dart:66:12 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\3_order_manager.dart:76:12 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\3_order_manager.dart:76:12 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\3_order_manager.dart:87:12 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\3_order_manager.dart:87:12 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\4_category_manager.dart:14:49 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\4_category_manager.dart:14:49 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\5_product_manager.dart:19:12 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\5_product_manager.dart:19:12 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\5_product_manager.dart:31:12 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\5_product_manager.dart:31:12 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\5_product_manager.dart:42:12 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\5_product_manager.dart:42:12 - invalid_use_of_protected_member
+warning - Unused import: 'package:stroymarket/bloc/categoryAll/categoryAll_bloc.dart' - lib\manager\6_region_manager.dart:1:8 - unused_import
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\6_region_manager.dart:16:47 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\6_region_manager.dart:16:47 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\7_ads_manager.dart:15:41 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\7_ads_manager.dart:15:41 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\8_shop_manager.dart:18:45 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\8_shop_manager.dart:18:45 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\8_shop_manager.dart:28:42 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\8_shop_manager.dart:28:42 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\8_shop_manager.dart:40:12 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\8_shop_manager.dart:40:12 - invalid_use_of_protected_member
+warning - The member 'emit' can only be used within 'package:bloc/src/bloc.dart' or a test - lib\manager\9_news_manager.dart:17:42 - invalid_use_of_visible_for_testing_member
+warning - The member 'emit' can only be used within instance members of subclasses of 'BlocBase' - lib\manager\9_news_manager.dart:17:42 - invalid_use_of_protected_member
+warning - This class (or a class that this class inherits from) is marked as '@immutable', but one or more of its instance fields aren't final: StatusScreen.id, StatusScreen.order_id, StatusScreen.shop_id, StatusScreen.status - lib\screens\history\status_screen.dart:16:7 - must_be_immutable
+warning - Dead code - lib\services\location\location_service.dart:63:7 - dead_code
+warning - This class (or a class that this class inherits from) is marked as '@immutable', but one or more of its instance fields aren't final: CustomAppBar.scaffoldKey, CustomAppBar.text, CustomAppBar.onPressed, CustomAppBar.icon, CustomAppBar.savatcha, CustomAppBar.isMenu - lib\widgets\common\custom_appbar.dart:94:7 - must_be_immutable
+warning - This class (or a class that this class inherits from) is marked as '@immutable', but one or more of its instance fields aren't final: CustomButton.onPressed, CustomButton.text, CustomButton.color, CustomButton.width - lib\widgets\common\custom_button.dart:5:7 - must_be_immutable
