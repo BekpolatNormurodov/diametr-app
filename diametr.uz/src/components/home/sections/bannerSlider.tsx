@@ -127,13 +127,15 @@ export default function BannerSlider() {
           className={`relative w-full rounded-3xl overflow-hidden transition-all duration-500 bg-gradient-to-r ${banner.bg}`}
         >
           {banner.image ? (
-            /* Real ad banner — show the full designed image, uncropped, no overlay */
+            /* Real ad banner — full width, natural height, nothing cropped and
+               no side fill: the image simply spans the width and is as tall as
+               its own aspect ratio makes it. */
             <img
               src={banner.image}
               alt=""
               loading="eager"
               decoding="async"
-              className={`block w-full h-[220px] sm:h-[300px] lg:h-[400px] object-cover object-center transition-opacity duration-350 ${
+              className={`block w-full h-auto transition-opacity duration-350 ${
                 animating ? 'opacity-0' : 'opacity-100'
               }`}
             />
