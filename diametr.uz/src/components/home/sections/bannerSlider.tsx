@@ -124,18 +124,22 @@ export default function BannerSlider() {
     <section ref={ref} className="w-full px-4 sm:px-6 lg:px-8 py-6">
       <div className="max-w-7xl mx-auto">
         <div
-          className={`relative w-full rounded-3xl overflow-hidden transition-all duration-500 bg-gradient-to-r ${banner.bg}`}
+          className={
+            banner.image
+              // Real ad: the box hugs the image at a capped height so the banner
+              // stays short AND the whole image shows, uncropped. It centers in
+              // the row; the sides are just the page — nothing is "filled".
+              ? 'relative mx-auto w-fit max-w-full rounded-3xl overflow-hidden transition-all duration-500'
+              : `relative w-full rounded-3xl overflow-hidden transition-all duration-500 bg-gradient-to-r ${banner.bg}`
+          }
         >
           {banner.image ? (
-            /* Real ad banner — full width, natural height, nothing cropped and
-               no side fill: the image simply spans the width and is as tall as
-               its own aspect ratio makes it. */
             <img
               src={banner.image}
               alt=""
               loading="eager"
               decoding="async"
-              className={`block w-full h-auto transition-opacity duration-350 ${
+              className={`block h-[190px] sm:h-[260px] lg:h-[340px] w-auto max-w-full transition-opacity duration-350 ${
                 animating ? 'opacity-0' : 'opacity-100'
               }`}
             />
