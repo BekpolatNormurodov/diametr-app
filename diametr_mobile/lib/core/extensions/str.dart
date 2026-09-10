@@ -2,6 +2,7 @@
 // field inside the search filter loops, so a per-call RegExp would allocate
 // hundreds of identical objects per keystroke.
 final RegExp _aposGlyphs = RegExp("[‘’ʻʼ`´]");
+final RegExp _leadingPlus = RegExp(r'^\++');
 
 // ignore: camel_case_extensions
 extension myextension on String? {
@@ -27,5 +28,13 @@ extension myextension on String? {
     return this!
         .toLowerCase()
         .replaceAll(_aposGlyphs, "'");
+  }
+
+  /// Renders a phone as exactly one leading '+' — the backend stores some
+  /// numbers already prefixed with '+', so blindly doing '+' + phone produced
+  /// "++998...". Returns '' for an empty value (so callers can hide the row).
+  String toPhone() {
+    final s = (this ?? '').replaceAll(_leadingPlus, '').trim();
+    return s.isEmpty ? '' : '+$s';
   }
 }

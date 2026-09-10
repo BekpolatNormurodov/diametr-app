@@ -226,8 +226,9 @@ class _MarketScreenState extends State<MarketScreen> {
                     child: _InfoCard(
                       icon: Iconsax.call,
                       iconColor: AppConstant.primaryColor,
-                      label: '+' + phone,
-                      onTap: () => FlutterPhoneDirectCaller.callNumber('+' + phone),
+                      label: phone.toPhone(),
+                      onTap: () =>
+                          FlutterPhoneDirectCaller.callNumber(phone.toPhone()),
                       trailing: Icon(Iconsax.arrow_right_3, size: 14.sp, color: context.tSub),
                     ),
                   ),

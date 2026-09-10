@@ -110,7 +110,7 @@ class _CartScreenState extends State<CartScreen> {
   // в”Ђв”Ђ price helpers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
   int _itemsTotal() {
     double t = 0;
-    for (final it in savatchaItem) t += it["price"] * it["count"];
+    for (final it in savatchaItem) t += ((it["price"] as num?) ?? 0) * ((it["count"] as num?) ?? 0);
     return t.toInt();
   }
 
@@ -131,6 +131,26 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   int _grandTotal() => _itemsTotal() + _totalDelivery();
+
+  /// Change a cart line's quantity from the cart itself. Below 1 removes the
+  /// line; capped at the stored stock when we know it.
+  void _changeQty(int index, int delta) {
+    if (index < 0 || index >= savatchaItem.length) return;
+    final int current =
+        int.tryParse(savatchaItem[index]["count"].toString()) ?? 1;
+    int next = current + delta;
+    if (next < 1) {
+      savatchaItem.removeAt(index);
+    } else {
+      final int stock =
+          int.tryParse(savatchaItem[index]["stock"]?.toString() ?? "0") ?? 0;
+      if (stock > 0 && next > stock) next = stock;
+      savatchaItem[index]["count"] = next;
+    }
+    StorageService().write(StorageService.savatcha, savatchaItem);
+    context.read<SavatchaBloc>().changeValue(savatchaItem);
+    setState(() {});
+  }
 
   bool get _canConfirm {
     if (savatchaItem.isEmpty) return false;
@@ -532,7 +552,8 @@ class _CartScreenState extends State<CartScreen> {
                 if (admin != null) ...[
                   SizedBox(height: 8.h),
                   _InfoChip(
-                      icon: Iconsax.call, text: '+${admin["phone"]}'),
+                      icon: Iconsax.call,
+                      text: admin["phone"]?.toString().toPhone() ?? ''),
                 ],
               ],
             ),
@@ -672,20 +693,40 @@ class _CartScreenState extends State<CartScreen> {
                               Row(
                                 children: [
                                   Container(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 7.w, vertical: 2.h),
                                     decoration: BoxDecoration(
                                       color: primary
                                           .withValues(alpha: 0.10),
                                       borderRadius:
-                                          BorderRadius.circular(6.r),
+                                          BorderRadius.circular(8.r),
                                     ),
-                                    child: Text('x${item['count']}',
-                                        style: TextStyle(
-                                            color: primary,
-                                            fontSize: 11.sp,
-                                            fontWeight:
-                                                FontWeight.w700)),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        InkWell(
+                                          onTap: () =>
+                                              _changeQty(globalIndex, -1),
+                                          child: Padding(
+                                            padding: EdgeInsets.all(5.w),
+                                            child: Icon(Iconsax.minus,
+                                                size: 14.sp, color: primary),
+                                          ),
+                                        ),
+                                        Text('${item['count']}',
+                                            style: TextStyle(
+                                                color: primary,
+                                                fontSize: 12.sp,
+                                                fontWeight: FontWeight.w700)),
+                                        InkWell(
+                                          onTap: () =>
+                                              _changeQty(globalIndex, 1),
+                                          child: Padding(
+                                            padding: EdgeInsets.all(5.w),
+                                            child: Icon(Iconsax.add,
+                                                size: 14.sp, color: primary),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                   SizedBox(width: 6.w),
                                   Expanded(
@@ -705,7 +746,7 @@ class _CartScreenState extends State<CartScreen> {
                         ),
                         SizedBox(width: 8.w),
                         Text(
-                          "${(item['price'] * item['count']).toString().toMoney()} so'm",
+                          "${(((item['price'] as num?) ?? 0) * ((item['count'] as num?) ?? 0)).toString().toMoney()} so'm",
                           style: TextStyle(
                               color: primary,
                               fontSize: 13.sp,
@@ -1118,7 +1159,7 @@ class _CartScreenState extends State<CartScreen> {
           type != "MARKET" ? orderLocations[shopId] : null;
 
       double itemsSum = 0;
-      for (final it in shopItems) itemsSum += it["price"] * it["count"];
+      for (final it in shopItems) itemsSum += ((it["price"] as num?) ?? 0) * ((it["count"] as num?) ?? 0);
       final int amount = itemsSum.toInt() +
           (type == "FIXED"
               ? (double.tryParse(

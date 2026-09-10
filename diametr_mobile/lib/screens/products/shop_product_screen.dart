@@ -111,20 +111,33 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
         return false;
       }
     }
-    savatchaData.add({
-      "id": itemData["id"],
-      "name": itemData["name"],
-      "product_name": itemData["product_name"],
-      "image": itemData["image"],
-      "price": itemData["price"],
-      "count": itemData["count"],
-      "shop_id": itemData["shop_id"],
-      "product_id" : itemData["product_id"],
-    });
-    // await SavatchaManager.changeValue(context, data: savatchaData);
-      context.read<SavatchaBloc>().changeValue(
-                               savatchaData);
-    
+    final int stock = int.tryParse(itemData["stock"]?.toString() ?? "0") ?? 0;
+    final int adding = int.tryParse(itemData["count"]?.toString() ?? "0") ?? 0;
+    // Merge with the same variant already in the cart instead of adding a
+    // duplicate line, and never let the total exceed the available stock.
+    final int idx = savatchaData
+        .indexWhere((e) => e["id"].toString() == itemData["id"].toString());
+    if (idx >= 0) {
+      final int current =
+          int.tryParse(savatchaData[idx]["count"].toString()) ?? 0;
+      int next = current + adding;
+      if (stock > 0 && next > stock) next = stock;
+      savatchaData[idx]["count"] = next;
+      savatchaData[idx]["stock"] = stock;
+    } else {
+      savatchaData.add({
+        "id": itemData["id"],
+        "name": itemData["name"],
+        "product_name": itemData["product_name"],
+        "image": itemData["image"],
+        "price": itemData["price"],
+        "count": (stock > 0 && adding > stock) ? stock : adding,
+        "stock": stock,
+        "shop_id": itemData["shop_id"],
+        "product_id": itemData["product_id"],
+      });
+    }
+    context.read<SavatchaBloc>().changeValue(savatchaData);
     await StorageService().write(StorageService.savatcha, savatchaData);
     setState(() {});
     return true;
@@ -391,9 +404,9 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
               _buildVariantSelector(data),
              SizedBox(height: 16.h),
                 Text(
-               data[selectTypeIndex]["count"] > 0 ?  'Bu turdagi mahsulot ${data[selectTypeIndex]["count"]} ta mavjud' : "Bu turdagi mahsulot tugagan",
+               ((data[selectTypeIndex]["count"] as num?) ?? 0) > 0 ?  'Bu turdagi mahsulot ${data[selectTypeIndex]["count"]} ta mavjud' : "Bu turdagi mahsulot tugagan",
                 style: TextStyle(
-                  color: data[selectTypeIndex]["count"] > 0 ?  AppConstant.primaryColor : Color.fromARGB(255, 253, 104, 104),
+                  color: ((data[selectTypeIndex]["count"] as num?) ?? 0) > 0 ?  AppConstant.primaryColor : Color.fromARGB(255, 253, 104, 104),
                   fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
                 ),
@@ -444,7 +457,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                   ),
                   Spacer(),
                   Text(
-                    (itemCount * data[selectTypeIndex]["price"])
+                    (itemCount * ((data[selectTypeIndex]["price"] as num?) ?? 0))
                             .toString()
                             .toMoney() +
                         " so'm",
@@ -459,7 +472,23 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
               SizedBox(height: 16.h),
               CustomButton(
                 onPressed: () async {
-                  if (data[selectTypeIndex]["count"] >= itemCount ) {
+                  final int stock = int.tryParse(
+                          data[selectTypeIndex]["count"]?.toString() ?? "0") ??
+                      0;
+                  // Validate against what is ALREADY in the cart for this
+                  // variant, not just this single tap, so the total never
+                  // exceeds the shop's stock.
+                  final List cart =
+                      StorageService().read(StorageService.savatcha) ?? [];
+                  final existing = cart.firstWhere(
+                      (e) =>
+                          e["id"].toString() ==
+                          data[selectTypeIndex]["id"].toString(),
+                      orElse: () => null);
+                  final int inCart = existing == null
+                      ? 0
+                      : (int.tryParse(existing["count"].toString()) ?? 0);
+                  if (inCart + itemCount <= stock) {
                     if (await addProductToSavatcha({
                     "id": data[selectTypeIndex]["id"],
                     "name": data[selectTypeIndex]["name"],
@@ -467,6 +496,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                     "image": (widget.image ?? ""),
                     "price": data[selectTypeIndex]["price"],
                     "count": itemCount,
+                    "stock": stock,
                     "shop_id": (widget.shop_id ?? ""),
                     "product_id" : (widget.product_id ?? ""),
                   }
@@ -514,7 +544,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                 },
                 text: "Savatchaga qo'shish",
                 width: 1.sw,
-                color: data[selectTypeIndex]["count"] >= itemCount ?   AppConstant.primaryColor  : AppConstant.greyColor,
+                color: ((data[selectTypeIndex]["count"] as num?) ?? 0) >= itemCount ?   AppConstant.primaryColor  : AppConstant.greyColor,
               ),
               SizedBox(height: 16.h),
             ],
@@ -560,7 +590,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                 itemBuilder: (context, index) {
                   return GestureDetector(
                     onTap: () {
-                      Navigator.of(context).pushReplacementNamed(
+                      Navigator.of(context).pushNamed(
                           '/shopProductScreen',
                           arguments: {
                             "name": (context.locale.languageCode == 'ru'
@@ -569,8 +599,8 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                                 tavsiyalar[index]["name"],
                             "product_id": tavsiyalar[index]["id"],
                             "shop_id": widget.shop_id,
-                            "image": widget.image,
-                            "desc": widget.desc,
+                            "image": tavsiyalar[index]["image"],
+                            "desc": tavsiyalar[index]["desc"],
                           });
                     },
                     child: Container(

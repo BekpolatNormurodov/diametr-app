@@ -379,6 +379,8 @@ class _ProductScreenState extends State<ProductScreen> {
                           children: [
                             Text(
                               "${data[index]["name"]}",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: context.tText,
                                 fontSize: 16.sp,
@@ -388,6 +390,8 @@ class _ProductScreenState extends State<ProductScreen> {
                             SizedBox(height: 3.h),
                             Text(
                               data[index]["address"].toString(),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: context.tSub,
                                 fontSize: 10.sp,

@@ -118,7 +118,7 @@ class _WorkerScreenState extends State<WorkerScreen> {
         // ── Info cards ──────────────────────────────────────────
         _InfoTile(icon: Iconsax.user, text: fullname),
         SizedBox(height: 12.h),
-        _InfoTile(icon: Iconsax.mobile, text: '+$phone'),
+        _InfoTile(icon: Iconsax.mobile, text: phone.toPhone()),
         SizedBox(height: 12.h),
         _InfoTile(
           icon: Iconsax.dollar_circle,
@@ -134,7 +134,7 @@ class _WorkerScreenState extends State<WorkerScreen> {
         // ── Call button ─────────────────────────────────────────
         CustomButton(
           onPressed: () async =>
-              FlutterPhoneDirectCaller.callNumber('+$phone'),
+              FlutterPhoneDirectCaller.callNumber(phone.toPhone()),
           text: 'worker_connect'.tr(),
           width: 1.sw,
         ),
