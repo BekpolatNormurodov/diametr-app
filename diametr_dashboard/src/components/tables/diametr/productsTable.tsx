@@ -511,7 +511,20 @@ export default function ProductsTable({
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="px-5 py-4 font-medium text-gray-800 dark:text-white">{item.name_uz ?? item.name ?? "-"}</TableCell>
+                    <TableCell className="px-5 py-4 font-medium text-gray-800 dark:text-white">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{item.name_uz ?? item.name ?? "-"}</span>
+                        {variants.length === 0 && (
+                          <span
+                            title="Bu mahsulotga variant qo'shilmagan, shuning uchun ilova va saytda mijozlarga ko'rinmaydi. Mahsulotni ochib variant qo'shing."
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 text-[10px] font-semibold whitespace-nowrap"
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+                            Variant yo'q — ko'rinmaydi
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{item.name_ru ?? "-"}</TableCell>
                     <TableCell className="px-5 py-4">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-100 dark:border-gray-700">
