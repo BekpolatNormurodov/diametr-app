@@ -518,15 +518,49 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                     );
 
                   } else {
-                    Fluttertoast.showToast(
-                      msg: "Boshqa do'kondan mahsulot qo'shib bo'lmaydi",
-                      toastLength: Toast.LENGTH_SHORT,
-                      gravity: ToastGravity.BOTTOM,
-                      timeInSecForIosWeb: 1,
-                      backgroundColor: AppConstant.darkColor.withOpacity(0.9),
-                      textColor: Colors.white,
-                      fontSize: 14.sp,
+                    // Cart holds another shop's items — offer to clear & switch
+                    // instead of leaving the user stuck.
+                    final bool? clear = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text("Boshqa do'kon"),
+                        content: const Text(
+                            "Savatchada boshqa do'kon mahsuloti bor. Savatchani tozalab, shu do'kondan davom etasizmi?"),
+                        actions: [
+                          TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text("Yo'q")),
+                          TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text("Ha, tozalash")),
+                        ],
+                      ),
                     );
+                    if (clear == true) {
+                      await StorageService().remove(StorageService.savatcha);
+                      context.read<SavatchaBloc>().changeValue([]);
+                      await addProductToSavatcha({
+                        "id": data[selectTypeIndex]["id"],
+                        "name": data[selectTypeIndex]["name"],
+                        "product_name": widget.name ?? "",
+                        "image": (widget.image ?? ""),
+                        "price": data[selectTypeIndex]["price"],
+                        "count": itemCount,
+                        "stock": stock,
+                        "shop_id": (widget.shop_id ?? ""),
+                        "product_id": (widget.product_id ?? ""),
+                      });
+                      itemCount = 1;
+                      setState(() {});
+                      Fluttertoast.showToast(
+                        msg: "Mahsulot qo'shildi",
+                        toastLength: Toast.LENGTH_SHORT,
+                        gravity: ToastGravity.BOTTOM,
+                        backgroundColor: AppConstant.darkColor.withOpacity(0.9),
+                        textColor: Colors.white,
+                        fontSize: 14.sp,
+                      );
+                    }
                   }
                   } else {
                       Fluttertoast.showToast(
