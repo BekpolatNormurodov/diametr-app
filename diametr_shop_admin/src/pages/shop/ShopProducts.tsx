@@ -1,12 +1,10 @@
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import PageMeta from "../../components/common/PageMeta";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
 import axiosClient from "../../service/axios.service";
 import { toast } from "../../components/ui/toast";
 import ShopProductsTable, { ShopProductItemProps } from "../../components/tables/shopProductsTable";
 import { usePolling } from "../../hooks/usePolling";
-import { GridIcon } from "../../icons";
 
 export default function ShopProductsPage() {
   const [data, setData] = useState<ShopProductItemProps[]>([]);
@@ -58,23 +56,6 @@ export default function ShopProductsPage() {
       <PageMeta title="Do'kon Tovarlar" description="Do'kon tovarlar ro'yxati" />
       <PageBreadcrumb pageTitle="Tovarlar" />
       <div className="space-y-6">
-        {/* Catalog browse CTA */}
-        <Link
-          to="/shop-products/browse"
-          className="group flex items-center justify-between gap-3 rounded-xl border border-brand-200 dark:border-brand-500/30 bg-gradient-to-r from-brand-50 to-white dark:from-brand-500/10 dark:to-transparent px-4 py-3 hover:shadow-sm transition"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center">
-              <GridIcon className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-800 dark:text-white">Barcha kategoriya va tovarlar</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Katalog orqali bir nechta variantni birdaniga qo'shing</p>
-            </div>
-          </div>
-          <span className="text-brand-500 text-sm font-semibold opacity-80 group-hover:opacity-100">Ochish →</span>
-        </Link>
-
         {/* Inventory Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
