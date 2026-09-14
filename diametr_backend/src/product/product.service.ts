@@ -72,9 +72,14 @@ export class ProductService {
 
     const ids = rows.map((r) => r.product_id);
     if (ids.length === 0) {
-      // Fallback: newest products
+      // Fallback: newest products — but only ones with at least one working
+      // variant, so empty catalogue placeholders (no variant, no price) never
+      // surface in the mobile home "popular/cheap" sections.
       return await this.prisma.product.findMany({
-        where: { work_status: 'WORKING' },
+        where: {
+          work_status: 'WORKING',
+          items: { some: { work_status: 'WORKING' } },
+        },
         include: {
           category: {
             select: { id: true, name: true, name_uz: true, name_ru: true },

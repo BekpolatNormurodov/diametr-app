@@ -33,7 +33,10 @@ class _MoreAndCheapSectionState extends State<MoreAndCheapSection> {
       if (!mounted) return;
       if (response.statusCode == 200 && response.data is List) {
         setState(() {
-          _items = response.data as List;
+          // Skip catalogue placeholders with no variants (no price, nothing to buy).
+          _items = (response.data as List)
+              .where((p) => (p["items"] as List?)?.isNotEmpty ?? false)
+              .toList();
           _loading = false;
         });
       } else {

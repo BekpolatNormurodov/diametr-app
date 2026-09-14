@@ -31,7 +31,10 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
       if (!mounted) return;
       if (r.statusCode == 200 && r.data is List) {
         setState(() {
-          _items = r.data as List;
+          // Skip catalogue placeholders with no variants (no price, nothing to buy).
+          _items = (r.data as List)
+              .where((p) => (p["items"] as List?)?.isNotEmpty ?? false)
+              .toList();
           _loading = false;
         });
       } else {

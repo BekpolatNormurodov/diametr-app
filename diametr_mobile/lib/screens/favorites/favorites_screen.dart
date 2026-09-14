@@ -155,7 +155,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         if (state is ProductAllWaitingState) return _shimmerGrid(context);
         if (state is ProductAllSuccessState) {
           final all = (state.data ?? [])
-              .where((e) => _favProductIds.contains(e["id"]))
+              .where((e) =>
+                  _favProductIds.contains(e["id"]) &&
+                  ((e["items"] as List?)?.isNotEmpty ?? false))
               .toList();
 
           if (all.isEmpty) {
