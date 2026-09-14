@@ -7,7 +7,6 @@ import Home from "./pages/Dashboard/Home";
 import { DiametrToastProvider } from "./components/ui/toast";
 import OrdersPage from "./pages/shop/Orders";
 import ShopProductsPage from "./pages/shop/ShopProducts";
-import BrowseCatalogPage from "./pages/shop/BrowseCatalog";
 import PaymentsPage from "./pages/shop/Payments";
 import PromoCodesPage from "./pages/shop/PromoCodes";
 import ProfilePage from "./pages/shop/Profile";
@@ -37,7 +36,6 @@ export default function App() {
             <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
               <Route path="/" element={<Home />} />
               <Route path="/shop-products" element={<ShopProductsPage />} />
-              <Route path="/shop-products/browse" element={<BrowseCatalogPage />} />
               <Route path="/orders" element={<OrdersPage />} />
               <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/promo-codes" element={<PromoCodesPage />} />

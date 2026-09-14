@@ -258,6 +258,7 @@ export default function ShopProductsTable({
         bonus_price: r.bonus_price && Number(r.bonus_price) > 0 ? Number(r.bonus_price) : undefined,
       }));
     if (toSave.length === 0) { toast.error("Kamida bitta variant tanlang va narx kiriting"); return; }
+    if (toSave.some((x) => x.price < 1000)) { toast.error("Narx kamida 1000 so'm bo'lishi kerak"); return; }
     setAddSaving(true);
     try {
       let created = 0, updated = 0;

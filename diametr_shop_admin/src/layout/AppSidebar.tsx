@@ -39,7 +39,6 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     key: "shop",
     items: [
       { icon: <ShopIcon />,  name: "Tovarlar",  path: "/shop-products" },
-      { icon: <GridIcon />,  name: "Katalog",   path: "/shop-products/browse" },
     ],
   },
   {
