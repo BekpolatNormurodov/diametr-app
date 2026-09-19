@@ -1,27 +1,32 @@
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import PageMeta from "../../components/common/PageMeta";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axiosClient from "../../service/axios.service";
 import { toast } from "../../components/ui/toast";
 import PaymentsTable, { PaymentItemProps } from "../../components/tables/paymentsTable";
-import { usePolling } from "../../hooks/usePolling";
+import { usePolling, useRequestSeq } from "../../hooks/usePolling";
+import { useShopId } from "../../context/ShopSessionContext";
 
 export default function PaymentsPage() {
   const [data, setData] = useState<PaymentItemProps[]>([]);
-  const shopId = Number(localStorage.getItem("shop_id") ?? 0);
+  const shopId = useShopId();
+  const req = useRequestSeq();
 
   const fetchData = async () => {
+    const id = req.next();
     try {
       const res = await axiosClient.get("/payment/all");
+      if (!req.isLatest(id)) return;
       const all: PaymentItemProps[] = res.data?.data ?? res.data ?? [];
       setData(all.filter((p: any) => p.shop_id === shopId));
     } catch {
+      if (!req.isLatest(id)) return;
       toast.error("Ma'lumotlarni yuklashda xatolik");
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
-  usePolling(fetchData, 15000);
+  // usePolling runs immediately on mount (and again when the shop id changes).
+  usePolling(fetchData, 15000, true, shopId);
 
   return (
     <>

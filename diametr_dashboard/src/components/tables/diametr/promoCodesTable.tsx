@@ -28,6 +28,7 @@ import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import { formatMoney } from "../../../service/formatters/money.format";
 import * as XLSX from "xlsx";
+import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 
 export interface PromoCodeItemProps {
   id: number;
@@ -83,7 +84,8 @@ export default function PromoCodesTable({
     setCurrentPage(1);
   }, [data]);
 
-  const filteredData = search.trim() === "" ? tableData : tableData.filter((s) => { const q = search.toLowerCase(); return (s.code ?? "").toLowerCase().includes(q); });
+  const searchQueryKey = searchKey(search);
+  const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.code]));
   const maxPage = Math.ceil(filteredData.length / +optionValue);
   const startIndex = (currentPage - 1) * +optionValue;
   const currentItems = filteredData.slice(startIndex, startIndex + +optionValue);
@@ -143,8 +145,9 @@ export default function PromoCodesTable({
       await axiosClient.delete(`/promo-code/${id}`);
       toast.success("O'chirildi");
       onRefetch();
-    } catch {
-      toast.error("Xatolik yuz berdi");
+    } catch (e: any) {
+      // e.g. 400 for a code that has already been used (backend explains in Uzbek).
+      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
     }
   };
 

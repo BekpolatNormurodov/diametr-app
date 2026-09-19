@@ -1,6 +1,7 @@
 ﻿import Chart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
 import Moment from "moment";
+import { isActiveOrder, isSoldOrder } from "../../utils/orderStatus";
 
 interface Props {
   orders?: any[];
@@ -21,11 +22,13 @@ export default function MonthlyTarget({ orders = [], isLoading = false }: Props)
   });
 
   const total     = thisMonth.length;
-  const finished  = thisMonth.filter((o) => o.status === "FINISHED").length;
+  // Sold = FINISHED or CONFIRMED (both have taken stock); active = STARTED only.
+  const sold      = thisMonth.filter(isSoldOrder);
+  const finished  = sold.length;
   const canceled  = thisMonth.filter((o) => o.status === "CANCELED").length;
-  const active    = thisMonth.filter((o) => o.status === "STARTED" || o.status === "CONFIRMED").length;
+  const active    = thisMonth.filter(isActiveOrder).length;
   const pct       = total > 0 ? Math.round((finished / total) * 100) : 0;
-  const revenue   = thisMonth.filter((o) => o.status === "FINISHED").reduce((s, o) => s + (Number(o.amount) || 0), 0);
+  const revenue   = sold.reduce((s, o) => s + (Number(o.amount) || 0), 0);
 
   const options: ApexOptions = {
     colors: ["#465FFF"],

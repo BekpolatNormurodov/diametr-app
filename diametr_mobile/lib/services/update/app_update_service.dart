@@ -15,16 +15,24 @@ import 'package:in_app_update/in_app_update.dart';
 class AppUpdateService {
   AppUpdateService._();
 
-  static bool _checkedThisLaunch = false;
+  /// Android keeps the process alive for days, so "once per launch" meant a
+  /// user who never force-closes the app was never offered a new release.
+  /// Re-check at most this often (on start and when the app is resumed).
+  static const Duration _minInterval = Duration(hours: 12);
+  static DateTime? _lastCheck;
 
-  /// Call once after the first screen is on-screen (e.g. HomeScreen.initState).
+  /// Call after the first screen is on-screen (HomeScreen.initState) and when
+  /// the app returns to the foreground; throttled by [_minInterval].
   ///
   /// If Play reports a newer version, shows Play's own full-screen update flow.
   /// A "flexible" update (download in the background, then a restart prompt) is
   /// preferred; if Play only allows an immediate update, that is used instead.
   static Future<void> checkAndUpdate() async {
-    if (_checkedThisLaunch) return;
-    _checkedThisLaunch = true;
+    final now = DateTime.now();
+    if (_lastCheck != null && now.difference(_lastCheck!) < _minInterval) {
+      return;
+    }
+    _lastCheck = now;
 
     if (!Platform.isAndroid) return; // Play In-App Update is Android-only.
 

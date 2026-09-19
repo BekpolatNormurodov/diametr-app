@@ -8,8 +8,10 @@ import {
   Put,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiConsumes,
   ApiOperation,
@@ -17,8 +19,16 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Role } from '@prisma/client';
+import { RolesGuardFactory } from 'src/_guard/roles.guard';
 import { diskStorage } from 'multer';
-import { extname, join } from 'path';
+import { join } from 'path';
+import {
+  IMAGE_MAX_BYTES,
+  imageFileFilter,
+  imageFileName,
+  uploadedImageName,
+} from 'src/_utils/image-upload';
 import { NewService } from './new.service';
 import { CreateNewDto } from './dto/create-new.dto';
 import { UpdateNewDto } from './dto/update-new.dto';
@@ -28,14 +38,20 @@ import { UpdateNewDto } from './dto/update-new.dto';
 export class NewController {
   constructor(private readonly newService: NewService) {}
 
+  // Writes and uploads are for the platform admin (dashboard) only; the
+  // GET /all and GET :id reads stay public (site and mobile).
   @Post()
-  @ApiOperation({ summary: 'Yangilik yaratish' })
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Yangilik yaratish (SUPER)' })
   create(@Body() data: CreateNewDto) {
     return this.newService.create(data);
   }
 
   @Post('/upload-image')
-  @ApiOperation({ summary: 'Yangilik rasmini yuklash' })
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Yangilik rasmini yuklash (SUPER)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -47,20 +63,14 @@ export class NewController {
     FileInterceptor('image', {
       storage: diskStorage({
         destination: join(process.cwd(), 'public', 'news'),
-        filename: (_req, file, cb) => {
-          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, unique + extname(file.originalname));
-        },
+        filename: imageFileName,
       }),
-      fileFilter: (_req, file, cb) => {
-        const allowed = /\.(jpg|jpeg|png|webp|gif|svg|bmp)$/i;
-        cb(null, allowed.test(file.originalname));
-      },
-      limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+      fileFilter: imageFileFilter,
+      limits: { fileSize: IMAGE_MAX_BYTES, files: 1 },
     }),
   )
   uploadImage(@UploadedFile() file: Express.Multer.File) {
-    return { image: file.filename };
+    return { image: uploadedImageName(file) };
   }
 
   @Get('/all')
@@ -77,14 +87,18 @@ export class NewController {
   }
 
   @Put(':id')
-  @ApiOperation({ summary: 'Yangilikni tahrirlash' })
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Yangilikni tahrirlash (SUPER)' })
   @ApiParam({ name: 'id', type: Number })
   update(@Param('id') id: string, @Body() data: UpdateNewDto) {
     return this.newService.update(+id, data);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Yangilikni o’chirish' })
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Yangilikni o’chirish (SUPER)' })
   @ApiParam({ name: 'id', type: Number })
   remove(@Param('id') id: string) {
     return this.newService.remove(+id);

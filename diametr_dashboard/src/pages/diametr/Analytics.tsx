@@ -9,6 +9,7 @@ import Moment from "moment";
 import * as XLSX from "xlsx";
 import { DownloadIcon } from "../../icons";
 import Button from "../../components/ui/button/Button";
+import { isSoldOrder } from "../../utils/orderStatus";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Interfaces
@@ -60,6 +61,12 @@ function getProductName(p: NonNullable<OrderItem["products"]>[number]): string {
   );
 }
 
+// Revenue ("tushum") and sold products count only sold orders (FINISHED or
+// CONFIRMED); order counts and payment-method shares count every order.
+function soldRevenue(orders: OrderItem[]): number {
+  return orders.reduce((s, o) => s + (isSoldOrder(o) ? o.amount ?? 0 : 0), 0);
+}
+
 function buildStats(orders: OrderItem[]) {
   const shopMap: Record<string, ShopStat> = {};
   const paymentMap: Record<string, { count: number; total: number }> = {};
@@ -67,25 +74,28 @@ function buildStats(orders: OrderItem[]) {
   orders.forEach((o) => {
     const shop = o.shop?.name ?? "Noma'lum do'kon";
     const payType = o.payment_type ?? "Noma'lum";
-    const orderAmount = o.amount ?? 0;
+    const sold = isSoldOrder(o);
+    const soldAmount = sold ? o.amount ?? 0 : 0;
 
     if (!shopMap[shop]) {
       shopMap[shop] = { shop, totalOrders: 0, totalRevenue: 0, products: {}, payments: {} };
     }
     shopMap[shop].totalOrders += 1;
-    shopMap[shop].totalRevenue += orderAmount;
+    shopMap[shop].totalRevenue += soldAmount;
     shopMap[shop].payments[payType] = (shopMap[shop].payments[payType] ?? 0) + 1;
 
-    (o.products ?? []).forEach((p) => {
-      const name = getProductName(p);
-      if (!shopMap[shop].products[name]) shopMap[shop].products[name] = { count: 0, revenue: 0 };
-      shopMap[shop].products[name].count += p.count ?? 1;
-      shopMap[shop].products[name].revenue += (p.amount ?? 0);
-    });
+    if (sold) {
+      (o.products ?? []).forEach((p) => {
+        const name = getProductName(p);
+        if (!shopMap[shop].products[name]) shopMap[shop].products[name] = { count: 0, revenue: 0 };
+        shopMap[shop].products[name].count += p.count ?? 1;
+        shopMap[shop].products[name].revenue += (p.amount ?? 0);
+      });
+    }
 
     if (!paymentMap[payType]) paymentMap[payType] = { count: 0, total: 0 };
     paymentMap[payType].count += 1;
-    paymentMap[payType].total += orderAmount;
+    paymentMap[payType].total += soldAmount;
   });
 
   return {
@@ -103,7 +113,7 @@ function exportOverview(orders: OrderItem[]) {
 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ["Jami buyurtmalar", orders.length],
-    ["Jami tushum", orders.reduce((s, o) => s + (o.amount ?? 0), 0)],
+    ["Jami tushum", soldRevenue(orders)],
     ["Faol do'konlar", shopStats.length],
     ["Sanasi", Moment().format("DD.MM.YYYY HH:mm")],
   ]), "Umumiy");
@@ -157,7 +167,7 @@ export default function AnalyticsPage() {
     return d.isSameOrAfter(dateFrom, "day") && d.isSameOrBefore(dateTo, "day");
   });
 
-  const totalRevenue = filtered.reduce((s, o) => s + (o.amount ?? 0), 0);
+  const totalRevenue = soldRevenue(filtered);
   const { shopStats, paymentStats } = buildStats(filtered);
 
   const statusConfig: Record<string, string> = {
@@ -266,8 +276,8 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          {/* Per-shop product breakdown */}
-          {shopStats.map((s, si) => (
+          {/* Per-shop product breakdown (sold orders only; shops with no sales are skipped) */}
+          {shopStats.filter((s) => Object.keys(s.products).length > 0).map((s, si) => (
             <div key={si} className="rounded-2xl border border-gray-100 dark:border-white/[0.05] bg-white dark:bg-white/[0.03] p-5">
               <h3 className="font-semibold text-gray-800 dark:text-white mb-3">{s.shop} – mahsulotlar bo'yicha</h3>
               <div className="overflow-x-auto">

@@ -1,5 +1,6 @@
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:stroymarket/core/extensions/str.dart';
+import 'package:stroymarket/core/utils/price.dart';
 import 'package:stroymarket/manager/11_shop_product_manager.dart';
 import 'package:stroymarket/services/storage/storage_service.dart';
 import 'package:stroymarket/widgets/common/custom_button.dart';
@@ -8,6 +9,7 @@ import '../../bloc/savatcha/savatcha_bloc.dart';
 import '../../bloc/shopProduct/shopProduct_state.dart';
 import '../../bloc/shopProduct/shopProduct_bloc.dart';
 import '../../export_files.dart';
+import '../../widgets/common/pull_to_refresh_fill.dart';
 
 // ignore: must_be_immutable
 class ShopProductScreen extends StatefulWidget {
@@ -38,6 +40,9 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
 
   int itemCount = 1;
   int selectTypeIndex = 0;
+  // Id of the chosen variant row, so a refresh (which can re-order or change
+  // the list) keeps the same variant selected.
+  dynamic _selectedId;
 
   @override
   void initState() {
@@ -45,6 +50,10 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
         productId: widget.product_id ?? " ", shopId: widget.shop_id ?? "");
     super.initState();
   }
+
+  /// Pull-to-refresh: reloads this product's variants, prices and stock.
+  Future<void> _refresh() => ShopProductManager.refresh(context,
+      productId: widget.product_id ?? " ", shopId: widget.shop_id ?? "");
 
   @override
   Widget build(BuildContext context) {
@@ -58,15 +67,42 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
           builder: (context, state) {
         if (state is ShopProductSuccessState) {
           if (state.data.length == 0) {
-            return EmptyState(
-              icon: Iconsax.shop,
-              title: "Do'kon hozircha mavjud emas",
-              subtitle:
-                  "Hozircha bu mahsulot biror do'konda topilmadi. Keyinroq qayta urinib ko'ring.",
+            return RefreshIndicator(
+              color: AppConstant.primaryColor,
+              backgroundColor: context.tCard,
+              onRefresh: _refresh,
+              child: PullToRefreshFill(
+                child: EmptyState(
+                  icon: Iconsax.shop,
+                  title: "Do'kon hozircha mavjud emas",
+                  subtitle:
+                      "Hozircha bu mahsulot biror do'konda topilmadi. Keyinroq qayta urinib ko'ring.",
+                ),
+              ),
             );
           }
           return SafeArea(
-              child: ShopProductScreenBody(state.data, state.tavsiyalar));
+              child: RefreshIndicator(
+                  color: AppConstant.primaryColor,
+                  backgroundColor: context.tCard,
+                  onRefresh: _refresh,
+                  child: ShopProductScreenBody(state.data, state.tavsiyalar)));
+        } else if (state is ShopProductErrorState) {
+          // Was a blank screen; say it failed and let the user retry.
+          return RefreshIndicator(
+            color: AppConstant.primaryColor,
+            backgroundColor: context.tCard,
+            onRefresh: _refresh,
+            child: PullToRefreshFill(
+              child: EmptyState(
+                icon: Iconsax.warning_2,
+                title: 'load_failed'.tr(),
+                subtitle: state.message,
+                actionLabel: 'retry'.tr(),
+                onAction: _refresh,
+              ),
+            ),
+          );
         } else if (state is ShopProductWaitingState) {
           return Center(
               child: Column(
@@ -124,6 +160,8 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
       if (stock > 0 && next > stock) next = stock;
       savatchaData[idx]["count"] = next;
       savatchaData[idx]["stock"] = stock;
+      // The line keeps the price the product page shows now.
+      savatchaData[idx]["price"] = itemData["price"];
     } else {
       savatchaData.add({
         "id": itemData["id"],
@@ -208,6 +246,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
             onTap: () {
               setState(() {
                 selectTypeIndex = index;
+                _selectedId = item["id"];
                 itemCount = 1;
               });
             },
@@ -288,6 +327,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
           onTap: () {
             setState(() {
               selectTypeIndex = index;
+              _selectedId = item["id"];
               itemCount = 1;
             });
           },
@@ -328,6 +368,23 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
   }
 
   ShopProductScreenBody<Widget>(data, tavsiyalar) {
+    // Keep the chosen variant after a refresh; never index past the list.
+    if (_selectedId != null) {
+      final int kept = (data as List).indexWhere((e) => e["id"] == _selectedId);
+      if (kept >= 0) selectTypeIndex = kept;
+    }
+    if (selectTypeIndex >= data.length) {
+      selectTypeIndex = 0;
+      itemCount = 1;
+    }
+    _selectedId = data[selectTypeIndex]["id"];
+    // What the customer pays: the shop's discount price when there is one
+    // (same rule as the website and the order lines), else the regular price.
+    final Map selectedRow = data[selectTypeIndex];
+    final num? regularPrice = selectedRow["price"] as num?;
+    final num? payPrice = rowEffectivePrice(selectedRow);
+    final bool discounted =
+        payPrice != null && regularPrice != null && payPrice < regularPrice;
     // Use variant image if available, fallback to product image.
     // Variants live in /static/product-items/, products in /static/products/.
     final dynamic variantImg = data[selectTypeIndex]["image"];
@@ -456,22 +513,49 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                     },
                   ),
                   Spacer(),
-                  Text(
-                    (itemCount * ((data[selectTypeIndex]["price"] as num?) ?? 0))
-                            .toString()
-                            .toMoney() +
-                        " so'm",
-                    style: TextStyle(
-                      color: context.tText,
-                      fontSize: 24.sp,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      // Discounted: the regular price, struck through.
+                      if (discounted)
+                        Text(
+                          (itemCount * regularPrice).toString().toMoney() +
+                              " so'm",
+                          style: TextStyle(
+                            color: context.tSub,
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w400,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                      Text(
+                        (itemCount * (payPrice ?? 0)).toString().toMoney() +
+                            " so'm",
+                        style: TextStyle(
+                          color: context.tText,
+                          fontSize: 24.sp,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
               SizedBox(height: 16.h),
               CustomButton(
                 onPressed: () async {
+                  if (payPrice == null) {
+                    Fluttertoast.showToast(
+                      msg: 'product_price_missing'.tr(),
+                      toastLength: Toast.LENGTH_SHORT,
+                      gravity: ToastGravity.BOTTOM,
+                      backgroundColor: AppConstant.darkColor.withValues(alpha: 0.9),
+                      textColor: Colors.white,
+                      fontSize: 14.sp,
+                    );
+                    return;
+                  }
                   final int stock = int.tryParse(
                           data[selectTypeIndex]["count"]?.toString() ?? "0") ??
                       0;
@@ -494,7 +578,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                     "name": data[selectTypeIndex]["name"],
                     "product_name": widget.name ?? "",
                     "image": (widget.image ?? ""),
-                    "price": data[selectTypeIndex]["price"],
+                    "price": payPrice,
                     "count": itemCount,
                     "stock": stock,
                     "shop_id": (widget.shop_id ?? ""),
@@ -544,7 +628,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                         "name": data[selectTypeIndex]["name"],
                         "product_name": widget.name ?? "",
                         "image": (widget.image ?? ""),
-                        "price": data[selectTypeIndex]["price"],
+                        "price": payPrice,
                         "count": itemCount,
                         "stock": stock,
                         "shop_id": (widget.shop_id ?? ""),
@@ -578,7 +662,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                 },
                 text: "Savatchaga qo'shish",
                 width: 1.sw,
-                color: ((data[selectTypeIndex]["count"] as num?) ?? 0) >= itemCount ?   AppConstant.primaryColor  : AppConstant.greyColor,
+                color: payPrice != null && ((data[selectTypeIndex]["count"] as num?) ?? 0) >= itemCount ?   AppConstant.primaryColor  : AppConstant.greyColor,
               ),
               SizedBox(height: 16.h),
             ],

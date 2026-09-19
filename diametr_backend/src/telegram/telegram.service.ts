@@ -1,6 +1,21 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import axios from 'axios';
 import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
+import {
+  isTelegramWebhookSecretValid,
+  telegramWebhookSecret,
+} from 'src/_utils/telegram-webhook';
+
+/**
+ * Text from users or the database inside a parse_mode=HTML message: a stray
+ * '<' or '&' makes Telegram reject the whole message.
+ */
+function escapeHtml(s: string | null | undefined): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 // ─── UZT helpers (+5) ─────────────────────────────────────────────────────────
 function uztNow(): Date {
@@ -57,6 +72,8 @@ const BOT_COMMANDS = [
 export class TelegramService implements OnModuleInit {
   private readonly logger = new Logger(TelegramService.name);
   private readonly token = process.env.TELEGRAM_BOT_TOKEN ?? '';
+  /** secret_token of the webhook (see telegramWebhookSecret). */
+  private readonly webhookSecret = telegramWebhookSecret(this.token);
   /** barcha admin chat IDlari (vergul bilan: 123,456,-100789) */
   private readonly chatIds: number[] = (process.env.TELEGRAM_CHAT_IDS ?? '')
     .split(',')
@@ -92,7 +109,7 @@ export class TelegramService implements OnModuleInit {
     try {
       await axios.post(
         `https://api.telegram.org/bot${this.token}/setWebhook`,
-        { url, drop_pending_updates: true },
+        { url, drop_pending_updates: true, secret_token: this.webhookSecret },
         { timeout: 8000 },
       );
       this.logger.log(`Webhook set: ${url} ✅`);
@@ -112,6 +129,14 @@ export class TelegramService implements OnModuleInit {
     } catch (e: any) {
       this.logger.error(`registerCommands error: ${e?.message}`);
     }
+  }
+
+  /**
+   * Only updates that carry our secret_token come from Telegram; anything
+   * else posted to the public webhook route is ignored.
+   */
+  acceptsWebhook(secretHeader: string | string[] | undefined): boolean {
+    return isTelegramWebhookSecretValid(this.webhookSecret, secretHeader);
   }
 
   // ─── handleUpdate ─────────────────────────────────────────────────
@@ -141,8 +166,8 @@ export class TelegramService implements OnModuleInit {
         });
         if (admin && text.trim()) {
           // Forward message to super admins
-          const shopName = admin.shop?.name ?? "Do'kon noma'lum";
-          const adminName = admin.fullname ?? admin.phone ?? 'Admin';
+          const shopName = escapeHtml(admin.shop?.name ?? "Do'kon noma'lum");
+          const adminName = escapeHtml(admin.fullname ?? admin.phone ?? 'Admin');
           await this.reply(
             chatId,
             `✅ Xabaringiz qabul qilindi.\nTez orada javob beramiz.`,
@@ -151,8 +176,8 @@ export class TelegramService implements OnModuleInit {
             `📩 <b>Do'kon admin xabari</b>\n` +
               `━━━━━━━━━━━━━━━━━\n` +
               `🏪 Do'kon: <b>${shopName}</b>\n` +
-              `👤 Admin: <b>${adminName}</b> | <code>${admin.phone}</code>\n` +
-              `💬 Xabar:\n${text}`,
+              `👤 Admin: <b>${adminName}</b> | <code>${escapeHtml(admin.phone)}</code>\n` +
+              `💬 Xabar:\n${escapeHtml(text)}`,
           );
         }
         return;
@@ -348,7 +373,7 @@ export class TelegramService implements OnModuleInit {
       .map((o) => {
         const emoji = statusEmoji[o.status] ?? '⚪';
         const amount = (o.amount ?? 0).toLocaleString();
-        const shop = o.shop?.name ?? '—';
+        const shop = escapeHtml(o.shop?.name ?? '—');
         return `${emoji} #${o.id} | ${shop} | ${amount} so'm`;
       })
       .join('\n');
@@ -390,8 +415,8 @@ export class TelegramService implements OnModuleInit {
     const text =
       `🔍 <b>Buyurtma #${order.id}</b>\n` +
       `━━━━━━━━━━━━━━━━━\n` +
-      `🏪 Do'kon: ${order.shop?.name ?? '—'}\n` +
-      `📍 Manzil: ${order.address ?? '—'}\n` +
+      `🏪 Do'kon: ${escapeHtml(order.shop?.name ?? '—')}\n` +
+      `📍 Manzil: ${escapeHtml(order.address ?? '—')}\n` +
       `💰 Summa: <b>${(order.amount ?? 0).toLocaleString()} so'm</b>\n` +
       `📅 Sana: ${created}\n\n` +
       `📌 Holat: ${statusMap[order.status] ?? order.status}`;
@@ -475,7 +500,7 @@ export class TelegramService implements OnModuleInit {
             '—';
           const item =
             p.variant_name ?? p.shop_product?.product_item?.name ?? '';
-          return `  • ${name} (${item}) x${p.count} — ${(p.amount ?? 0).toLocaleString()} so'm`;
+          return `  • ${escapeHtml(name)} (${escapeHtml(item)}) x${p.count} — ${(p.amount ?? 0).toLocaleString()} so'm`;
         })
         .join('\n') ?? '';
 
@@ -492,9 +517,9 @@ export class TelegramService implements OnModuleInit {
 
     const msg =
       `🛍 <b>Yangi buyurtma #${order.id}</b>\n\n` +
-      `🏪 Do'kon: ${order.shop?.name ?? '—'}\n` +
+      `🏪 Do'kon: ${escapeHtml(order.shop?.name ?? '—')}\n` +
       `📡 Manba: ${source}\n` +
-      `📍 Manzil: ${order.address ?? '—'}\n` +
+      `📍 Manzil: ${escapeHtml(order.address ?? '—')}\n` +
       `💳 To'lov: ${this.payLabel(order.payment_type)}\n` +
       `🚚 Yetkazish: ${this.deliveryLabel(order.delivery_type)}\n\n` +
       `📦 Mahsulotlar:\n${products}` +
@@ -543,7 +568,7 @@ export class TelegramService implements OnModuleInit {
     if (!this.isEnabled()) return;
     await this.send(
       `❌ <b>Buyurtma #${orderId} bekor qilindi</b>` +
-        (reason ? `\nSabab: ${reason}` : ''),
+        (reason ? `\nSabab: ${escapeHtml(reason)}` : ''),
     );
   }
 
@@ -573,7 +598,8 @@ export class TelegramService implements OnModuleInit {
       click: '🟠 Click',
       uzum: '🟣 Uzum',
     };
-    return map[type ?? ''] ?? type ?? '—';
+    // payment_type is free text from the order body.
+    return map[type ?? ''] ?? escapeHtml(type ?? '—');
   }
 
   private deliveryLabel(type?: string | null) {
@@ -647,7 +673,8 @@ export class TelegramService implements OnModuleInit {
       .sort((a, b) => b[1].sum - a[1].sum)
       .slice(0, 10)
       .map(
-        ([n, v]) => `  🏪 ${n}: ${v.count} ta — ${v.sum.toLocaleString()} so'm`,
+        ([n, v]) =>
+          `  🏪 ${escapeHtml(n)}: ${v.count} ta — ${v.sum.toLocaleString()} so'm`,
       )
       .join('\n');
     await this.reply(

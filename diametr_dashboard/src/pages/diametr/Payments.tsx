@@ -80,12 +80,14 @@ export default function PaymentsPage() {
 
   // Shops list
   const [shopOptions, setShopOptions] = useState<{ value: string; label: string }[]>([]);
-  useEffect(() => {
+  // Loaded on mount and refreshed whenever the modal opens (a failed refresh keeps the old list).
+  const loadShops = () => {
     axiosClient.get("/shop/all").then((res) => {
       const list = res.data?.data ?? res.data ?? [];
-      setShopOptions(list.map((s: any) => ({ value: String(s.id), label: s.name ?? String(s.id) })));
+      if (Array.isArray(list)) setShopOptions(list.map((s: any) => ({ value: String(s.id), label: s.name ?? String(s.id) })));
     }).catch(() => {});
-  }, []);
+  };
+  useEffect(() => { loadShops(); }, []);
 
   // Payments data
   const fetchPayments = useCallback(() => axiosClient.get("/payment/all").then((res) => res.data), []);
@@ -172,7 +174,7 @@ export default function PaymentsPage() {
         <ComponentCard
           title="Obunalar tarixi"
           action={
-            <Button size="sm" variant="primary" startIcon={<PlusIcon className="size-5 fill-white" />} onClick={openModal}>
+            <Button size="sm" variant="primary" startIcon={<PlusIcon className="size-5 fill-white" />} onClick={() => { loadShops(); openModal(); }}>
               Obuna qo'shish
             </Button>
           }

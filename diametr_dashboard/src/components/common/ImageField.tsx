@@ -1,8 +1,15 @@
 import React, { useRef, useState } from "react";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
+import { toast } from "../ui/toast";
 
-const ACCEPTED_FORMATS = "image/jpeg,image/png,image/webp,image/gif,image/svg+xml,image/bmp";
+// SVG is not accepted: the backend rejects it (an SVG can carry script and is
+// served from the API origin). Keep in sync with _utils/image-upload.ts.
+const ACCEPTED_FORMATS = "image/jpeg,image/png,image/webp,image/gif,image/bmp";
+const SVG_REJECTED = "SVG formatidagi rasm qabul qilinmaydi. JPG, PNG, WebP, GIF yoki BMP rasm tanlang.";
+
+const isSvgFile = (file: File) =>
+  file.type.toLowerCase() === "image/svg+xml" || /\.svgz?$/i.test(file.name);
 
 interface ImageFieldResult {
   file?: File;
@@ -36,6 +43,12 @@ export default function ImageField({ label = "Rasm", existingUrl, onChange, allo
   };
 
   const acceptFile = (file: File) => {
+    // The picker's "All files" option and drag-and-drop bypass `accept`.
+    if (isSvgFile(file)) {
+      if (fileRef.current) fileRef.current.value = "";
+      toast.error(SVG_REJECTED);
+      return;
+    }
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
     setFileName(file.name);
@@ -164,7 +177,7 @@ export default function ImageField({ label = "Rasm", existingUrl, onChange, allo
             <p className="text-sm text-gray-600 dark:text-gray-300">
               <span className="font-medium text-brand-600 dark:text-brand-400">Rasm tanlang</span> yoki bu yerga tashlang
             </p>
-            <p className="text-xs text-gray-400">JPG, PNG, WebP, GIF, SVG, BMP</p>
+            <p className="text-xs text-gray-400">JPG, PNG, WebP, GIF, BMP</p>
           </div>
         )
       ) : (

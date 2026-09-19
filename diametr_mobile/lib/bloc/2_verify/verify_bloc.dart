@@ -23,7 +23,10 @@ class VerifyBloc extends Cubit<VerifyState> {
       if (response.statusCode == 200) {
         emit(
           VerifySuccessState(
-              user: response.data["user"], token: response.data["token"]),
+              user: response.data["user"],
+              // The API returns the JWT as `access_token` (older backends also
+              // as `token`); reading only "token" stored the string "null".
+              token: response.data["access_token"] ?? response.data["token"]),
         );
       } else {
         emit(

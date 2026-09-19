@@ -13,6 +13,7 @@ import Select from "../../form/Select";
 import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
+import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 
 export interface WorkerItemProps {
   id: number;
@@ -41,14 +42,17 @@ export default function WorkersTable({ data, onRefetch }: { data: WorkerItemProp
 
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
-  useEffect(() => {
+  // Services can be added on another page — loaded on mount and refreshed whenever the edit modal opens.
+  const loadServices = () => {
     axiosClient.get("/service/all").then((res) => {
       const list = res.data?.data ?? res.data ?? [];
-      setServiceOptions(list.map((s: any) => ({ value: String(s.id), label: s.name ?? String(s.id) })));
+      if (Array.isArray(list)) setServiceOptions(list.map((s: any) => ({ value: String(s.id), label: s.name ?? String(s.id) })));
     }).catch(() => {});
-  }, []);
+  };
+  useEffect(() => { loadServices(); }, []);
 
-  const filteredData = search.trim() === "" ? tableData : tableData.filter((s) => { const q = search.toLowerCase(); return (s.fullname ?? "").toLowerCase().includes(q) || (s.phone ?? "").toLowerCase().includes(q) || (s.service?.name ?? "").toLowerCase().includes(q); });
+  const searchQueryKey = searchKey(search);
+  const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.fullname, s.phone, s.service?.name]));
   const maxPage = Math.ceil(filteredData.length / +optionValue);
   const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
   const staticUrl = import.meta.env.VITE_STATIC_PATH ?? "";
@@ -61,6 +65,7 @@ export default function WorkersTable({ data, onRefetch }: { data: WorkerItemProp
       service_id: item.service?.id ? String(item.service.id) : (item.serviceId ? String(item.serviceId) : ""),
       expired: item.expired ? Moment(item.expired).format("YYYY-MM-DD") : "",
     });
+    loadServices();
     openModal();
   };
 

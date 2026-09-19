@@ -1,9 +1,10 @@
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import PageMeta from "../../components/common/PageMeta";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axiosClient from "../../service/axios.service";
 import Moment from "moment";
 import { toast } from "../../components/ui/toast";
+import { useShopSession } from "../../context/ShopSessionContext";
 
 function formatMoney(n: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(n);
@@ -46,27 +47,54 @@ export default function SubscriptionPage() {
   const [topUpAmount, setTopUpAmount] = useState(50000);
   const [customAmount, setCustomAmount] = useState("");
   const [selectedPlan, setSelectedPlan] = useState(0);
+  const { shop: sessionShop, refresh: refreshSession } = useShopSession();
+  const reqSeq = useRef(0);
+  const lastFetch = useRef(0);
 
   const fetchData = useCallback(async () => {
+    const id = ++reqSeq.current;
+    lastFetch.current = Date.now();
     try {
       const [balRes, logsRes] = await Promise.allSettled([
         axiosClient.get("/subscription/balance"),
         axiosClient.get("/subscription/my-logs?take=30"),
       ]);
+      if (id !== reqSeq.current) return;
       if (balRes.status === "fulfilled") setBalance(balRes.value.data);
       if (logsRes.status === "fulfilled") {
         const d = logsRes.value.data;
         setLogs(Array.isArray(d) ? d : d?.data ?? []);
       }
     } finally {
-      setLoading(false);
+      if (id === reqSeq.current) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // Also refetch when the live session sees the balance/expiry change (webhook payment,
+  // admin renewal, hourly auto-renewal) so this page never disagrees with the header.
+  useEffect(() => { fetchData(); }, [fetchData, sessionShop?.expired, sessionShop?.balance]);
+
+  // Returning from the Click/Payme/Uzum tab: refetch (throttled), plus one delayed retry
+  // because the payment webhook can land a few seconds after the owner comes back.
+  useEffect(() => {
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastFetch.current < 30_000) return;
+      fetchData(); // the session provider refreshes itself on visibility too
+      clearTimeout(retry);
+      retry = setTimeout(() => { fetchData(); refreshSession(); }, 5_000);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      clearTimeout(retry);
+    };
+  }, [fetchData, refreshSession]);
 
   const st = statusInfo(balance?.expired);
   const isExpired = st.color === "red" && (st.days ?? 0) < 0;
+  // Blocked by the expiry job or manually by the platform admin (when the API reports work_status).
+  const isBlocked = isExpired || balance?.work_status === "BLOCKED";
   const subPrice = balance?.subscription_price ?? 50000;
   const shopId = balance?.id;
 
@@ -98,6 +126,7 @@ export default function SubscriptionPage() {
       await axiosClient.post("/subscription/pay-from-balance", { months: plan.months });
       toast.success(`Obuna ${plan.months} oyga muvaffaqiyatli uzaytirildi!`);
       fetchData();
+      refreshSession(); // header badge + expired banner update immediately
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
     }
@@ -187,11 +216,11 @@ export default function SubscriptionPage() {
                 </div>
                 <div className="text-xs font-medium text-gray-400 uppercase">Holat</div>
               </div>
-              <div className={`text-2xl font-bold ${isExpired ? "text-red-600" : "text-emerald-600"}`}>
-                {isExpired ? "Bloklangan" : "Faol"}
+              <div className={`text-2xl font-bold ${isBlocked ? "text-red-600" : "text-emerald-600"}`}>
+                {isBlocked ? "Bloklangan" : "Faol"}
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                {isExpired ? "Mahsulotlaringiz platformada ko'rinmaydi" : "Mahsulotlaringiz platformada ko'rinadi"}
+                {isBlocked ? "Mahsulotlaringiz platformada ko'rinmaydi" : "Mahsulotlaringiz platformada ko'rinadi"}
               </p>
             </div>
           </>
@@ -220,7 +249,11 @@ export default function SubscriptionPage() {
                   const newVal = !(balance?.auto_payment !== false);
                   await axiosClient.patch("/subscription/auto-payment", { auto_payment: newVal });
                   setBalance((b: any) => ({ ...b, auto_payment: newVal }));
-                } catch { }
+                  refreshSession();
+                } catch (e: any) {
+                  toast.error(e?.response?.data?.message ?? "Avto to'lovni o'zgartirib bo'lmadi");
+                  fetchData();
+                }
                 setToggling(false);
               }}
               disabled={toggling}

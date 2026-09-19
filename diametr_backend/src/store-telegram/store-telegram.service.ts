@@ -1,8 +1,28 @@
-﻿import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+﻿import {
+  HttpException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import axios from 'axios';
+import { Prisma } from '@prisma/client';
 import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
-import { SmsService } from 'src/sms/sms.service';
+import { SMS_RESEND_WAIT_MESSAGE, SmsService } from 'src/sms/sms.service';
 import { JwtService } from '@nestjs/jwt';
+import { translateHttpMessage } from 'src/_i18n/i18n';
+import { OrderCheckoutService } from 'src/order/order-checkout.service';
+import {
+  CATALOG_LIVE_STOCK_WHERE,
+  LIVE_STOCK_WHERE,
+  SOLD_ORDER_PRODUCT_WHERE,
+  effectivePrice,
+} from 'src/shop-product/stock.utils';
+import { TelegramService } from 'src/telegram/telegram.service';
+import { matchesSearchKey, searchKey } from 'src/_utils/search-key';
+import {
+  isTelegramWebhookSecretValid,
+  telegramWebhookSecret,
+} from 'src/_utils/telegram-webhook';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,6 +42,45 @@ type CheckoutCtx = {
   lat?: number;
   lon?: number;
 };
+
+/** Stock a bot user may see and buy: live catalogue chain, WORKING shop, in stock. */
+const BOT_STOCK_WHERE: Prisma.ShopProductWhereInput = {
+  AND: [LIVE_STOCK_WHERE, { count: { gt: 0 } }],
+};
+
+/** Same, for counts under a shop that is already filtered to WORKING. */
+const BOT_SHOP_STOCK_WHERE: Prisma.ShopProductWhereInput = {
+  AND: [CATALOG_LIVE_STOCK_WHERE, { count: { gt: 0 } }],
+};
+
+/**
+ * User-typed or stored text (search query, address, shop name, ...) inside a
+ * parse_mode=HTML message: a stray '<' or '&' makes Telegram reject the whole
+ * message, so the user gets no reply.
+ */
+function escapeHtml(s: string | null | undefined): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** Telegram's photo caption limit (visible characters after HTML parsing). */
+const TG_CAPTION_MAX = 1024;
+
+/** Length Telegram counts for a caption: tags removed, entities as one char. */
+function captionLength(html: string): number {
+  const visible = html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(?:lt|gt|amp|quot);/g, '_');
+  return visible.length;
+}
+
+/** Bot API error description of a failed axios call ('' when none). */
+function tgErrorDescription(e: any): string {
+  const d = e?.response?.data?.description;
+  return typeof d === 'string' ? d : '';
+}
 
 // ─── Color name mapping ───────────────────────────────────────────────────────
 
@@ -128,16 +187,21 @@ export class StoreTelegramService implements OnModuleInit {
   private readonly webhookBase = (
     process.env.STORE_BOT_WEBHOOK_URL ?? ''
   ).replace(/\/$/, '');
+  /** secret_token of the webhook (see telegramWebhookSecret). */
+  private readonly webhookSecret = telegramWebhookSecret(this.token);
   private readonly storeUrl = 'https://diametr.uz/store';
   private readonly ORDERS_PER_PAGE = 3;
   private readonly SEARCH_PER_PAGE = 3;
   private readonly ITEMS_PER_PHOTO_PAGE = 6;
-  private readonly IMG_BASE = 'https://diametr.uz';
+  /** Uploaded images: public/<folder>/<file> is served at /static/<folder>/<file>. */
+  private readonly IMG_BASE = 'https://api.diametr.uz/static';
 
   constructor(
     private readonly prisma: PrismaClientService,
     private readonly smsService: SmsService,
     private readonly jwtService: JwtService,
+    private readonly orderCheckout: OrderCheckoutService,
+    private readonly telegram: TelegramService,
   ) {}
 
   // ─── Init ──────────────────────────────────────────────────────────────────
@@ -164,7 +228,7 @@ export class StoreTelegramService implements OnModuleInit {
     try {
       await axios.post(
         `https://api.telegram.org/bot${this.token}/setWebhook`,
-        { url, drop_pending_updates: true },
+        { url, drop_pending_updates: true, secret_token: this.webhookSecret },
         { timeout: 8000 },
       );
       this.logger.log(`Store bot webhook set: ${url} ✅`);
@@ -232,6 +296,20 @@ export class StoreTelegramService implements OnModuleInit {
     } catch (e: any) {
       this.logger.error(`registerCommands error: ${e?.message}`);
     }
+  }
+
+  /**
+   * The webhook route processes an update only in webhook mode and only when
+   * it carries our secret_token (i.e. it really comes from Telegram). A forged
+   * update could otherwise act as any customer's chat (cart, orders).
+   * In polling mode updates arrive via getUpdates, never via the route.
+   */
+  acceptsWebhook(secretHeader: string | string[] | undefined): boolean {
+    return (
+      !!this.token &&
+      !!this.webhookBase &&
+      isTelegramWebhookSecretValid(this.webhookSecret, secretHeader)
+    );
   }
 
   // ─── Update router ─────────────────────────────────────────────────────────
@@ -423,7 +501,7 @@ export class StoreTelegramService implements OnModuleInit {
       const num = nums[i] ?? `${page * this.ORDERS_PER_PAGE + i + 1}.`;
       const emoji = statusEmoji[o.status] ?? '⚪';
       const sl = statusLabel[o.status]?.[lang] ?? o.status;
-      const shop = o.shop?.name ?? '—';
+      const shop = escapeHtml(o.shop?.name ?? '—');
       const amount = (o.amount ?? 0).toLocaleString('ru-RU');
       const d = new Date(o.createdt);
       const date = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
@@ -446,7 +524,10 @@ export class StoreTelegramService implements OnModuleInit {
       this.getSession(chatId),
     ]);
     const lang = user?.lang ?? 'uz';
-    const cart = this.parseCart(session?.cart);
+    const { cart, changed } = await this.refreshCart(
+      chatId,
+      this.parseCart(session?.cart),
+    );
 
     if (cart.length === 0) {
       const text =
@@ -458,20 +539,21 @@ export class StoreTelegramService implements OnModuleInit {
       return this.reply(chatId, text);
     }
 
-    const shopName = cart[0].shop_name;
+    const shopName = escapeHtml(cart[0].shop_name);
     const total = cart.reduce((s, i) => s + i.price * i.count, 0);
     const totalQty = cart.reduce((s, i) => s + i.count, 0);
     const nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
     const div = '━━━━━━━━━━━━━━━━━━━━━';
 
     const header =
-      lang === 'ru'
+      (lang === 'ru'
         ? `🛒 <b>Корзина</b>  ·  ${shopName}`
-        : `🛒 <b>Savat</b>  ·  ${shopName}`;
+        : `🛒 <b>Savat</b>  ·  ${shopName}`) +
+      (changed ? `\n${this.cartChangedNote(lang)}` : '');
     const lines = cart.map((item, i) => {
       const amt = (item.price * item.count).toLocaleString('ru-RU');
       const pr = item.price.toLocaleString('ru-RU');
-      return `${nums[i] ?? `${i + 1}.`}  <b>${item.name}</b>\n    💰 ${pr} × ${item.count} = ${amt} so'm`;
+      return `${nums[i] ?? `${i + 1}.`}  <b>${escapeHtml(item.name)}</b>\n    💰 ${pr} × ${item.count} = ${amt} so'm`;
     });
     const footer =
       lang === 'ru'
@@ -579,7 +661,7 @@ export class StoreTelegramService implements OnModuleInit {
         lon: true,
         _count: {
           select: {
-            products: { where: { work_status: 'WORKING', count: { gt: 0 } } },
+            products: { where: BOT_SHOP_STOCK_WHERE },
           },
         },
       },
@@ -632,8 +714,8 @@ export class StoreTelegramService implements OnModuleInit {
           : `${s.dist.toFixed(1)} km`;
       const prodCnt = s._count.products;
       return (
-        `${nums[i] ?? `${safePage * this.SEARCH_PER_PAGE + i + 1}.`} <b>${s.name ?? '—'}</b>\n` +
-        `    📍 ${s.address ?? '—'}   ·   🚩 ${d} ${lang === 'ru' ? 'от вас' : 'uzoqda'}\n` +
+        `${nums[i] ?? `${safePage * this.SEARCH_PER_PAGE + i + 1}.`} <b>${escapeHtml(s.name ?? '—')}</b>\n` +
+        `    📍 ${escapeHtml(s.address ?? '—')}   ·   🚩 ${d} ${lang === 'ru' ? 'от вас' : 'uzoqda'}\n` +
         `    📦 ${prodCnt} ${lang === 'ru' ? 'тов.' : 'tovar'}`
       );
     });
@@ -692,7 +774,7 @@ export class StoreTelegramService implements OnModuleInit {
               some: {
                 work_status: 'WORKING',
                 shop_products: {
-                  some: { work_status: 'WORKING', count: { gt: 0 } },
+                  some: BOT_STOCK_WHERE,
                 },
               },
             },
@@ -770,7 +852,10 @@ export class StoreTelegramService implements OnModuleInit {
       },
     ]);
 
-    const firstPhoto = this.imgUrl(slice.find((c) => c.image)?.image);
+    const firstPhoto = this.imgUrl(
+      slice.find((c) => c.image)?.image,
+      'categories',
+    );
     if (msgId) {
       return firstPhoto
         ? this.editTgMedia(chatId, msgId, firstPhoto, text, keyboard)
@@ -804,7 +889,7 @@ export class StoreTelegramService implements OnModuleInit {
       this.prisma.productItem.findMany({
         where: {
           work_status: 'WORKING',
-          shop_products: { some: { work_status: 'WORKING', count: { gt: 0 } } },
+          shop_products: { some: BOT_STOCK_WHERE },
           product: { category_id: catId },
         },
         select: {
@@ -829,7 +914,7 @@ export class StoreTelegramService implements OnModuleInit {
           _count: {
             select: {
               shop_products: {
-                where: { work_status: 'WORKING', count: { gt: 0 } },
+                where: BOT_STOCK_WHERE,
               },
             },
           },
@@ -951,7 +1036,10 @@ export class StoreTelegramService implements OnModuleInit {
 
     const firstPhoto = (() => {
       for (const pi of slice) {
-        const img = this.imgUrl(pi.image ?? pi.product?.image);
+        // The variant's own picture, else its product's (different folders).
+        const img = pi.image
+          ? this.imgUrl(pi.image, 'product-items')
+          : this.imgUrl(pi.product?.image, 'products');
         if (img) return img;
       }
       return null;
@@ -987,29 +1075,14 @@ export class StoreTelegramService implements OnModuleInit {
         ? { lat: session.lat, lon: session.lon }
         : undefined;
 
-    const all = await this.prisma.shop.findMany({
-      where: { work_status: 'WORKING', name: { contains: query } },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        lat: true,
-        lon: true,
-        _count: {
-          select: {
-            products: { where: { work_status: 'WORKING', count: { gt: 0 } } },
-          },
-        },
-      },
-      take: 200,
-    });
+    const all = await this.findShopsByQuery(query);
 
     if (all.length === 0) {
       return this.reply(
         chatId,
         lang === 'ru'
-          ? `🔍 <b>Магазин не найден</b> по запросу «${query}»`
-          : `🔍 <b>Do'kon topilmadi</b> «${query}» so'rovi bo'yicha`,
+          ? `🔍 <b>Магазин не найден</b> по запросу «${escapeHtml(query)}»`
+          : `🔍 <b>Do'kon topilmadi</b> «${escapeHtml(query)}» so'rovi bo'yicha`,
       );
     }
 
@@ -1038,6 +1111,34 @@ export class StoreTelegramService implements OnModuleInit {
     await this.sendMessage(chatId, text, { inline_keyboard: keyboard });
   }
 
+  /**
+   * WORKING shops whose name matches the query (first 200). All of them are
+   * loaded and matched in memory with searchKey, so Latin and Cyrillic
+   * spellings find each other.
+   */
+  private async findShopsByQuery(query: string) {
+    const shops = await this.prisma.shop.findMany({
+      where: { work_status: 'WORKING' },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        lat: true,
+        lon: true,
+        _count: {
+          select: {
+            products: { where: BOT_SHOP_STOCK_WHERE },
+          },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+    const queryKey = searchKey(query);
+    return shops
+      .filter((s) => matchesSearchKey(queryKey, [s.name]))
+      .slice(0, 200);
+  }
+
   private buildShopsPage(
     shops: any[],
     query: string,
@@ -1062,8 +1163,8 @@ export class StoreTelegramService implements OnModuleInit {
     };
     const header =
       lang === 'ru'
-        ? `🏪 <b>Магазины</b>  ·  «${query}»  ·  ${total} шт.`
-        : `🏪 <b>Do'konlar</b>  ·  «${query}»  ·  ${total} ta`;
+        ? `🏪 <b>Магазины</b>  ·  «${escapeHtml(query)}»  ·  ${total} шт.`
+        : `🏪 <b>Do'konlar</b>  ·  «${escapeHtml(query)}»  ·  ${total} ta`;
 
     const lines = slice.map((s, i) => {
       const num = nums[i] ?? `${safePage * this.SEARCH_PER_PAGE + i + 1}.`;
@@ -1081,8 +1182,8 @@ export class StoreTelegramService implements OnModuleInit {
         geoLine = `📌 ${lang === 'ru' ? 'Адрес не указан' : "Manzil ko'rsatilmagan"}`;
       }
       return (
-        `${num} <b>${s.name ?? '—'}</b>\n` +
-        `    📍 ${s.address ?? '—'}   ·   ${geoLine}\n` +
+        `${num} <b>${escapeHtml(s.name ?? '—')}</b>\n` +
+        `    📍 ${escapeHtml(s.address ?? '—')}   ·   ${geoLine}\n` +
         `    📦 ${prodCnt} ${lang === 'ru' ? 'тов.' : 'tovar'}`
       );
     });
@@ -1128,16 +1229,13 @@ export class StoreTelegramService implements OnModuleInit {
     ]);
     const lang = user?.lang ?? 'uz';
 
-    const all = await this.prisma.productItem.findMany({
+    // Every variant the bot may offer is loaded (a few hundred rows) and
+    // matched in memory with searchKey, so Latin/Cyrillic spellings and
+    // missing apostrophes find each other — SQL `contains` cannot.
+    const candidates = await this.prisma.productItem.findMany({
       where: {
         work_status: 'WORKING',
-        shop_products: { some: { work_status: 'WORKING', count: { gt: 0 } } },
-        OR: [
-          { name: { contains: query } },
-          { product: { name: { contains: query } } },
-          { product: { name_uz: { contains: query } } },
-          { product: { name_ru: { contains: query } } },
-        ],
+        shop_products: { some: BOT_STOCK_WHERE },
       },
       select: {
         id: true,
@@ -1159,19 +1257,30 @@ export class StoreTelegramService implements OnModuleInit {
         _count: {
           select: {
             shop_products: {
-              where: { work_status: 'WORKING', count: { gt: 0 } },
+              where: BOT_STOCK_WHERE,
             },
           },
         },
       },
-      take: 100,
+      orderBy: { id: 'asc' },
     });
+    const queryKey = searchKey(query);
+    const all = candidates
+      .filter((pi) =>
+        matchesSearchKey(queryKey, [
+          pi.name,
+          pi.product?.name,
+          pi.product?.name_uz,
+          pi.product?.name_ru,
+        ]),
+      )
+      .slice(0, 100);
 
     if (all.length === 0) {
       const no =
         lang === 'ru'
-          ? `🔍 <b>Товар не найден</b> по запросу «${query}»`
-          : `🔍 <b>Tovar topilmadi</b> «${query}» so'rovi bo'yicha`;
+          ? `🔍 <b>Товар не найден</b> по запросу «${escapeHtml(query)}»`
+          : `🔍 <b>Tovar topilmadi</b> «${escapeHtml(query)}» so'rovi bo'yicha`;
       if (msgId)
         return this.editMessage(chatId, msgId, no, { inline_keyboard: [] });
       return this.reply(chatId, no);
@@ -1179,8 +1288,8 @@ export class StoreTelegramService implements OnModuleInit {
 
     const header =
       lang === 'ru'
-        ? `🔍 <b>Natijalar</b>: «${query}»  ·  ${all.length} шт.`
-        : `🔍 <b>Natijalar</b>: «${query}»  ·  ${all.length} ta`;
+        ? `🔍 <b>Natijalar</b>: «${escapeHtml(query)}»  ·  ${all.length} шт.`
+        : `🔍 <b>Natijalar</b>: «${escapeHtml(query)}»  ·  ${all.length} ta`;
     await this.sendProductItemsPage(
       chatId,
       all,
@@ -1226,12 +1335,10 @@ export class StoreTelegramService implements OnModuleInit {
     const lang = user?.lang ?? 'uz';
     if (!pi) return;
 
-    const spList = await this.prisma.shopProduct.findMany({
-      where: {
-        product_item_id: piId,
-        work_status: 'WORKING',
-        count: { gt: 0 },
-      },
+    const spRows = await this.prisma.shopProduct.findMany({
+      // Stock of blocked/deleted shops or archived products is not offered
+      // (shopless rows used to crash this page on shop.name).
+      where: { AND: [BOT_STOCK_WHERE, { product_item_id: piId }] },
       select: {
         id: true,
         price: true,
@@ -1241,12 +1348,18 @@ export class StoreTelegramService implements OnModuleInit {
           select: { id: true, name: true, address: true, lat: true, lon: true },
         },
         order_products: {
-          where: { order: { status: 'FINISHED' } },
+          // FINISHED and CONFIRMED orders both took the stock: both are sold.
+          where: SOLD_ORDER_PRODUCT_WHERE,
           select: { count: true },
         },
       },
       orderBy: { price: 'asc' },
     });
+    // Shown and sorted by the price the customer actually pays (discount included).
+    const spList = spRows
+      .filter((sp) => sp.shop != null)
+      .map((sp) => ({ ...sp, price: effectivePrice(sp.price, sp.bonus_price) }))
+      .sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
 
     if (spList.length === 0) {
       const noShops =
@@ -1303,7 +1416,7 @@ export class StoreTelegramService implements OnModuleInit {
       `${priceRange}   ·   🏪 ${total} ${lang === 'ru' ? 'маг.' : "do'kon"}`;
 
     const shopLines = slice.map((sp, i) => {
-      const shop = sp.shop;
+      const shop = sp.shop!;
       const price = (sp.price ?? 0).toLocaleString('ru-RU');
       const soldCount =
         (sp as any).order_products?.reduce(
@@ -1325,8 +1438,8 @@ export class StoreTelegramService implements OnModuleInit {
           ? `   ·   ✅ ${soldCount} ${lang === 'ru' ? 'продано' : 'sotilgan'}`
           : '';
       return (
-        `${nums[i] ?? `${safePage * PER_PAGE + i + 1}.`}  <b>${shop.name ?? '—'}</b>${cartTag}\n` +
-        `    📍 ${shop.address ?? '—'}${distLine}\n` +
+        `${nums[i] ?? `${safePage * PER_PAGE + i + 1}.`}  <b>${escapeHtml(shop.name ?? '—')}</b>${cartTag}\n` +
+        `    📍 ${escapeHtml(shop.address ?? '—')}${distLine}\n` +
         `    💰 ${price} so'm   ·   📦 ${sp.count} ta${soldLine}`
       );
     });
@@ -1338,7 +1451,7 @@ export class StoreTelegramService implements OnModuleInit {
     const addRows = slice.map((sp) => {
       const price = (sp.price ?? 0).toLocaleString('ru-RU');
       const inCart = cart.find((c) => c.shop_product_id === sp.id);
-      const shopLabel = (sp.shop.name ?? '').substring(0, 20);
+      const shopLabel = (sp.shop?.name ?? '').substring(0, 20);
       const label = inCart
         ? `✅ ${shopLabel} (${inCart.count} ta)`
         : `➕ ${shopLabel} — ${price} so'm`;
@@ -1404,11 +1517,14 @@ export class StoreTelegramService implements OnModuleInit {
     const lang = user?.lang ?? 'uz';
     if (!shop) return;
 
-    const all = await this.prisma.shopProduct.findMany({
-      where: { shop_id: shopId, work_status: 'WORKING', count: { gt: 0 } },
+    // BOT_STOCK_WHERE also requires the shop to be WORKING: a blocked shop
+    // shows the "no products" text instead of items it cannot sell.
+    const rows = await this.prisma.shopProduct.findMany({
+      where: { AND: [BOT_STOCK_WHERE, { shop_id: shopId }] },
       select: {
         id: true,
         price: true,
+        bonus_price: true,
         count: true,
         product_item: {
           select: {
@@ -1424,18 +1540,23 @@ export class StoreTelegramService implements OnModuleInit {
           },
         },
         order_products: {
-          where: { order: { status: 'FINISHED' } },
+          // FINISHED and CONFIRMED orders both took the stock: both are sold.
+          where: SOLD_ORDER_PRODUCT_WHERE,
           select: { count: true },
         },
       },
       take: 100,
     });
+    const all = rows.map((sp) => ({
+      ...sp,
+      price: effectivePrice(sp.price, sp.bonus_price),
+    }));
 
     if (all.length === 0) {
       const noItems =
         lang === 'ru'
-          ? `📭 В магазине <b>${shop.name}</b> пока нет товаров.`
-          : `📭 <b>${shop.name}</b> do'konida tovar yo'q.`;
+          ? `📭 В магазине <b>${escapeHtml(shop.name)}</b> пока нет товаров.`
+          : `📭 <b>${escapeHtml(shop.name)}</b> do'konida tovar yo'q.`;
       if (msgId)
         return this.editMessage(chatId, msgId, noItems, {
           inline_keyboard: [],
@@ -1454,11 +1575,13 @@ export class StoreTelegramService implements OnModuleInit {
     const nums = ['1️⃣', '2️⃣', '3️⃣'];
     const div = '━━━━━━━━━━━━━━━━━━━━━';
 
-    const addressLine = shop.address ? `\n📍 ${shop.address}` : '';
+    const addressLine = shop.address
+      ? `\n📍 ${escapeHtml(shop.address)}`
+      : '';
     const header =
       lang === 'ru'
-        ? `🏪 <b>${shop.name}</b>  ·  ${total} товаров${addressLine}`
-        : `🏪 <b>${shop.name}</b>  ·  ${total} tovar${addressLine}`;
+        ? `🏪 <b>${escapeHtml(shop.name)}</b>  ·  ${total} товаров${addressLine}`
+        : `🏪 <b>${escapeHtml(shop.name)}</b>  ·  ${total} tovar${addressLine}`;
 
     const lines = slice.map((sp, i) => {
       const pname = this.getProductName(sp, lang);
@@ -1523,7 +1646,7 @@ export class StoreTelegramService implements OnModuleInit {
     const keyboard: any[][] = [...addRows, [cartBtn]];
     if (pageRow.length) keyboard.push(pageRow);
 
-    const shopPhoto = this.imgUrl(shop.image);
+    const shopPhoto = this.imgUrl(shop.image, 'shops');
     if (msgId) {
       const result = shopPhoto
         ? this.editTgMedia(chatId, msgId, shopPhoto, text, keyboard)
@@ -1559,7 +1682,10 @@ export class StoreTelegramService implements OnModuleInit {
         return this.editMessage(chatId, msgId, noauth, { inline_keyboard: [] });
       return this.reply(chatId, noauth);
     }
-    const cart = this.parseCart(session?.cart);
+    const { cart, changed } = await this.refreshCart(
+      chatId,
+      this.parseCart(session?.cart),
+    );
     if (cart.length === 0) {
       const empty = lang === 'ru' ? '🛒 Корзина пуста.' : "🛒 Savat bo'sh.";
       if (msgId)
@@ -1568,10 +1694,12 @@ export class StoreTelegramService implements OnModuleInit {
     }
     const total = cart.reduce((s, i) => s + i.price * i.count, 0);
     await this.upsertSession(chatId, { chk: null });
+    const note = changed ? `${this.cartChangedNote(lang)}\n\n` : '';
     const text =
-      lang === 'ru'
-        ? `📋 <b>Оформление заказа</b>\n🏪 Магазин: ${cart[0].shop_name}\n💰 Сумма: ${total.toLocaleString('ru-RU')} сум\n\nВыберите тип доставки:`
-        : `📋 <b>Buyurtmani rasmiylashtirish</b>\n🏪 Do'kon: ${cart[0].shop_name}\n💰 Jami: ${total.toLocaleString('ru-RU')} so'm\n\nYetkazib berish turini tanlang:`;
+      note +
+      (lang === 'ru'
+        ? `📋 <b>Оформление заказа</b>\n🏪 Магазин: ${escapeHtml(cart[0].shop_name)}\n💰 Сумма: ${total.toLocaleString('ru-RU')} сум\n\nВыберите тип доставки:`
+        : `📋 <b>Buyurtmani rasmiylashtirish</b>\n🏪 Do'kon: ${escapeHtml(cart[0].shop_name)}\n💰 Jami: ${total.toLocaleString('ru-RU')} so'm\n\nYetkazib berish turini tanlang:`);
     const kb = {
       inline_keyboard: [
         [
@@ -1642,8 +1770,8 @@ export class StoreTelegramService implements OnModuleInit {
     });
     const ack =
       lang === 'ru'
-        ? `✅ Адрес принят: <b>${address}</b>\n\nВыберите способ оплаты:`
-        : `✅ Manzil qabul qilindi: <b>${address}</b>\n\nTo'lov turini tanlang:`;
+        ? `✅ Адрес принят: <b>${escapeHtml(address)}</b>\n\nВыберите способ оплаты:`
+        : `✅ Manzil qabul qilindi: <b>${escapeHtml(address)}</b>\n\nTo'lov turini tanlang:`;
     await this.reply(chatId, ack);
     return this.showPaymentSelection(chatId, lang, undefined);
   }
@@ -1706,13 +1834,20 @@ export class StoreTelegramService implements OnModuleInit {
     chatId: string,
     msgId: number,
     paymentType: string,
+    forceChangedNote = false,
   ) {
     const [user, session] = await Promise.all([
       this.prisma.user.findFirst({ where: { chat_id: chatId } }),
       this.getSession(chatId),
     ]);
     const lang = user?.lang ?? 'uz';
-    const cart = this.parseCart(session?.cart);
+    // The confirm screen must show what the order will really cost.
+    const refreshed = await this.refreshCart(
+      chatId,
+      this.parseCart(session?.cart),
+    );
+    const cart = refreshed.cart;
+    const changed = refreshed.changed || forceChangedNote;
     if (cart.length === 0) {
       return this.editMessage(
         chatId,
@@ -1725,7 +1860,7 @@ export class StoreTelegramService implements OnModuleInit {
     chk.payment_type = paymentType;
     await this.upsertSession(chatId, { chk: JSON.stringify(chk) });
 
-    const shopName = cart[0].shop_name;
+    const shopName = escapeHtml(cart[0].shop_name);
     const total = cart.reduce((s, i) => s + i.price * i.count, 0);
     const payLabel: Record<string, Record<string, string>> = {
       CASH: { uz: 'Naqd pul', ru: 'Наличные' },
@@ -1742,19 +1877,21 @@ export class StoreTelegramService implements OnModuleInit {
     const del =
       delLabel[chk.delivery_type ?? 'MARKET']?.[lang] ?? chk.delivery_type;
     const addrLine = chk.address
-      ? `\n📍 ${lang === 'ru' ? 'Адрес' : 'Manzil'}: ${chk.address}`
+      ? `\n📍 ${lang === 'ru' ? 'Адрес' : 'Manzil'}: ${escapeHtml(chk.address)}`
       : '';
     const itemLines = cart
       .map(
         (it) =>
-          `  • ${it.name} × ${it.count} = ${(it.price * it.count).toLocaleString('ru-RU')} so'm`,
+          `  • ${escapeHtml(it.name)} × ${it.count} = ${(it.price * it.count).toLocaleString('ru-RU')} so'm`,
       )
       .join('\n');
 
+    const note = changed ? `${this.cartChangedNote(lang)}\n\n` : '';
     const text =
-      lang === 'ru'
+      note +
+      (lang === 'ru'
         ? `✅ <b>Подтвердите заказ</b>\n🏪 Магазин: ${shopName}\n🚚 Доставка: ${del}${addrLine}\n💳 Оплата: ${pay}\n\n<b>Товары:</b>\n${itemLines}\n\n💰 Итого: <b>${total.toLocaleString('ru-RU')} сум</b>`
-        : `✅ <b>Buyurtmani tasdiqlang</b>\n🏪 Do'kon: ${shopName}\n🚚 Yetkazib berish: ${del}${addrLine}\n💳 To'lov: ${pay}\n\n<b>Tovarlar:</b>\n${itemLines}\n\n💰 Jami: <b>${total.toLocaleString('ru-RU')} so'm</b>`;
+        : `✅ <b>Buyurtmani tasdiqlang</b>\n🏪 Do'kon: ${shopName}\n🚚 Yetkazib berish: ${del}${addrLine}\n💳 To'lov: ${pay}\n\n<b>Tovarlar:</b>\n${itemLines}\n\n💰 Jami: <b>${total.toLocaleString('ru-RU')} so'm</b>`);
 
     return this.editMessage(chatId, msgId, text, {
       inline_keyboard: [
@@ -1786,62 +1923,96 @@ export class StoreTelegramService implements OnModuleInit {
         { inline_keyboard: [] },
       );
     }
-    const cart = this.parseCart(session?.cart);
-    if (cart.length === 0) {
+    const chk: CheckoutCtx = JSON.parse(session?.chk ?? '{}');
+    // Prices/stock may have changed since the confirm screen: show the new
+    // totals again instead of ordering something the user did not see.
+    const { cart, changed } = await this.refreshCart(
+      chatId,
+      this.parseCart(session?.cart),
+    );
+    if (cart.length === 0 || changed) {
+      if (cart.length > 0 && chk.payment_type) {
+        return this.handleCheckoutPayment(chatId, msgId, chk.payment_type, true);
+      }
       return this.editMessage(
         chatId,
         msgId,
-        lang === 'ru' ? '🛒 Корзина пуста.' : "🛒 Savat bo'sh.",
-        { inline_keyboard: [] },
+        cart.length === 0
+          ? lang === 'ru'
+            ? '🛒 Корзина пуста.'
+            : "🛒 Savat bo'sh."
+          : this.cartChangedNote(lang),
+        {
+          inline_keyboard: [
+            [
+              {
+                text: lang === 'ru' ? '🛒 Корзина' : '🛒 Savat',
+                callback_data: 'view_cart',
+              },
+            ],
+          ],
+        },
       );
     }
-    const chk: CheckoutCtx = JSON.parse(session?.chk ?? '{}');
     const shopId = cart[0].shop_id;
     const total = cart.reduce((s, i) => s + i.price * i.count, 0);
 
     try {
-      const order = await this.prisma.$transaction(async (tx) => {
-        const o = await tx.order.create({
-          data: {
-            shop_id: shopId,
-            user_id: user.id,
-            amount: total,
-            delivery_type: (chk.delivery_type ?? 'MARKET') as any,
-            payment_type: chk.payment_type ?? 'CASH',
-            address: chk.address ?? null,
-            source: 'STORE_BOT' as any,
-          },
-        });
-        await Promise.all(
-          cart.map((item) =>
-            tx.orderProduct.create({
-              data: {
-                order_id: o.id,
-                shop_product_id: item.shop_product_id,
-                count: item.count,
-                amount: item.price,
-              },
-            }),
-          ),
-        );
-        return o;
-      });
+      // Same validation, pricing and snapshots as POST /order.
+      const order = await this.orderCheckout.placeOrder(
+        {
+          shop_id: shopId,
+          amount: total,
+          products: cart.map((item) => ({
+            shop_product_id: item.shop_product_id,
+            count: item.count,
+          })),
+          delivery_type: chk.delivery_type ?? 'MARKET',
+          payment_type: chk.payment_type ?? 'CASH',
+          address: chk.address ?? undefined,
+          lat: chk.lat,
+          lon: chk.lon,
+          source: 'STORE_BOT',
+        },
+        user.id,
+      );
+      if (!order) throw new Error('order not saved');
+      this.telegram.notifyNewOrder(order).catch(() => {});
 
       await this.upsertSession(chatId, { cart: null, chk: null });
+      const amount = (order.amount ?? total).toLocaleString('ru-RU');
       const successText =
         lang === 'ru'
-          ? `🎉 <b>Заказ #${order.id} оформлен!</b>\n🏪 Магазин: ${cart[0].shop_name}\n💰 Сумма: ${total.toLocaleString('ru-RU')} сум\n⏳ Статус: В обработке\n\nОтслеживайте: /orders`
-          : `🎉 <b>#${order.id} buyurtmangiz qabul qilindi!</b>\n🏪 Do'kon: ${cart[0].shop_name}\n💰 Jami: ${total.toLocaleString('ru-RU')} so'm\n⏳ Holat: Jarayonda\n\nKuzating: /orders`;
+          ? `🎉 <b>Заказ #${order.id} оформлен!</b>\n🏪 Магазин: ${escapeHtml(cart[0].shop_name)}\n💰 Сумма: ${amount} сум\n⏳ Статус: В обработке\n\nОтслеживайте: /orders`
+          : `🎉 <b>#${order.id} buyurtmangiz qabul qilindi!</b>\n🏪 Do'kon: ${escapeHtml(cart[0].shop_name)}\n💰 Jami: ${amount} so'm\n⏳ Holat: Jarayonda\n\nKuzating: /orders`;
       await this.editMessage(chatId, msgId, successText, {
         inline_keyboard: [],
       });
     } catch (e: any) {
       this.logger.error(`createOrderFromBot error: ${e?.message}`);
+      const reason =
+        e instanceof HttpException
+          ? escapeHtml(
+              translateHttpMessage(
+                String(e.message ?? ''),
+                lang === 'ru' ? 'ru' : 'uz',
+              ),
+            )
+          : lang === 'ru'
+            ? "Неизвестная ошибка, попробуйте ещё раз"
+            : "Noma'lum xatolik, qayta urinib ko'ring";
       const errText =
-        lang === 'ru'
-          ? `❌ Ошибка: ${e?.message ?? 'Неизвестная ошибка'}`
-          : `❌ Xatolik: ${e?.message ?? "Noma'lum xatolik"}`;
-      await this.editMessage(chatId, msgId, errText, { inline_keyboard: [] });
+        lang === 'ru' ? `❌ Ошибка: ${reason}` : `❌ Xatolik: ${reason}`;
+      await this.editMessage(chatId, msgId, errText, {
+        inline_keyboard: [
+          [
+            {
+              text: lang === 'ru' ? '🛒 Корзина' : '🛒 Savat',
+              callback_data: 'view_cart',
+            },
+          ],
+        ],
+      });
     }
   }
 
@@ -1863,6 +2034,22 @@ export class StoreTelegramService implements OnModuleInit {
         `🔢 SMS orqali kelgan 6 raqamli kodni kiriting:`;
       await this.sendMessage(chatId, text, { remove_keyboard: true });
     } catch (e: any) {
+      if (e instanceof HttpException && e.getStatus() === 429) {
+        // A code went to this phone less than a minute ago. Keep the session:
+        // if this chat is already waiting for that code, it still works.
+        const session = await this.getSession(chatId).catch(() => null);
+        const waiting =
+          session?.state === 'waiting_code' &&
+          !!session?.sms_id &&
+          session?.phone === phone;
+        await this.reply(
+          chatId,
+          waiting
+            ? `⏳ ${SMS_RESEND_WAIT_MESSAGE}.\n\n🔢 Avval yuborilgan SMS kodini kiriting.`
+            : `⏳ ${SMS_RESEND_WAIT_MESSAGE}.\n\n1 daqiqadan so'ng /start yozib qayta urinib ko'ring.`,
+        );
+        return;
+      }
       this.logger.error(`handleContact sms.send error: ${e?.message}`);
       await this.reply(
         chatId,
@@ -1894,14 +2081,22 @@ export class StoreTelegramService implements OnModuleInit {
       });
     } catch (e: any) {
       const msg = e?.message ?? '';
-      if (msg.includes("noto'g'ri") || msg.includes('Kod')) {
+      // Most specific first: the "too many tries" and "expired" texts also
+      // contain "noto'g'ri" / "Kod".
+      if (msg.includes('urinish')) {
+        await this.clearState(chatId);
         await this.reply(
           chatId,
-          "❌ Kod noto'g'ri. Qayta kiriting yoki /start yozing.",
+          "❌ Juda ko'p noto'g'ri urinish. Yangi kod olish uchun /start yozing.",
         );
       } else if (msg.includes('muddati')) {
         await this.clearState(chatId);
         await this.reply(chatId, '⏰ Kod muddati tugagan. /start yozing.');
+      } else if (msg.includes("noto'g'ri") || msg.includes('Kod')) {
+        await this.reply(
+          chatId,
+          "❌ Kod noto'g'ri. Qayta kiriting yoki /start yozing.",
+        );
       } else {
         await this.clearState(chatId);
         await this.reply(chatId, '❌ Xatolik yuz berdi. /start yozing.');
@@ -2000,24 +2195,7 @@ export class StoreTelegramService implements OnModuleInit {
           session?.lat && session?.lon
             ? { lat: session.lat, lon: session.lon }
             : undefined;
-        const all = await this.prisma.shop.findMany({
-          where: { work_status: 'WORKING', name: { contains: query } },
-          select: {
-            id: true,
-            name: true,
-            address: true,
-            lat: true,
-            lon: true,
-            _count: {
-              select: {
-                products: {
-                  where: { work_status: 'WORKING', count: { gt: 0 } },
-                },
-              },
-            },
-          },
-          take: 200,
-        });
+        const all = await this.findShopsByQuery(query);
         const withDist = all.map((s) => ({
           ...s,
           _count: s._count,
@@ -2333,11 +2511,13 @@ export class StoreTelegramService implements OnModuleInit {
   ): Promise<string> {
     const [session, sp] = await Promise.all([
       this.getSession(chatId),
-      this.prisma.shopProduct.findUnique({
-        where: { id: spId },
+      this.prisma.shopProduct.findFirst({
+        // Only stock that can really be ordered (live chain, WORKING shop, in stock).
+        where: { AND: [BOT_STOCK_WHERE, { id: spId }] },
         select: {
           id: true,
           price: true,
+          bonus_price: true,
           count: true,
           shop: { select: { id: true, name: true } },
           product_item: {
@@ -2350,7 +2530,8 @@ export class StoreTelegramService implements OnModuleInit {
       }),
     ]);
 
-    if (!sp?.shop) return '❌ Tovar topilmadi';
+    const unitPrice = sp ? effectivePrice(sp.price, sp.bonus_price) : null;
+    if (!sp?.shop || unitPrice == null) return '❌ Tovar topilmadi';
     const cart = this.parseCart(session?.cart);
     const shopId = sp.shop.id;
     const shopName = sp.shop.name ?? '—';
@@ -2368,8 +2549,8 @@ export class StoreTelegramService implements OnModuleInit {
       const lang = user?.lang ?? 'uz';
       const text =
         lang === 'ru'
-          ? `⚠️ В корзине товары из <b>${cart[0].shop_name}</b>.\nОчистить и добавить из <b>${shopName}</b>?`
-          : `⚠️ Savatingizda <b>${cart[0].shop_name}</b> dan tovarlar bor.\n<b>${shopName}</b> dan qo'shish uchun savatni tozalaymizmi?`;
+          ? `⚠️ В корзине товары из <b>${escapeHtml(cart[0].shop_name)}</b>.\nОчистить и добавить из <b>${escapeHtml(shopName)}</b>?`
+          : `⚠️ Savatingizda <b>${escapeHtml(cart[0].shop_name)}</b> dan tovarlar bor.\n<b>${escapeHtml(shopName)}</b> dan qo'shish uchun savatni tozalaymizmi?`;
       if (msgId) {
         await this.editMessage(chatId, msgId, text, {
           inline_keyboard: [
@@ -2388,6 +2569,7 @@ export class StoreTelegramService implements OnModuleInit {
 
     const existing = cart.find((c) => c.shop_product_id === spId);
     if (existing) {
+      existing.price = unitPrice;
       if (existing.count < (sp.count ?? 99)) existing.count++;
       await this.setCart(chatId, cart);
       return `✅ ${pname} (${existing.count} ta)`;
@@ -2396,7 +2578,7 @@ export class StoreTelegramService implements OnModuleInit {
     cart.push({
       shop_product_id: spId,
       name: pname,
-      price: sp.price ?? 0,
+      price: unitPrice,
       count: 1,
       shop_id: shopId,
       shop_name: shopName,
@@ -2449,6 +2631,61 @@ export class StoreTelegramService implements OnModuleInit {
     });
   }
 
+  /**
+   * Re-reads every cart line: price becomes the current effective price, the
+   * quantity is capped to the stock, and lines that can no longer be ordered
+   * (sold out, archived, shop blocked) are dropped. Saved when anything changed.
+   */
+  private async refreshCart(
+    chatId: string,
+    cart: CartItem[],
+  ): Promise<{ cart: CartItem[]; changed: boolean }> {
+    if (cart.length === 0) return { cart, changed: false };
+    const ids = [
+      ...new Set(
+        cart
+          .map((c) => Number(c?.shop_product_id))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    ];
+    const rows =
+      ids.length === 0
+        ? []
+        : await this.prisma.shopProduct.findMany({
+            where: { AND: [BOT_STOCK_WHERE, { id: { in: ids } }] },
+            select: {
+              id: true,
+              price: true,
+              bonus_price: true,
+              count: true,
+              shop_id: true,
+            },
+          });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    let changed = false;
+    const next: CartItem[] = [];
+    for (const item of cart) {
+      const row = byId.get(Number(item?.shop_product_id));
+      const price = row ? effectivePrice(row.price, row.bonus_price) : null;
+      if (!row || price == null || row.shop_id !== item.shop_id) {
+        changed = true;
+        continue;
+      }
+      const wanted = Math.max(1, Math.floor(Number(item.count)) || 1);
+      const count = Math.min(wanted, row.count);
+      if (price !== item.price || count !== item.count) changed = true;
+      next.push({ ...item, price, count });
+    }
+    if (changed) await this.setCart(chatId, next);
+    return { cart: next, changed };
+  }
+
+  private cartChangedNote(lang: string): string {
+    return lang === 'ru'
+      ? '⚠️ <i>Цены или остатки изменились — корзина обновлена.</i>'
+      : "⚠️ <i>Narx yoki qoldiq o'zgardi — savat yangilandi.</i>";
+  }
+
   // ─── Session helpers (DB-backed) ────────────────────────────────────────────
 
   private async getSession(chatId: string) {
@@ -2484,7 +2721,12 @@ export class StoreTelegramService implements OnModuleInit {
     });
   }
 
-  /** Edit a photo message (media + caption + keyboard); falls back to editMessageText if needed */
+  /**
+   * Edit a message into a photo message (media + caption + keyboard). Falls
+   * back to a text edit (editMessage, which also copes with a photo target)
+   * when the caption is over Telegram's limit or the media edit fails, e.g.
+   * the target is a text message or the photo URL cannot be fetched.
+   */
   private async editTgMedia(
     chatId: string,
     msgId: number,
@@ -2492,6 +2734,11 @@ export class StoreTelegramService implements OnModuleInit {
     caption: string,
     keyboard: any[][],
   ) {
+    if (captionLength(caption) > TG_CAPTION_MAX) {
+      return this.editMessage(chatId, msgId, caption, {
+        inline_keyboard: keyboard,
+      });
+    }
     try {
       await axios.post(
         `https://api.telegram.org/bot${this.token}/editMessageMedia`,
@@ -2503,7 +2750,9 @@ export class StoreTelegramService implements OnModuleInit {
         },
         { timeout: 15000 },
       );
-    } catch {
+    } catch (e: any) {
+      // Same photo and caption (e.g. the current page pressed again).
+      if (/message is not modified/i.test(tgErrorDescription(e))) return;
       await this.editMessage(chatId, msgId, caption, {
         inline_keyboard: keyboard,
       });
@@ -2512,10 +2761,14 @@ export class StoreTelegramService implements OnModuleInit {
 
   // ─── Image URL helper ──────────────────────────────────────────────────────
 
-  private imgUrl(path: string | null | undefined): string | null {
-    if (!path?.trim()) return null;
-    if (path.startsWith('http')) return path;
-    return `${this.IMG_BASE}/${path}`;
+  private imgUrl(
+    file: string | null | undefined,
+    folder: 'categories' | 'products' | 'product-items' | 'shops',
+  ): string | null {
+    const name = file?.trim();
+    if (!name) return null;
+    if (name.startsWith('http')) return name;
+    return `${this.IMG_BASE}/${folder}/${encodeURIComponent(name)}`;
   }
 
   /** sendPhoto via Bot API; falls back to sendMessage if photo fails */
@@ -2525,6 +2778,17 @@ export class StoreTelegramService implements OnModuleInit {
     caption: string,
     replyMarkup?: any,
   ): Promise<void> {
+    if (captionLength(caption) > TG_CAPTION_MAX) {
+      // Too long for a caption: send the text without the picture.
+      if (replyMarkup) {
+        await this.sendMessage(chatId, caption, {
+          inline_keyboard: replyMarkup.inline_keyboard,
+        });
+      } else {
+        await this.reply(chatId, caption);
+      }
+      return;
+    }
     try {
       await axios.post(
         `https://api.telegram.org/bot${this.token}/sendPhoto`,
@@ -2587,20 +2851,23 @@ export class StoreTelegramService implements OnModuleInit {
     if (!chatId) return;
     const lang = order.user?.lang ?? 'uz';
     const shop = order.shop;
+    const shopName = escapeHtml(shop?.name ?? '—');
+    const shopAddress = escapeHtml(shop?.address ?? '—');
+    const orderAddress = escapeHtml(order.address ?? '—');
     const amount = (order.amount ?? 0).toLocaleString('ru-RU');
     if ((order.delivery_type ?? '') === 'MARKET') {
       const text =
         lang === 'ru'
-          ? `✅ <b>Заказ #${order.id} принят!</b>\n🏪 ${shop?.name ?? '—'}\n💰 ${amount} сум\n\n🛒 Самовывоз\n📍 ${shop?.address ?? '—'}\n\n/orders`
-          : `✅ <b>#${order.id} buyurtmangiz qabul qilindi!</b>\n🏪 ${shop?.name ?? '—'}\n💰 ${amount} so'm\n\n🛒 Olib ketish\n📍 ${shop?.address ?? '—'}\n\n/orders`;
+          ? `✅ <b>Заказ #${order.id} принят!</b>\n🏪 ${shopName}\n💰 ${amount} сум\n\n🛒 Самовывоз\n📍 ${shopAddress}\n\n/orders`
+          : `✅ <b>#${order.id} buyurtmangiz qabul qilindi!</b>\n🏪 ${shopName}\n💰 ${amount} so'm\n\n🛒 Olib ketish\n📍 ${shopAddress}\n\n/orders`;
       await this.reply(chatId, text);
       if (shop?.lat && shop?.lon)
         await this.sendLocation(chatId, shop.lat, shop.lon);
     } else {
       const text =
         lang === 'ru'
-          ? `✅ <b>Заказ #${order.id} принят!</b>\n🏪 ${shop?.name ?? '—'}\n💰 ${amount} сум\n\n🚚 Доставка\n📍 ${order.address ?? '—'}\n⏰ В течение 24 часов\n\n/orders`
-          : `✅ <b>#${order.id} buyurtmangiz qabul qilindi!</b>\n🏪 ${shop?.name ?? '—'}\n💰 ${amount} so'm\n\n🚚 Yetkazib berish\n📍 ${order.address ?? '—'}\n⏰ 24 soat ichida\n\n/orders`;
+          ? `✅ <b>Заказ #${order.id} принят!</b>\n🏪 ${shopName}\n💰 ${amount} сум\n\n🚚 Доставка\n📍 ${orderAddress}\n⏰ В течение 24 часов\n\n/orders`
+          : `✅ <b>#${order.id} buyurtmangiz qabul qilindi!</b>\n🏪 ${shopName}\n💰 ${amount} so'm\n\n🚚 Yetkazib berish\n📍 ${orderAddress}\n⏰ 24 soat ichida\n\n/orders`;
       await this.reply(chatId, text);
       if (order.lat && order.lon)
         await this.sendLocation(chatId, order.lat, order.lon);
@@ -2692,6 +2959,12 @@ export class StoreTelegramService implements OnModuleInit {
       .catch(() => {});
   }
 
+  /**
+   * Replace a message's text. The catalogue, product and shop pages are photo
+   * messages, which editMessageText cannot change ("there is no text in the
+   * message to edit"): such a message is deleted and the text is sent as a new
+   * message with the same keyboard, so buttons on photo pages keep working.
+   */
   private async editMessage(
     chatId: string,
     messageId: number,
@@ -2711,7 +2984,31 @@ export class StoreTelegramService implements OnModuleInit {
         { timeout: 8000 },
       );
     } catch (e: any) {
-      this.logger.error(`editMessage error: ${e?.message}`);
+      const description = tgErrorDescription(e);
+      if (/no text in the message/i.test(description)) {
+        await this.deleteMessage(chatId, messageId);
+        await this.sendMessage(chatId, text, replyMarkup);
+        return;
+      }
+      if (/message is not modified/i.test(description)) return;
+      this.logger.error(
+        `editMessage error: ${e?.message}${description ? ` (${description})` : ''}`,
+      );
+    }
+  }
+
+  /** Best effort: a message older than 48 h cannot be deleted (ignored). */
+  private async deleteMessage(chatId: string, messageId: number) {
+    try {
+      await axios.post(
+        `https://api.telegram.org/bot${this.token}/deleteMessage`,
+        { chat_id: chatId, message_id: messageId },
+        { timeout: 8000 },
+      );
+    } catch (e: any) {
+      this.logger.warn(
+        `deleteMessage error: ${e?.message} ${tgErrorDescription(e)}`.trim(),
+      );
     }
   }
 

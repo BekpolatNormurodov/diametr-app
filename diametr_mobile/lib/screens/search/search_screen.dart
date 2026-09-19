@@ -5,7 +5,11 @@ import 'package:stroymarket/bloc/productAll/productAll_state.dart';
 import 'package:stroymarket/bloc/regionSelected/regionSelected_bloc.dart';
 import 'package:stroymarket/bloc/shopAll/shopAll_bloc.dart';
 import 'package:stroymarket/bloc/shopAll/shopAll_state.dart';
+import 'package:dio/dio.dart' as dio;
 import 'package:stroymarket/core/extensions/str.dart';
+import 'package:stroymarket/core/network/dio_client.dart';
+import 'package:stroymarket/core/utils/price.dart';
+import 'package:stroymarket/core/utils/search_key.dart';
 import 'package:stroymarket/manager/4_category_manager.dart';
 import 'package:stroymarket/manager/5_product_manager.dart';
 import 'package:stroymarket/manager/6_region_manager.dart';
@@ -14,6 +18,14 @@ import 'package:stroymarket/screens/home/components/region_filter.dart';
 import 'package:stroymarket/services/storage/storage_service.dart';
 
 import '../../export_files.dart';
+
+// Search keys (see searchKey) of every record, computed once per record and
+// reused on each keystroke. Names and description are kept apart because a
+// variant hit is reported by its name only (_ProductCard.matchedVariant).
+final SearchKeyIndex _nameKeys =
+    SearchKeyIndex((r) => [r["name"], r["name_uz"], r["name_ru"]]);
+final SearchKeyIndex _descKeys = SearchKeyIndex((r) => [r["desc"]]);
+final SearchKeyIndex _shopNameKeys = SearchKeyIndex((r) => [r["name"]]);
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -27,6 +39,11 @@ class _SearchScreenState extends State<SearchScreen>
   final TextEditingController _searchCtrl = TextEditingController();
   late TabController _tabCtrl;
 
+  /// Product id -> lowest effective shop price. /product/all carries no
+  /// prices at all, so the price sort compared 0 with 0 and any price-range
+  /// filter emptied the list; prices come from the live stock instead.
+  Map<int, num> _minPrices = const {};
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +52,41 @@ class _SearchScreenState extends State<SearchScreen>
     CategoryManager.getAll(context);
     ProductManager.getAll(context);
     ShopManager.getAll(context);
+    _loadPrices();
+  }
+
+  Future<void> _loadPrices() async {
+    try {
+      final String? token = StorageService().read(StorageService.token);
+      final dio.Response resp = await DioClient().get(
+        Endpoints.ShopProductAll,
+        queryParameters: {'key': Endpoints.authKey},
+        options: dio.Options(
+            headers: {"Authorization": "Bearer ${token ?? ""}"}),
+      );
+      if (!mounted || resp.statusCode != 200 || resp.data is! List) return;
+      final Map<int, num> prices = {};
+      for (final sp in resp.data as List) {
+        if (sp is! Map || sp["work_status"] != "WORKING") continue;
+        final item = sp["product_item"];
+        if (item is! Map || item["work_status"] != "WORKING") continue;
+        final product = item["product"];
+        if (product is Map &&
+            product["work_status"] != null &&
+            product["work_status"] != "WORKING") {
+          continue;
+        }
+        final int? productId = int.tryParse(
+            '${item["product_id"] ?? (product is Map ? product["id"] : "")}');
+        final num? price = effectivePrice(sp["price"], sp["bonus_price"]);
+        if (productId == null || price == null) continue;
+        final num? current = prices[productId];
+        if (current == null || price < current) prices[productId] = price;
+      }
+      setState(() => _minPrices = prices);
+    } catch (_) {
+      // Prices are an extra; the search itself still works without them.
+    }
   }
 
   @override
@@ -80,7 +132,8 @@ class _SearchScreenState extends State<SearchScreen>
 
   @override
   Widget build(BuildContext context) {
-    final q = _searchCtrl.text.trim().normalizeSearch();
+    // Normalized once per query (Latin/Cyrillic, apostrophes, ts/h folded).
+    final q = searchKey(_searchCtrl.text);
     return Scaffold(
       backgroundColor: context.tBg,
       appBar: AppBar(
@@ -183,7 +236,12 @@ class _SearchScreenState extends State<SearchScreen>
       body: TabBarView(
         controller: _tabCtrl,
         children: [
-          _ProductsTab(query: q, key: ValueKey('products_$q')),
+          _ProductsTab(
+            query: q,
+            prices: _minPrices,
+            onRefreshPrices: _loadPrices,
+            key: ValueKey('products_$q'),
+          ),
           _CategoriesTab(query: q),
           _ShopsTab(query: q, key: ValueKey('shops_$q')),
         ],
@@ -195,7 +253,14 @@ class _SearchScreenState extends State<SearchScreen>
 // в”Ђв”Ђв”Ђ Products Tab в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 class _ProductsTab extends StatefulWidget {
   final String query;
-  const _ProductsTab({required this.query, super.key});
+  final Map<int, num> prices;
+  final Future<void> Function() onRefreshPrices;
+  const _ProductsTab({
+    required this.query,
+    required this.prices,
+    required this.onRefreshPrices,
+    super.key,
+  });
 
   @override
   State<_ProductsTab> createState() => _ProductsTabState();
@@ -210,6 +275,12 @@ class _ProductsTabState extends State<_ProductsTab> {
 
   bool get _hasFilter =>
       _priceMin != null || _priceMax != null || _sortAsc != null;
+
+  /// Lowest price of a product, or null when no shop sells it (unknown).
+  num? _priceOf(dynamic product) =>
+      (product["price"] as num?) ??
+      _ProductCardState._minVariantPrice(product) ??
+      widget.prices[product["id"]];
 
   @override
   void didUpdateWidget(covariant _ProductsTab old) {
@@ -229,34 +300,21 @@ class _ProductsTabState extends State<_ProductsTab> {
       builder: (context, state) {
         if (state is ProductAllWaitingState) return _shimmerGrid(context);
         if (state is ProductAllSuccessState) {
-          final q = widget.query; // already lower-cased by the parent
-          bool matches(dynamic v) =>
-              v != null && v.toString().normalizeSearch().contains(q);
+          final q = widget.query; // already a searchKey (computed by the parent)
+          bool matches(dynamic record) =>
+              _nameKeys.matches(record, q) || _descKeys.matches(record, q);
           // Search the product's own names AND its variant names. A product's
           // display name lives in name_uz/name_ru (plain `name` is usually null),
           // and shoppers search by variant too — e.g. "seyf" is a variant of
           // "Xavfsizlik tizimlari", so matching only the product name found nothing.
           var all = (state.data ?? []).where((e) {
-            // Skip catalogue placeholders with no variants — they have no shop
-            // and no price, and tapping one lands on a dead "Do'kon topilmadi"
-            // page (e.g. an empty "Seyflar").
-            final variants = e["items"];
-            if (variants is! List || variants.isEmpty) return false;
-            if (matches(e["name"]) ||
-                matches(e["name_uz"]) ||
-                matches(e["name_ru"]) ||
-                matches(e["desc"])) {
-              return true;
-            }
+            // Variantless products are shown too now (marked "Turlari qo'shilmoqda" on the
+            // card) — match them by product name/description.
+            if (matches(e)) return true;
             final items = e["items"];
             if (items is List) {
               for (final it in items) {
-                if (matches(it["name"]) ||
-                    matches(it["name_uz"]) ||
-                    matches(it["name_ru"]) ||
-                    matches(it["desc"])) {
-                  return true;
-                }
+                if (matches(it)) return true;
               }
             }
             return false;
@@ -279,20 +337,25 @@ class _ProductsTabState extends State<_ProductsTab> {
               ? all
               : all.where((e) => e["category"]?["id"] == _catId).toList();
 
-          // sort by price
+          // sort by price (products without a price go last, either way)
           if (_sortAsc != null) {
             filtered = List.from(filtered)
               ..sort((a, b) {
-                final pa = (a["price"] as num?)?.toDouble() ?? 0;
-                final pb = (b["price"] as num?)?.toDouble() ?? 0;
+                final pa = _priceOf(a);
+                final pb = _priceOf(b);
+                if (pa == null || pb == null) {
+                  return pa == null ? (pb == null ? 0 : 1) : -1;
+                }
                 return _sortAsc! ? pa.compareTo(pb) : pb.compareTo(pa);
               });
           }
 
-          // filter by price range
+          // filter by price range: a product with no known price can't be
+          // shown as "in range" (it used to count as 0)
           if (_priceMin != null || _priceMax != null) {
             filtered = filtered.where((e) {
-              final p = (e["price"] as num?)?.toInt() ?? 0;
+              final p = _priceOf(e);
+              if (p == null) return false;
               if (_priceMin != null && p < _priceMin!) return false;
               if (_priceMax != null && p > _priceMax!) return false;
               return true;
@@ -305,7 +368,12 @@ class _ProductsTabState extends State<_ProductsTab> {
           return RefreshIndicator(
             color: AppConstant.primaryColor,
             backgroundColor: context.tCard,
-            onRefresh: () async => ProductManager.getAll(context),
+            onRefresh: () async {
+              await Future.wait([
+                ProductManager.getAll(context),
+                widget.onRefreshPrices(),
+              ]);
+            },
             child: CustomScrollView(
               slivers: [
                 // ── Category chips + Sort chips ──
@@ -488,7 +556,10 @@ class _ProductsTabState extends State<_ProductsTab> {
                         crossAxisSpacing: 8.w,
                       ),
                       delegate: SliverChildBuilderDelegate(
-                        (ctx, i) => _ProductCard(item: displayed[i], query: widget.query),
+                        (ctx, i) => _ProductCard(
+                            item: displayed[i],
+                            query: widget.query,
+                            price: _priceOf(displayed[i])),
                         childCount: displayed.length,
                       ),
                     ),
@@ -826,7 +897,8 @@ class _PriceFilterSheetState extends State<_PriceFilterSheet> {
 class _ProductCard extends StatefulWidget {
   final dynamic item;
   final String query;
-  const _ProductCard({required this.item, this.query = ""});
+  final num? price;
+  const _ProductCard({required this.item, this.query = "", this.price});
 
   @override
   State<_ProductCard> createState() => _ProductCardState();
@@ -835,16 +907,12 @@ class _ProductCard extends StatefulWidget {
   /// variant's display name so the card can show WHY it appeared (e.g. "Seyf").
   static String? matchedVariant(dynamic item, String q) {
     if (q.isEmpty) return null;
-    bool has(dynamic v) => v != null && v.toString().normalizeSearch().contains(q);
     // Product's own name already matches → no need to point at a variant.
-    if (has(item["name"]) || has(item["name_uz"]) || has(item["name_ru"])) {
-      return null;
-    }
+    if (_nameKeys.matches(item, q)) return null;
     final items = item["items"];
     if (items is List) {
       for (final it in items) {
-        if (it is Map &&
-            (has(it["name"]) || has(it["name_uz"]) || has(it["name_ru"]))) {
+        if (it is Map && _nameKeys.matches(it, q)) {
           return (it["name"] ?? it["name_uz"] ?? it["name_ru"])?.toString();
         }
       }
@@ -915,7 +983,13 @@ class _ProductCardState extends State<_ProductCard> {
         '';
     // Price is not on the product itself — take the lowest working shop price
     // across its variants.
-    final dynamic price = widget.item["price"] ?? _minVariantPrice(widget.item);
+    final dynamic price = widget.price ??
+        widget.item["price"] ??
+        _minVariantPrice(widget.item);
+    // Only a product with NO variant is "types being added". A stocked product
+    // whose price just isn't in this payload (/product/all omits shop offers)
+    // must not get that label.
+    final bool hasVariant = (widget.item["items"] as List?)?.isNotEmpty ?? false;
     // If the search matched an inner variant, surface its name so the shopper
     // sees why this product appeared (e.g. searching "seyf" → "→ Seyf").
     final String? matchedVar =
@@ -1043,6 +1117,26 @@ class _ProductCardState extends State<_ProductCard> {
                           fontWeight: FontWeight.w700),
                       maxLines: 1,
                     ),
+                  ] else if (!hasVariant) ...[
+                    SizedBox(height: 4.h),
+                    Row(
+                      children: [
+                        Icon(Iconsax.clock,
+                            size: 11.sp, color: const Color(0xFF8A94A6)),
+                        SizedBox(width: 3.w),
+                        Expanded(
+                          child: Text(
+                            'coming_soon'.tr(),
+                            style: TextStyle(
+                                color: const Color(0xFF8A94A6),
+                                fontSize: 11.sp,
+                                fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ],
               ),
@@ -1065,14 +1159,9 @@ class _CategoriesTab extends StatelessWidget {
       builder: (context, state) {
         if (state is CategoryAllWaitingState) return _shimmerList(context);
         if (state is CategoryAllSuccessState) {
-          bool matches(dynamic v) =>
-              v != null && v.toString().normalizeSearch().contains(query);
           // Category display name is in name_uz/name_ru, not `name`.
           final data = (state.data ?? [])
-              .where((e) =>
-                  matches(e["name"]) ||
-                  matches(e["name_uz"]) ||
-                  matches(e["name_ru"]))
+              .where((e) => _nameKeys.matches(e, query))
               .toList();
           if (data.isEmpty) return _empty(context);
           return ListView.builder(
@@ -1237,12 +1326,7 @@ class _ShopsTabState extends State<_ShopsTab> {
             if (state is ShopAllWaitingState) return _shimmerList(context);
             if (state is ShopAllSuccessState) {
               var data = (state.data ?? [])
-                  .where((e) =>
-                      e["name"]
-                              ?.toString()
-                              .normalizeSearch()
-                              .contains(widget.query) ??
-                          false)
+                  .where((e) => _shopNameKeys.matches(e, widget.query))
                   .toList();
 
               // filter by selected regions

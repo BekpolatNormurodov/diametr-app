@@ -1,39 +1,101 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { DISCOUNT_TYPE, Prisma } from '@prisma/client';
 import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
 import {
   CreatePromoCodeDto,
   UpdatePromoCodeDto,
 } from './dto/create-promo-code.dto';
 
+const NOT_YOUR_PROMO = "Bu promokod sizning do'koningizga tegishli emas";
+const PROMO_USED_DELETE =
+  "Bu promokod buyurtmalarda ishlatilgan, uni o'chirib bo'lmaydi. Uning o'rniga nofaol qiling";
+const PROMO_CODE_TAKEN = 'Bu promokod allaqachon mavjud';
+const PERCENT_TOO_BIG = "Foizli chegirma 100% dan oshmasligi kerak";
+
 @Injectable()
 export class PromoCodeService {
   constructor(private readonly prisma: PrismaClientService) {}
   private logger = new Logger('PromoCodeService');
 
-  async create(data: CreatePromoCodeDto) {
-    this.logger.log('create');
-    return this.prisma.promoCode.create({
-      data: {
-        code: data.code,
-        discount_type: data.discount_type,
-        discount_value: data.discount_value,
-        min_order_amount: data.min_order_amount ?? null,
-        max_uses: data.max_uses ?? null,
-        expires_at: data.expires_at ? new Date(data.expires_at) : null,
-        shop_id: data.shop_id ?? null,
-      },
-    });
+  /**
+   * SUPER manages every code. A shop owner (ADMIN) only the codes of their own
+   * shop — never another shop's code nor a platform-wide one (shop_id null).
+   */
+  private assertCanManage(promo: { shop_id: number | null }, req: any) {
+    const role: string | undefined = req?.['role'] ?? req?.['user']?.role;
+    if (role === 'SUPER') return;
+    const shopId = req?.['user']?.shop_id;
+    if (
+      role === 'ADMIN' &&
+      shopId != null &&
+      promo.shop_id != null &&
+      promo.shop_id === shopId
+    ) {
+      return;
+    }
+    throw new ForbiddenException(NOT_YOUR_PROMO);
   }
 
-  async update(id: number, data: UpdatePromoCodeDto) {
-    this.logger.log('update');
+  private assertPercent(type: DISCOUNT_TYPE | undefined, value: unknown) {
+    if (type === DISCOUNT_TYPE.PERCENT && Number(value) > 100) {
+      throw new BadRequestException(PERCENT_TOO_BIG);
+    }
+  }
+
+  /** A duplicate code is a 400 with a clear message, not a 500. */
+  private rethrowUnique(e: unknown): never {
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === 'P2002'
+    ) {
+      throw new BadRequestException(PROMO_CODE_TAKEN);
+    }
+    throw e;
+  }
+
+  async create(data: CreatePromoCodeDto) {
+    this.logger.log('create');
+    this.assertPercent(data.discount_type, data.discount_value);
+    try {
+      return await this.prisma.promoCode.create({
+        data: {
+          code: data.code,
+          discount_type: data.discount_type,
+          discount_value: data.discount_value,
+          min_order_amount: data.min_order_amount ?? null,
+          max_uses: data.max_uses ?? null,
+          expires_at: data.expires_at ? new Date(data.expires_at) : null,
+          shop_id: data.shop_id ?? null,
+        },
+      });
+    } catch (e) {
+      this.rethrowUnique(e);
+    }
+  }
+
+  private async load(id: number, req: any) {
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new NotFoundException('Promo code not found');
+    }
     const promo = await this.prisma.promoCode.findUnique({ where: { id } });
     if (!promo) throw new NotFoundException('Promo code not found');
+    this.assertCanManage(promo, req);
+    return promo;
+  }
+
+  async update(id: number, data: UpdatePromoCodeDto, req?: any) {
+    this.logger.log('update');
+    const promo = await this.load(id, req);
+    this.assertPercent(
+      data.discount_type ?? promo.discount_type,
+      data.discount_value ?? promo.discount_value,
+    );
     return this.prisma.promoCode.update({
       where: { id },
       data: {
@@ -53,7 +115,7 @@ export class PromoCodeService {
         }),
         ...(data.is_active !== undefined && { is_active: data.is_active }),
       },
-    });
+    }).catch((e) => this.rethrowUnique(e));
   }
 
   async findAll(shopId?: number) {
@@ -73,17 +135,26 @@ export class PromoCodeService {
     }));
   }
 
-  async remove(id: number) {
+  async remove(id: number, req?: any) {
     this.logger.log('remove');
-    const promo = await this.prisma.promoCode.findUnique({ where: { id } });
-    if (!promo) throw new NotFoundException('Promo code not found');
-    return this.prisma.promoCode.delete({ where: { id } });
+    await this.load(id, req);
+    try {
+      return await this.prisma.promoCode.delete({ where: { id } });
+    } catch (e) {
+      // Orders and promocodeuse rows reference a used code (FK RESTRICT).
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2003'
+      ) {
+        throw new BadRequestException(PROMO_USED_DELETE);
+      }
+      throw e;
+    }
   }
 
-  async toggle(id: number) {
+  async toggle(id: number, req?: any) {
     this.logger.log('toggle');
-    const promo = await this.prisma.promoCode.findUnique({ where: { id } });
-    if (!promo) throw new NotFoundException('Promo code not found');
+    const promo = await this.load(id, req);
     return this.prisma.promoCode.update({
       where: { id },
       data: { is_active: !promo.is_active },
@@ -143,6 +214,9 @@ export class PromoCodeService {
       min_order_amount: promo.min_order_amount
         ? Number(promo.min_order_amount)
         : null,
+      // Additive: the shop the code belongs to (null = every shop), so a
+      // multi-shop cart can apply it to that shop's items.
+      shop_id: promo.shop_id,
     };
   }
 }

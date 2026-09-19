@@ -3,13 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import { useLang } from '../context/AppContext'
-import { useCart } from '../context/CartContext'
+import { useCart, variantLabelOf } from '../context/CartContext'
 import { useScrollReveal } from '../hooks/useScrollReveal'
+import { useAuthUser } from '../hooks/useAuthUser'
 import Navbar from '../components/home/sections/navbar'
 import Footer from '../components/home/sections/footer'
 import AuthModal from '../components/auth/AuthModal'
 import CartDrawer from '../components/cart/CartDrawer'
-import { authService, AuthUser } from '../service/authService'
+import { authService } from '../service/authService'
+import { searchKey, buildSearchKeys, matchesSearch } from '../utils/searchKey'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
@@ -74,6 +76,8 @@ interface ShopProductRaw {
   shop_id?: number
   product_item_id?: number
   work_status?: string
+  desc?: string
+  image?: string
   // Variant fields returned by shop/:id
   variant_name?: string
   variant_image?: string
@@ -81,14 +85,6 @@ interface ShopProductRaw {
   size?: string | null
   value?: number | null
   unit_type?: { id: number; name: string; symbol: string } | null
-}
-
-interface ProductItem {
-  id: number
-  name?: string
-  desc?: string
-  image?: string
-  product_id?: number
 }
 
 interface ShopCategory {
@@ -99,12 +95,16 @@ interface ShopCategory {
 }
 
 interface EnrichedProduct extends ShopProductRaw {
-  item?: ProductItem
   category?: ShopCategory
 }
 
-const PRODUCT_IMG = (img?: string) =>
-  img ? `${BASE_URL}/static/product-items/${img}` : null
+// Variant photo first (product-items folder), else the product's own photo (products folder)
+const PRODUCT_IMG = (sp: { variant_image?: string; image?: string }) =>
+  sp.variant_image
+    ? `${BASE_URL}/static/product-items/${sp.variant_image}`
+    : sp.image
+      ? `${BASE_URL}/static/products/${sp.image}`
+      : null
 
 export default function ShopDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -116,7 +116,7 @@ export default function ShopDetailPage() {
   const [products, setProducts] = useState<EnrichedProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [user, setUser] = useState<AuthUser | null>(() => authService.getUser())
+  const [user, setUser] = useAuthUser()
   const [authOpen, setAuthOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set())
@@ -153,10 +153,15 @@ export default function ShopDetailPage() {
     setActiveCatId(null)
     setMinPrice('')
     setMaxPrice('')
-    axios.get(`${API_URL}/shop/${id}`)
-      .then(async res => {
+    // Customers buy straight from this page: read live prices/stock
+    // (no-store skips the browser and the short (2s) API proxy cache).
+    fetch(`${API_URL}/shop/${id}`, { cache: 'no-store' })
+      .then(res => {
+        if (!res.ok) throw new Error(`Error ${res.status}`)
+        return res.json()
+      })
+      .then(data => {
         try {
-          const data = res.data
           setShop({
             id: data.id,
             name: data.name,
@@ -181,29 +186,18 @@ export default function ShopDetailPage() {
               .catch(() => {})
           }
 
+          // shop/:id already returns only WORKING rows, so we just drop the rare
+          // price-less row. (No `work_status` field is sent, so filtering on it
+          // here was a dead no-op.)
           const rawProducts: ShopProductRaw[] = (data.products || []).filter(
-            (p: ShopProductRaw) => p.work_status !== 'STOPPED' && p.price != null
+            (p: ShopProductRaw) => p.price != null
           )
 
-          // Parallel-fetch product items to get description (variant details now come from shop response)
-          const enriched: EnrichedProduct[] = await Promise.all(
-            rawProducts.map(async (sp): Promise<EnrichedProduct> => {
-              if (!sp.product_item_id) return { ...sp }
-              try {
-                const itemRes = await axios.get(`${API_URL}/product-item/${sp.product_item_id}`)
-                return { ...sp, item: itemRes.data as ProductItem }
-              } catch {
-                return { ...sp }
-              }
-            })
-          )
-
-          // Use category from shop response
-          const enrichedWithCat: EnrichedProduct[] = enriched.map(e => ({
-            ...e,
-            category: (e as any).category ?? undefined,
-          }))
-          setProducts(enrichedWithCat)
+          // Variant details (name + image) already come from shop/:id
+          // (variant_name / variant_image), so no per-item round-trips are
+          // needed — render straight from the payload instead of firing one
+          // /product-item/:id request per product.
+          setProducts(rawProducts as EnrichedProduct[])
         } catch {
           // data processing failed but shop loaded — just show empty products
           setProducts([])
@@ -267,17 +261,15 @@ export default function ShopDetailPage() {
     return () => window.removeEventListener('resize', onResize)
   }, [categories, lang, measureChips])
 
+  // Match the product's names (both languages), its description, and the
+  // variant name — all present on the shop/:id payload row. Keys are
+  // Latin/Cyrillic-normalized (searchKey) and built once per product list.
+  const productKeys = useMemo(() => buildSearchKeys(products, p => [
+    p.name_uz, p.name_ru, p.name, p.desc, p.variant_name,
+  ]), [products])
+  const q = searchKey(search)
   const filtered = products.filter(p => {
-    const q = search.toLowerCase()
-    if (q) {
-      const it: any = p.item
-      // variant names AND the parent product's names, both languages
-      const hay = [
-        it?.name, it?.name_uz, it?.name_ru, it?.desc,
-        it?.product?.name_uz, it?.product?.name_ru, it?.product?.name,
-      ]
-      if (!hay.some(s => (s || '').toLowerCase().includes(q))) return false
-    }
+    if (q && !matchesSearch(productKeys.get(p), q)) return false
     if (activeCatId !== null && p.category?.id !== activeCatId) return false
     const price = p.price ?? 0
     if (minPrice !== '' && price < Number(minPrice.replace(/\s/g, ''))) return false
@@ -286,28 +278,35 @@ export default function ShopDetailPage() {
   })
 
   const addToCart = useCallback((sp: EnrichedProduct) => {
-    if (!shop || sp.price == null) return
+    // Sold out (count 0) can't be ordered — the server would reject it
+    if (!shop || sp.price == null || !(sp.count > 0)) return
     const productName =
       (lang === 'ru' ? sp.name_ru : sp.name_uz) ??
       sp.name ??
-      sp.item?.name ??
+      sp.variant_name ??
       (lang === 'uz' ? 'Mahsulot' : 'Товар')
     const shopName = shop.name ?? (lang === 'uz' ? "Do'kon" : 'Магазин')
-    const imgSrc = PRODUCT_IMG(sp.item?.image)
+    const imgSrc = PRODUCT_IMG(sp)
     const finalPrice = sp.bonus_price != null && sp.bonus_price > 0 && sp.bonus_price < sp.price
       ? sp.bonus_price
       : sp.price!
+    const variantLabel = variantLabelOf({ name: sp.variant_name, value: sp.value, unit_type: sp.unit_type, size: sp.size, color: sp.color })
 
     addItem({
       shopProductId: sp.shop_product_id ?? sp.id,
-      productId: sp.item?.product_id ?? sp.product_item_id ?? 0,
-      productName,
-      productImage: sp.item?.image,
+      // `sp.id` is the PRODUCT id in the shop/:id payload; use it (not the
+      // product_item_id) as the cart's productId.
+      productId: sp.id ?? sp.product_item_id ?? 0,
+      productName: sp.name_uz || sp.name || sp.name_ru || productName,
+      productNameRu: sp.name_ru,
+      // The cart shows images from the products folder, so store the product photo
+      productImage: sp.image,
+      variantLabel,
       shopId: shop.id,
       shopName,
       deliveryAmount: shop.delivery_amount,
       price: finalPrice,
-      maxQty: sp.count || undefined,
+      maxQty: sp.count,
     })
 
     const uid = sp.shop_product_id ?? sp.id
@@ -339,8 +338,8 @@ export default function ShopDetailPage() {
               {lang === 'uz' ? "Savatga qo'shildi!" : 'Добавлено в корзину!'}
             </p>
           </div>
-          <p className="text-[11px] text-slate-500 truncate">{productName}</p>
-          <p className="text-[11px] text-[#00C48C] font-semibold truncate">{shopName} · {sp.price!.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}</p>
+          <p className="text-[11px] text-slate-500 truncate">{productName}{variantLabel && variantLabel !== productName ? ` · ${variantLabel}` : ''}</p>
+          <p className="text-[11px] text-[#00C48C] font-semibold truncate">{shopName} · {finalPrice.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}</p>
         </div>
       </div>,
       { icon: false, autoClose: 2500 }
@@ -355,7 +354,7 @@ export default function ShopDetailPage() {
         onCartClick={() => setCartOpen(true)}
         onAuthClick={() => setAuthOpen(true)}
         user={user}
-        onLogout={() => setUser(null)}
+        onLogout={() => { authService.logout(); setUser(null) }}
       />
       <div className="h-[76px] flex-shrink-0" />
 
@@ -734,11 +733,12 @@ export default function ShopDetailPage() {
                 const uid = sp.shop_product_id ?? sp.id
                 const added = addedIds.has(uid)
                 const alreadyInCart = inCart(uid)
-                const imgSrc = PRODUCT_IMG(sp.item?.image)
+                const imgSrc = PRODUCT_IMG(sp)
+                const soldOut = !(sp.count > 0)
                 const name =
                   (lang === 'ru' ? sp.name_ru : sp.name_uz) ??
                   sp.name ??
-                  sp.item?.name ??
+                  sp.variant_name ??
                   (lang === 'uz' ? 'Mahsulot' : 'Товар')
                 return (
                   <div
@@ -791,8 +791,8 @@ export default function ShopDetailPage() {
                       <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors mb-1">
                         {name}
                       </h3>
-                      {sp.item?.desc && (
-                        <p className="text-slate-400 dark:text-slate-500 text-xs line-clamp-1 mb-2">{sp.item.desc}</p>
+                      {sp.desc && (
+                        <p className="text-slate-400 dark:text-slate-500 text-xs line-clamp-1 mb-2">{sp.desc}</p>
                       )}
                       {/* Variant badges: unit/value, color, size */}
                       {(sp.unit_type || sp.color || sp.size) && (
@@ -858,16 +858,20 @@ export default function ShopDetailPage() {
                         </div>
                         <button
                           onClick={() => addToCart(sp)}
-                          disabled={added}
+                          disabled={added || soldOut}
                           className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
-                            added
+                            soldOut
+                              ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+                              : added
                               ? 'bg-primary/20 text-primary cursor-default'
                               : alreadyInCart
                               ? 'bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20'
                               : 'bg-primary text-white hover:bg-accent shadow-sm hover:shadow-md hover:shadow-primary/20'
                           }`}
                         >
-                          {added ? (
+                          {soldOut ? (
+                            lang === 'uz' ? 'Tugagan' : 'Нет в наличии'
+                          ) : added ? (
                             <>
                               <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />

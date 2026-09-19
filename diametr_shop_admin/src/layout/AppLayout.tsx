@@ -4,27 +4,20 @@ import AppHeader from "./AppHeader";
 import Backdrop from "./Backdrop";
 import AppSidebar from "./AppSidebar";
 import { PrivateRoute } from "./PrivateRoute";
-import { useCallback, useEffect, useState } from "react";
-import axiosClient from "../service/axios.service";
+import { ShopSessionProvider, useShopSession } from "../context/ShopSessionContext";
 
 const SubscriptionBanner: React.FC = () => {
-  const [expired, setExpired] = useState(false);
   const navigate = useNavigate();
+  // Re-evaluated on every live session refresh (mount, 60s, focus, after a payment),
+  // so a renewal clears the banner and an expiry while the panel is open shows it.
+  const { shop, checkedAt } = useShopSession();
+  const exp = shop?.expired;
+  const expired = checkedAt > 0 && !!exp
+    && Math.ceil((new Date(exp).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) < 0;
+  // A shop can also be blocked by the platform admin with a future expiry (live status only).
+  const blocked = checkedAt > 0 && shop?.work_status === "BLOCKED";
 
-  const check = useCallback(async () => {
-    try {
-      const res = await axiosClient.get("/subscription/balance");
-      const exp = res.data?.expired;
-      if (exp) {
-        const days = Math.ceil((new Date(exp).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        setExpired(days < 0);
-      }
-    } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => { check(); }, [check]);
-
-  if (!expired) return null;
+  if (!expired && !blocked) return null;
 
   return (
     <div
@@ -36,7 +29,9 @@ const SubscriptionBanner: React.FC = () => {
       </svg>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-red-700 dark:text-red-400">
-          Obuna muddati tugagan — mahsulotlaringiz platformada ko'rsatilmaydi
+          {expired
+            ? "Obuna muddati tugagan — mahsulotlaringiz platformada ko'rsatilmaydi"
+            : "Do'kon bloklangan — mahsulotlaringiz platformada ko'rsatilmaydi"}
         </p>
       </div>
       <svg className="w-5 h-5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -73,9 +68,11 @@ const LayoutContent: React.FC = () => {
 const AppLayout: React.FC = () => {
   return (
     <PrivateRoute>
-      <SidebarProvider>
-        <LayoutContent />
-      </SidebarProvider>
+      <ShopSessionProvider>
+        <SidebarProvider>
+          <LayoutContent />
+        </SidebarProvider>
+      </ShopSessionProvider>
     </PrivateRoute>
   );
 };

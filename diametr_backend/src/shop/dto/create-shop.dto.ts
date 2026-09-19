@@ -7,6 +7,7 @@ import {
   IsNumberString,
   IsOptional,
   IsString,
+  Max,
   Min,
   MinLength,
 } from 'class-validator';
@@ -67,15 +68,16 @@ export class CreateShopDto {
     minimum: 0,
   })
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @IsOptional()
   @Min(0)
+  @Max(2000000000)
   delivery_amount: number;
 
   @ApiPropertyOptional({ example: 1, description: 'Hudud ID', minimum: 1 })
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @Min(1)
   region_id?: number;
 

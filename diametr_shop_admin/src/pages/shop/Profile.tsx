@@ -1,15 +1,17 @@
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import PageMeta from "../../components/common/PageMeta";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axiosClient from "../../service/axios.service";
 import { toast } from "../../components/ui/toast";
 import Button from "../../components/ui/button/Button";
 import Input from "../../components/form/input/InputField";
 import Label from "../../components/form/Label";
+import { useShopSession } from "../../context/ShopSessionContext";
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../../utils/password";
 
 export default function ProfilePage() {
-  const userRaw = localStorage.getItem("user");
-  const [user, setUser] = useState<any>(userRaw ? JSON.parse(userRaw) : null);
+  // Live session (shop name refreshed from the API); stored snapshot is only the placeholder.
+  const { user, updateUser, refresh } = useShopSession();
 
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -18,11 +20,18 @@ export default function ProfilePage() {
 
   const [chatId, setChatId] = useState<string>(user?.chat_id ?? "");
   const [savingTg, setSavingTg] = useState(false);
+  const chatIdEdited = useRef(false);
+
+  // The live refresh (GET /admin/me) may bring a newer chat_id than the stored snapshot:
+  // show it unless the owner is already typing a new one.
+  useEffect(() => {
+    if (!chatIdEdited.current) setChatId(user?.chat_id ?? "");
+  }, [user?.chat_id]);
 
   const handlePasswordChange = async () => {
     if (!oldPassword || !newPassword) { toast.error("Eski va yangi parolni kiriting"); return; }
     if (newPassword !== confirmPassword) { toast.error("Yangi parollar mos kelmaydi"); return; }
-    if (newPassword.length < 6) { toast.error("Parol kamida 6 ta belgi bo'lishi kerak"); return; }
+    if (newPassword.length < MIN_PASSWORD_LENGTH) { toast.error(PASSWORD_TOO_SHORT); return; }
     setSaving(true);
     try {
       await axiosClient.patch(`/admin/me/password`, { old_password: oldPassword, password: newPassword });
@@ -38,9 +47,14 @@ export default function ProfilePage() {
     setSavingTg(true);
     try {
       const res = await axiosClient.patch("/admin/me", { chat_id: chatId.trim() });
-      const updated = { ...user, chat_id: res.data?.chat_id ?? chatId.trim() };
-      setUser(updated);
-      localStorage.setItem("user", JSON.stringify(updated));
+      // Merge only non-sensitive fields of the fresh admin row (never the password).
+      updateUser({
+        chat_id: res.data?.chat_id ?? chatId.trim(),
+        ...(res.data?.fullname ? { fullname: res.data.fullname } : {}),
+        ...(res.data?.phone ? { phone: res.data.phone } : {}),
+      });
+      chatIdEdited.current = false;
+      refresh();
       toast.success("Telegram ulandi");
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
@@ -109,7 +123,7 @@ export default function ProfilePage() {
           )}
           <div className="flex gap-3">
             <div className="flex-1">
-              <Input type="text" placeholder="Chat ID" value={chatId} onChange={(e: any) => setChatId(e.target.value)} />
+              <Input type="text" placeholder="Chat ID" value={chatId} onChange={(e: any) => { chatIdEdited.current = true; setChatId(e.target.value); }} />
             </div>
             <Button onClick={handleSaveChatId} disabled={savingTg} size="sm">
               {savingTg ? "..." : user?.chat_id ? "Yangilash" : "Ulash"}
@@ -135,7 +149,7 @@ export default function ProfilePage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Yangi parol</Label>
-                <Input type="password" placeholder="Min 6 belgi" value={newPassword} onChange={(e: any) => setNewPassword(e.target.value)} />
+                <Input type="password" placeholder={`Kamida ${MIN_PASSWORD_LENGTH} belgi`} value={newPassword} onChange={(e: any) => setNewPassword(e.target.value)} />
               </div>
               <div>
                 <Label>Tasdiqlash</Label>

@@ -42,6 +42,16 @@ export class AdminController {
     return this.adminService.findAll();
   }
 
+  // The shop owner's own live profile (header/profile of the shop panel).
+  // MUST stay declared before GET ':id' (SUPER only), which would otherwise
+  // take '/me' as an id.
+  @Get('/me')
+  @UseGuards(RolesGuardFactory([Role.ADMIN]))
+  @ApiOperation({ summary: "O'z profilim (ADMIN)" })
+  getMe(@Req() req: any) {
+    return this.adminService.getMe(req['user'].id);
+  }
+
   @Get(':id')
   @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiOperation({ summary: 'Bitta admin (SUPER)' })

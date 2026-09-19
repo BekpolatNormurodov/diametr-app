@@ -2,9 +2,11 @@
 
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:map_launcher/map_launcher.dart';
+import 'package:stroymarket/bloc/orderAll/orderAll_bloc.dart';
 import 'package:stroymarket/bloc/savatcha/savatcha_bloc.dart';
 import 'package:stroymarket/core/extensions/str.dart';
 import 'package:stroymarket/core/network/dio_Client.dart';
+import 'package:stroymarket/core/utils/price.dart';
 import 'package:stroymarket/services/storage/storage_service.dart';
 
 import 'package:dio/dio.dart' as dio;
@@ -57,20 +59,178 @@ class _CartScreenState extends State<CartScreen> {
 
   LoadingService loadingService = LoadingService();
   List savatchaItem = [];
+  bool _submitting = false;
+  // A pull-to-refresh re-check is running. Ordering waits for it: its toast
+  // (a route) could otherwise open above the loading dialog, and closing the
+  // dialog would then close the toast and leave the dialog stuck.
+  bool _refreshing = false;
 
   @override
   void initState() {
     savatchaItem = StorageService().read(StorageService.savatcha) ?? [];
-    _fetchAllShops();
+    _loadCart();
     super.initState();
+  }
+
+  /// The cart lives in storage and survives restarts, so opening it re-checks
+  /// every line against the live stock before anything is shown.
+  Future<void> _loadCart() async {
+    final shops = _fetchAllShops();
+    final check = await _checkCart();
+    await shops;
+    if (!mounted) return;
+    setState(() => isLoading = false);
+    _notifyCartChanges(check);
+  }
+
+  /// Pull-to-refresh on the cart.
+  Future<void> _refreshCart() async {
+    if (_submitting) return;
+    _refreshing = true;
+    try {
+      final shops = _fetchAllShops();
+      final check = await _checkCart();
+      await shops;
+      if (!mounted) return;
+      setState(() {});
+      _notifyCartChanges(check);
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  /// Re-checks every cart line with GET /shop-product/:id: the price becomes
+  /// the current effective price (discount included), the stock the live
+  /// count (the quantity is capped to it), and lines whose stock row, variant,
+  /// product or shop can no longer be bought are removed. Lines that could not
+  /// be checked (network) are left untouched and reported as [unverified].
+  Future<_CartCheck> _checkCart() async {
+    if (savatchaItem.isEmpty) return const _CartCheck();
+    final DioClient client = DioClient();
+    final String? token = StorageService().read(StorageService.token);
+    final Set<String> ids =
+        savatchaItem.map<String>((it) => it["id"].toString()).toSet();
+    final Map<String, Map?> live = {}; // id -> current row, null = gone
+    bool unverified = false;
+    await Future.wait(ids.map((id) async {
+      if (int.tryParse(id) == null) {
+        live[id] = null; // corrupt line, can never be ordered
+        return;
+      }
+      try {
+        final resp = await client.get(
+          Endpoints.ShopProductById + id,
+          queryParameters: {'key': Endpoints.authKey},
+          options: dio.Options(
+              headers: {"Authorization": "Bearer ${token ?? ""}"}),
+        );
+        if (resp.statusCode == 200 && resp.data is Map) {
+          live[id] = resp.data as Map;
+        } else if (resp.statusCode == 404) {
+          live[id] = null;
+        } else {
+          unverified = true;
+        }
+      } catch (_) {
+        unverified = true;
+      }
+    }));
+
+    bool removed = false, updated = false, dirty = false;
+    final List next = [];
+    // Built from the list as it is NOW, so a +/- tapped meanwhile is kept.
+    for (final it in savatchaItem) {
+      final String id = it["id"].toString();
+      if (!live.containsKey(id)) {
+        next.add(it);
+        continue;
+      }
+      final Map? row = live[id];
+      if (row == null || !_isSellable(row, it)) {
+        removed = true;
+        dirty = true;
+        continue;
+      }
+      final Map line = Map.from(it);
+      final num? price = rowEffectivePrice(row);
+      if (price != num.tryParse('${line["price"]}')) {
+        line["price"] = price;
+        updated = true;
+        dirty = true;
+      }
+      final int stock = (row["count"] as num?)?.toInt() ?? 0;
+      if (stock != int.tryParse('${line["stock"]}')) {
+        line["stock"] = stock;
+        dirty = true;
+      }
+      final int count = int.tryParse('${line["count"]}') ?? 1;
+      if (count > stock) {
+        line["count"] = stock;
+        updated = true;
+        dirty = true;
+      } else if (count < 1) {
+        line["count"] = 1;
+        dirty = true;
+      }
+      next.add(line);
+    }
+    if (dirty) {
+      savatchaItem = next;
+      await StorageService().write(StorageService.savatcha, savatchaItem);
+      if (mounted) {
+        context.read<SavatchaBloc>().changeValue(savatchaItem);
+        setState(() {});
+      }
+    }
+    return _CartCheck(
+        removed: removed, updated: updated, unverified: unverified);
+  }
+
+  /// Contract C2 `available` (row, variant, product and shop all WORKING, a
+  /// price and stock > 0); derived from the other fields if it is missing.
+  bool _isSellable(Map row, Map line) {
+    final available = row["available"];
+    if (available is bool) {
+      if (!available) return false;
+    } else {
+      bool working(dynamic v) => v == null || v == "WORKING";
+      final item = row["product_item"];
+      final product = item is Map ? item["product"] : null;
+      final shop = row["shop"];
+      if (row["work_status"] != "WORKING") return false;
+      if (item is Map && !working(item["work_status"])) return false;
+      if (product is Map && !working(product["work_status"])) return false;
+      if (shop is Map && !working(shop["work_status"])) return false;
+      if (row["shop_id"] == null || row["price"] is! num) return false;
+      if (((row["count"] as num?) ?? 0) <= 0) return false;
+    }
+    final String lineShop = '${line["shop_id"] ?? ""}';
+    if (row["shop_id"] != null &&
+        lineShop.isNotEmpty &&
+        row["shop_id"].toString() != lineShop) {
+      return false;
+    }
+    return true;
+  }
+
+  /// One message for everything a check changed.
+  void _notifyCartChanges(_CartCheck check, {bool beforeOrder = false}) {
+    if (!mounted || !check.changed) return;
+    AppToast.show(
+      context,
+      message: [
+        if (check.removed) 'cart_items_removed'.tr(),
+        if (check.updated) 'cart_prices_updated'.tr(),
+        if (beforeOrder) 'cart_review_changes'.tr(),
+      ].join('\n'),
+      type: ToastType.warning,
+      duration: const Duration(seconds: 5),
+    );
   }
 
   /// Fetch shop data for every unique shop_id in cart.
   Future<void> _fetchAllShops() async {
-    if (savatchaItem.isEmpty) {
-      setState(() => isLoading = false);
-      return;
-    }
+    if (savatchaItem.isEmpty) return;
     final Set<String> shopIds =
         savatchaItem.map<String>((it) => it["shop_id"].toString()).toSet();
     final DioClient client = DioClient();
@@ -95,7 +255,6 @@ class _CartScreenState extends State<CartScreen> {
         // silent
       }
     }
-    setState(() => isLoading = false);
   }
 
   // в”Ђв”Ђ grouped cart items by shop в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
@@ -203,14 +362,19 @@ class _CartScreenState extends State<CartScreen> {
     }
     return Stack(
       children: [
-        ListView(
-          padding: EdgeInsets.only(bottom: 120.h),
-          children: [
-            ..._grouped.entries
-                .map((e) => _buildShopSection(e.key, e.value))
-                ,
-            _buildSummary(),
-          ],
+        RefreshIndicator(
+          color: AppConstant.primaryColor,
+          backgroundColor: context.tCard,
+          onRefresh: _refreshCart,
+          child: ListView(
+            padding: EdgeInsets.only(bottom: 120.h),
+            children: [
+              ..._grouped.entries
+                  .map((e) => _buildShopSection(e.key, e.value))
+                  ,
+              _buildSummary(),
+            ],
+          ),
         ),
         // Sticky bottom CTA
         Positioned(
@@ -1146,9 +1310,29 @@ class _CartScreenState extends State<CartScreen> {
   }
   // в”Ђв”Ђ submit one order per shop в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
   Future<void> _submitOrders() async {
-    if (!_canConfirm) return;
+    if (!_canConfirm || _submitting || _refreshing) return;
+    _submitting = true;
     loadingService.showLoading(context);
+
+    // Last check right before ordering, so the order never goes out with a
+    // price, quantity or item the shop no longer has.
+    final _CartCheck check = await _checkCart();
+    if (!mounted) return;
+    if (check.unverified || check.changed || !_canConfirm) {
+      loadingService.closeLoading(context); // before any toast (toasts are routes)
+      _submitting = false;
+      if (check.unverified) {
+        AppToast.show(context,
+            message: 'cart_check_failed'.tr(), type: ToastType.error);
+      } else {
+        _notifyCartChanges(check, beforeOrder: true);
+      }
+      return;
+    }
+
     final List<String> orderIds = [];
+    final Set<String> orderedShops = {};
+    String? errorMessage;
     bool hasError = false;
 
     for (final entry in _grouped.entries) {
@@ -1197,34 +1381,85 @@ class _CartScreenState extends State<CartScreen> {
           options: dio.Options(
               headers: {"Authorization": "Bearer ${token ?? ""}"}),
         );
-        if (resp.statusCode == 201) {
-          orderIds.add(resp.data["order_id"]?.toString() ?? "");
+        if (resp.statusCode == 201 || resp.statusCode == 200) {
+          // The API returns the created Order itself: its number is `id`.
+          final body = resp.data;
+          orderIds.add(
+              (body is Map ? (body["id"] ?? body["order_id"]) : null)
+                      ?.toString() ??
+                  "");
+          orderedShops.add(shopId);
         } else {
           hasError = true;
+          errorMessage ??= _apiMessage(resp.data);
         }
+      } on dio.DioError catch (e) {
+        hasError = true;
+        errorMessage ??= _apiMessage(e.response?.data);
       } catch (_) {
         hasError = true;
       }
+      // An expired session (401) already cleared the token and is taking the
+      // user to the login screen; touching the navigator here could pop it.
+      if (StorageService().read(StorageService.token) == null) return;
     }
 
+    if (!mounted) return;
     loadingService.closeLoading(context);
+    _submitting = false;
 
     if (orderIds.isNotEmpty) {
-      savatchaItem = [];
-      await StorageService().remove(StorageService.savatcha);
-      if (mounted) {
-        context.read<SavatchaBloc>().changeValue([]);
-        Navigator.pop(context);
+      // Only the shops whose order went through leave the cart; a failed
+      // shop's items stay so the user can retry them.
+      savatchaItem = savatchaItem
+          .where((it) => !orderedShops.contains(it["shop_id"].toString()))
+          .toList();
+      if (savatchaItem.isEmpty) {
+        await StorageService().remove(StorageService.savatcha);
+      } else {
+        await StorageService().write(StorageService.savatcha, savatchaItem);
       }
-      setState(() {});
+      if (!mounted) return;
+      context.read<SavatchaBloc>().changeValue(savatchaItem);
+      // The new order shows up in the bell badge and history right away.
+      context.read<OrderAllBloc>().getAll().catchError((_) => null);
       final String msg = orderIds.length == 1
           ? "Buyurtma raqami ${orderIds[0]}\nTarix bo'limidan kuzatishingiz mumkin"
           : "Buyurtmalar: ${orderIds.join(', ')}\nTarix bo'limidan kuzatishingiz mumkin";
-      AppToast.show(context, message: msg, type: ToastType.success, duration: const Duration(seconds: 5));
+      if (savatchaItem.isEmpty) {
+        Navigator.pop(context);
+        setState(() {});
+        AppToast.show(context, message: msg, type: ToastType.success, duration: const Duration(seconds: 5));
+      } else {
+        setState(() {});
+        AppToast.show(context,
+            message: "$msg\n${errorMessage ?? 'Buyurtma yuborishda xatolik'}",
+            type: ToastType.warning,
+            duration: const Duration(seconds: 6));
+      }
     } else if (hasError) {
-      AppToast.show(context, message: 'Buyurtma yuborishda xatolik', type: ToastType.error);
+      AppToast.show(context,
+          message: errorMessage ?? 'Buyurtma yuborishda xatolik',
+          type: ToastType.error);
     }
   }
+
+  /// The API's own error text (e.g. not enough stock) instead of a generic one.
+  String? _apiMessage(dynamic body) {
+    final message = body is Map ? body["message"] : null;
+    final text = message is List ? message.join(', ') : message?.toString();
+    return (text == null || text.trim().isEmpty) ? null : text;
+  }
+}
+
+/// What a cart re-check did.
+class _CartCheck {
+  final bool removed; // lines no longer sellable were removed
+  final bool updated; // a price or quantity changed
+  final bool unverified; // some lines could not be checked (network)
+  const _CartCheck(
+      {this.removed = false, this.updated = false, this.unverified = false});
+  bool get changed => removed || updated;
 }
 
 /// Small info row with a tinted icon chip + label text.

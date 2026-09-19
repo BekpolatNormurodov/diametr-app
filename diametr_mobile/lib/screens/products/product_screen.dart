@@ -1,6 +1,8 @@
 import 'package:stroymarket/manager/5_product_manager.dart';
 import 'package:stroymarket/manager/8_shop_manager.dart';
 
+import 'package:stroymarket/bloc/regionSelected/regionSelected_bloc.dart';
+
 import '../../bloc/product/product_bloc.dart';
 import '../../bloc/product/product_state.dart';
 import '../../bloc/shopbyProduct/shopbyProduct_bloc.dart';
@@ -69,10 +71,16 @@ class _ProductScreenState extends State<ProductScreen> {
 
   @override
   void initState() {
-    ProductManager.getById(context, ProductId: widget.product_id ?? "");
-    ShopManager.getByProductId(context, productId: widget.product_id ?? "");
+    _load();
     super.initState();
   }
+
+  /// Loads the product and the shops selling it (on open and on pull-to-refresh).
+  Future<void> _load() => Future.wait([
+        ProductManager.getById(context, ProductId: widget.product_id ?? ""),
+        ShopManager.getByProductId(context,
+            productId: widget.product_id ?? ""),
+      ]);
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +95,14 @@ class _ProductScreenState extends State<ProductScreen> {
         },
         'assets/icons/chevron-left.png',
       ),
-      body: SafeArea(child: ProductScreenBody()),
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: AppConstant.primaryColor,
+          backgroundColor: context.tCard,
+          onRefresh: _load,
+          child: ProductScreenBody(),
+        ),
+      ),
     );
   }
 
@@ -192,6 +207,16 @@ class _ProductScreenState extends State<ProductScreen> {
             );
           } else if (state is ProductWaitingState) {
             return const ProductDetailSkeleton();
+          } else if (state is ProductErrorState) {
+            // GET /product/:id is 404 for an archived product (e.g. opened from
+            // favorites) — say so instead of leaving the top of the page blank.
+            return EmptyState(
+              height: 480.h,
+              icon: Iconsax.box_remove,
+              title: "Mahsulot topilmadi",
+              subtitle:
+                  "Mahsulot olib tashlangan bo'lishi mumkin. Qayta yuklash uchun pastga torting.",
+            );
           } else {
             return SizedBox();
           }
@@ -204,15 +229,50 @@ class _ProductScreenState extends State<ProductScreen> {
           if (state is ShopByProductSuccessState) {
             final list = state.data ?? [];
             if (list.isEmpty) {
-              return Padding(
-                padding: EdgeInsets.symmetric(vertical: 24.h),
-                child: EmptyState(
-                  height: 280.h,
-                  icon: Iconsax.shop_remove,
-                  title: "Do'kon topilmadi",
-                  subtitle:
-                      "Bu mahsulotni sotayotgan do'konlar hali ro'yxatda yo'q.",
-                ),
+              // Three different reasons a product has no shops — say which one:
+              //  1) no variant yet  -> its types are still being added
+              //  2) has variants, a region filter is on -> not sold in that region
+              //  3) has variants, no filter -> no shop stocks it yet
+              return BlocBuilder<ProductBloc, ProductState>(
+                builder: (context, pState) {
+                  // Which message is right depends on the product; don't
+                  // flash a wrong one while it is still loading.
+                  if (pState is ProductWaitingState) return const SizedBox();
+                  // The product itself is gone/unreachable: the message above
+                  // already says so, don't add a contradictory "no shops" one.
+                  if (pState is ProductErrorState) return const SizedBox();
+                  final bool? hasVariants = pState is ProductSuccessState &&
+                          pState.data != null
+                      ? ((pState.data["items"] as List?)?.isNotEmpty ?? false)
+                      : null;
+                  final bool regionFiltered =
+                      context.read<RegionSelectedBloc>().state.isNotEmpty;
+                  final String title;
+                  final String subtitle;
+                  final IconData icon;
+                  if (hasVariants == false) {
+                    icon = Iconsax.clock;
+                    title = 'coming_soon'.tr();
+                    subtitle = 'coming_soon_sub'.tr();
+                  } else if (regionFiltered) {
+                    icon = Iconsax.location;
+                    title = 'no_shops_region'.tr();
+                    subtitle = 'no_shops_region_sub'.tr();
+                  } else {
+                    icon = Iconsax.shop_remove;
+                    title = 'no_shops'.tr();
+                    subtitle = 'no_shops_sub'.tr();
+                  }
+                  return Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24.h),
+                    child: EmptyState(
+                      height: 280.h,
+                      icon: icon,
+                      title: title,
+                      subtitle: subtitle,
+                    ),
+                  );
+                },
               );
             }
             return Column(
@@ -320,9 +380,20 @@ class _ProductScreenState extends State<ProductScreen> {
         itemBuilder: (context, index) {
           return GestureDetector(
             onTap: () {
-              Navigator.of(context).pushNamed('/marketScreen', arguments: {
-                "id": data[index]["id"],
-                "name": data[index]["name"],
+              // Open THIS product's variants in that shop. Opening the whole
+              // shop page made the customer look for the product again.
+              final pState = context.read<ProductBloc>().state;
+              final Map? product =
+                  pState is ProductSuccessState && pState.data is Map
+                      ? pState.data as Map
+                      : null;
+              Navigator.of(context)
+                  .pushNamed(RouteNames.shopProductScreen, arguments: {
+                "name": widget.name,
+                "product_id": widget.product_id,
+                "shop_id": data[index]["id"],
+                "image": product?["image"],
+                "desc": product?["desc"],
               });
             },
             child: Container(

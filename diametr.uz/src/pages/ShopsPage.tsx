@@ -5,9 +5,11 @@ import { useScrollReveal } from '../hooks/useScrollReveal'
 import Navbar from '../components/home/sections/navbar'
 import Footer from '../components/home/sections/footer'
 import { useLang } from '../context/AppContext'
-import { authService, AuthUser } from '../service/authService'
+import { authService } from '../service/authService'
+import { useAuthUser } from '../hooks/useAuthUser'
 import AuthModal from '../components/auth/AuthModal'
 import CartDrawer from '../components/cart/CartDrawer'
+import { searchKey, buildSearchKeys, matchesSearch } from '../utils/searchKey'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
@@ -66,7 +68,7 @@ export default function ShopsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [activeShopId, setActiveShopId] = useState<number | null>(null)
-  const [user, setUser] = useState<AuthUser | null>(() => authService.getUser())
+  const [user, setUser] = useAuthUser()
   const [authOpen, setAuthOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [userCoords, setUserCoords] = useState<{ lat: number; lon: number } | null>(null)
@@ -100,21 +102,22 @@ export default function ShopsPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  // Latin/Cyrillic-normalized (searchKey) name/address/region keys, built once.
+  const shopKeys = useMemo(
+    () => buildSearchKeys(shops, s => [s.name, s.address, s.region?.name]),
+    [shops]
+  )
   const filtered = useMemo(() => {
     let list = shops
     if (selectedRegion !== null) {
       list = list.filter(s => (s.region as any)?.id === selectedRegion)
     }
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(s =>
-        (s.name || '').toLowerCase().includes(q) ||
-        (s.address || '').toLowerCase().includes(q) ||
-        (s.region?.name || '').toLowerCase().includes(q)
-      )
+    const q = searchKey(search)
+    if (q) {
+      list = list.filter(s => matchesSearch(shopKeys.get(s), q))
     }
     return list
-  }, [shops, search, selectedRegion])
+  }, [shops, shopKeys, search, selectedRegion])
 
   // Yandex map embed URL
   const yandexEmbedUrl = useMemo(() => {

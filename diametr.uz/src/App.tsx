@@ -15,6 +15,7 @@ import { CartProvider } from './context/CartContext';
 import { ToastContainer, Zoom } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import SplashScreen from './components/common/SplashScreen';
+import VersionWatcher from './components/common/VersionWatcher';
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -89,6 +90,7 @@ function App() {
       <CartProvider>
         <BrowserRouter>
           <ScrollToTop />
+          <VersionWatcher />
           <SplashWrapper>
             <AnimatedRoutes />
           </SplashWrapper>

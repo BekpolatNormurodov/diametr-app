@@ -21,7 +21,10 @@ class Endpoints {
 
   static String Order = dotenv.env["Order"] ?? "";
   static String OrderAll = dotenv.env["OrderAll"] ?? "";
-  static String OrderCreate = dotenv.env["OrderCreate"] ?? "";
+  // POST /order (@Post() on @Controller('order')). The bundled .env says
+  // OrderCreate=/order/create/, a route that never existed on the API (404), so
+  // every mobile checkout failed; the path is no longer taken from .env.
+  static String OrderCreate = "/order";
   static String OrderConfirm = dotenv.env["OrderConfirm"] ?? "";
 
   
@@ -40,6 +43,10 @@ class Endpoints {
   static String ShopAll = dotenv.env["ShopAll"] ?? "";
 
   static String ShopProduct = dotenv.env["ShopProduct"] ?? "";
+  // GET /shop-product/:id — live price/stock/availability of one cart line.
+  static String ShopProductById = "/shop-product/";
+  // GET /shop-product/all — every sellable stock row (used for search prices).
+  static String ShopProductAll = "/shop-product/all";
   static String ShopByProduct = dotenv.env["ShopByProduct"] ?? "";
 
   // ─────────────────────────────────────────────────────────────────────────────

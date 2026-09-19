@@ -29,6 +29,9 @@ class ShopProductBloc extends Cubit<ShopProductState> {
         },
       ),
     );
+    // The bloc is owned by its screen route now; the user may have left
+    // before the response arrived.
+    if (isClosed) return response.data;
     if (response.statusCode == 200) {
       emit(
         ShopProductSuccessState(
@@ -50,6 +53,11 @@ class ShopProductBloc extends Cubit<ShopProductState> {
     required String productId,
     required String shopId,
   }) async {
+    // Pull-to-refresh after an error: do a normal load instead of nothing.
+    if (state is ShopProductWaitingState) return null;
+    if (state is! ShopProductSuccessState) {
+      return get(productId: productId, shopId: shopId);
+    }
     if (state is ShopProductSuccessState) {
       String? token = await StorageService().read(
         StorageService.token,
@@ -68,6 +76,7 @@ class ShopProductBloc extends Cubit<ShopProductState> {
           },
         ),
       );
+      if (isClosed) return response.data;
       if (response.statusCode == 200) {
         emit(
           ShopProductSuccessState(

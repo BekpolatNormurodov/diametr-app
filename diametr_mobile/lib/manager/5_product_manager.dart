@@ -21,11 +21,17 @@ class ProductManager {
   }
 
   static Future<void> getAll(
-    BuildContext context,
-  ) async {
+    BuildContext context, {
+    bool silent = false,
+  }) async {
     try {
-      await BlocProvider.of<ProductAllBloc>(context).getAll();
+      await BlocProvider.of<ProductAllBloc>(context).getAll(silent: silent);
     } catch (e) {
+      if (silent &&
+          BlocProvider.of<ProductAllBloc>(context).state
+              is ProductAllSuccessState) {
+        return;
+      }
       final msg = e is DioExceptions ? e.message : e.toString();
       BlocProvider.of<ProductAllBloc>(context)
           .emit(ProductAllErrorState(message: msg, title: msg));

@@ -21,6 +21,8 @@ import { usePolling } from "../../hooks/usePolling";
 import ImageField, { ImageFieldResult } from "../../components/common/ImageField";
 import TranslateButton from "../../components/common/TranslateButton";
 import { toast } from "../../components/ui/toast";
+import { ConfirmDeleteModal } from "../../components/tables/diametr/TableActions";
+import { searchKey } from "../../utils/searchKey";
 
 export interface Product {
   name?: string;
@@ -52,6 +54,7 @@ export default function ProductsPage() {
   let [Product, setProduct] = useState<Product>(emptyProduct);
   const imageResultRef = useRef<ImageFieldResult | null>(null);
   const [saving, setSaving] = useState(false);
+  const [dupConfirm, setDupConfirm] = useState<string | null>(null);
 
   const fetchProducts = useCallback(
     () => axiosClient.get("/product/all").then((res) => res.data),
@@ -69,7 +72,7 @@ export default function ProductsPage() {
     () => axiosClient.get("/category/all").then((res) => res.data),
     []
   );
-  const { data: catsData } = useFetchWithLoader<{ id: number; name_uz?: string; name_ru?: string; name?: string }[]>({
+  const { data: catsData, refetch: refetchCats } = useFetchWithLoader<{ id: number; name_uz?: string; name_ru?: string; name?: string }[]>({
     fetcher: fetchCats,
   });
   const category_options = Array.isArray(catsData)
@@ -87,6 +90,9 @@ export default function ProductsPage() {
   const unitTypeOptions = Array.isArray(utData)
     ? utData.map((u) => ({ value: String(u.id), label: `${u.symbol} — ${u.name_uz ?? u.name}` }))
     : [];
+
+  // Option lists can change elsewhere (Kategoriyalar / O'lchov birliklari pages) — refresh when a modal opens.
+  const refreshOptions = () => { refetchCats(); refetchUt(); };
 
   // "dona" ni default qilish
   const donaOption = unitTypeOptions.find((o) => o.label.toLowerCase().includes("dona"));
@@ -111,14 +117,31 @@ export default function ProductsPage() {
     }
   };
 
-  const handleAdding = async () => {
+  const handleAdding = async (skipDuplicateCheck = false) => {
     if (!Product.category_id) {
       toast.error("Kategoriya tanlash shart!");
       return;
     }
-    if (!Product.name_uz?.trim()) {
+    const nameUz = Product.name_uz?.trim() ?? "";
+    if (!nameUz) {
       toast.error("Mahsulot nomini kiriting!");
       return;
+    }
+    if (nameUz.length < 2) {
+      toast.error("Mahsulot nomi kamida 2 ta belgi bo'lishi kerak");
+      return;
+    }
+    if (!skipDuplicateCheck) {
+      // Compare by search key so Latin/Cyrillic spellings of one name count as duplicates.
+      const key = searchKey(nameUz);
+      const dup = productData.find((p) => {
+        const cid = p.category?.id ? String(p.category.id) : (p.categoryId ? String(p.categoryId) : "");
+        return cid === Product.category_id && searchKey(p.name_uz ?? p.name ?? "") === key;
+      });
+      if (dup) {
+        setDupConfirm(`Bu kategoriyada "${dup.name_uz ?? dup.name ?? nameUz}" nomli mahsulot allaqachon bor (#${dup.id}). Baribir yaratilsinmi?`);
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -138,8 +161,8 @@ export default function ProductsPage() {
       }
 
       const created = await axiosClient.post("/product", {
-        name_uz: Product.name_uz,
-        name_ru: Product.name_ru,
+        name_uz: nameUz,
+        name_ru: Product.name_ru?.trim() || null,
         image: imageFilename,
         category_id: Number(Product.category_id),
         unit_type_id: Product.unit_type_id ? Number(Product.unit_type_id) : undefined,
@@ -193,6 +216,7 @@ export default function ProductsPage() {
                   category_id: activeCategoryFilter || "",
                 });
                 imageResultRef.current = null;
+                refreshOptions();
                 openModal();
               }}
             >
@@ -211,6 +235,7 @@ export default function ProductsPage() {
               autoExpandId={autoExpandId}
               onAutoExpandHandled={() => setAutoExpandId(null)}
               onCategoryFilterChange={setActiveCategoryFilter}
+              onOptionsRefresh={refreshOptions}
             />
           )}
         </ComponentCard>
@@ -320,7 +345,7 @@ export default function ProductsPage() {
             {/* Actions */}
             <div className="flex items-center gap-3 mt-6 justify-end">
               <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
-              <Button size="sm" onClick={handleAdding} disabled={saving || !Product.category_id || !Product.name_uz?.trim()}>
+              <Button size="sm" onClick={() => handleAdding()} disabled={saving || !Product.category_id || !Product.name_uz?.trim()}>
                 {saving ? (
                   <span className="inline-flex items-center gap-2">
                     <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
@@ -332,6 +357,17 @@ export default function ProductsPage() {
           </div>
         </div>
       </Modal>
+
+      {dupConfirm && (
+        <ConfirmDeleteModal
+          tone="primary"
+          title="Bunday mahsulot allaqachon bor"
+          desc={dupConfirm}
+          confirmLabel="Baribir yaratish"
+          onConfirm={() => { setDupConfirm(null); handleAdding(true); }}
+          onCancel={() => setDupConfirm(null)}
+        />
+      )}
 
       {/* ─── Unit Type Add Modal ────────────────────────── */}
       <Modal isOpen={utOpen} onClose={closeUtModal} className="max-w-[500px] m-4">

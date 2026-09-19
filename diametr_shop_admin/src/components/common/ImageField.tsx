@@ -2,8 +2,11 @@ import React, { useRef, useState } from "react";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
 
-const ACCEPTED_FORMATS = "image/jpeg,image/png,image/webp,image/gif,image/svg+xml,image/bmp";
-const ACCEPTED_EXT = ".jpg,.jpeg,.png,.webp,.gif,.svg,.bmp";
+// SVG is not accepted (the backend rejects it with 400): it can carry scripts.
+const ACCEPTED_FORMATS = "image/jpeg,image/png,image/webp,image/gif,image/bmp";
+const ACCEPTED_EXT = ".jpg,.jpeg,.png,.webp,.gif,.bmp";
+
+const isSvg = (file: File) => file.type === "image/svg+xml" || /\.svgz?$/i.test(file.name);
 
 interface ImageFieldResult {
   file?: File;
@@ -21,6 +24,7 @@ export default function ImageField({ label = "Rasm", existingUrl, onChange }: Im
   const [mode, setMode] = useState<"upload" | "url">("upload");
   const [urlValue, setUrlValue] = useState(existingUrl ?? "");
   const [preview, setPreview] = useState<string | null>(existingUrl ?? null);
+  const [svgRejected, setSvgRejected] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleModeChange = (m: "upload" | "url") => {
@@ -31,6 +35,13 @@ export default function ImageField({ label = "Rasm", existingUrl, onChange }: Im
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // The accept list is only a hint to the file picker ("All files" still allows an SVG).
+    if (isSvg(file)) {
+      e.target.value = "";
+      setSvgRejected(true);
+      return;
+    }
+    setSvgRejected(false);
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
     onChange({ file, mode: "upload" });
@@ -70,7 +81,7 @@ export default function ImageField({ label = "Rasm", existingUrl, onChange }: Im
           <input
             ref={fileRef}
             type="file"
-            accept={ACCEPTED_FORMATS}
+            accept={`${ACCEPTED_FORMATS},${ACCEPTED_EXT}`}
             onChange={handleFileChange}
             className="block w-full text-sm text-gray-500 dark:text-gray-400
               file:mr-4 file:py-2 file:px-4
@@ -80,7 +91,9 @@ export default function ImageField({ label = "Rasm", existingUrl, onChange }: Im
               hover:file:bg-brand-100
               dark:file:bg-white/10 dark:file:text-white"
           />
-          <p className="mt-1 text-xs text-gray-400">JPG, PNG, WebP, GIF, SVG, BMP ruxsat etilgan</p>
+          <p className={`mt-1 text-xs ${svgRejected ? "text-red-500" : "text-gray-400"}`}>
+            {svgRejected ? "SVG rasm qabul qilinmaydi — JPG, PNG, WebP, GIF yoki BMP tanlang" : "JPG, PNG, WebP, GIF, BMP ruxsat etilgan"}
+          </p>
         </div>
       ) : (
         <div>

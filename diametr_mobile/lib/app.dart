@@ -13,9 +13,9 @@ import 'package:stroymarket/bloc/regionAll/regionAll_bloc.dart';
 import 'package:stroymarket/bloc/regionSelected/regionSelected_bloc.dart';
 import 'package:stroymarket/bloc/savatcha/savatcha_bloc.dart';
 import 'package:stroymarket/bloc/serviceAll/serviceAll_bloc.dart';
-import 'package:stroymarket/bloc/shopProduct/shopProduct_bloc.dart';
 import 'package:stroymarket/bloc/worker/worker_bloc.dart';
 import 'package:stroymarket/bloc/workerbyService/workerbyService_bloc.dart';
+import 'package:stroymarket/services/auth/session_service.dart';
 
 import 'bloc/shop/shop_bloc.dart';
 import 'bloc/shopAll/shopAll_bloc.dart';
@@ -50,6 +50,7 @@ class stroymarket extends StatelessWidget {
               return MultiBlocProvider(
                 providers: providers,
                 child: MaterialApp(
+                  navigatorKey: SessionService.navigatorKey,
                   localizationsDelegates: context.localizationDelegates,
                   supportedLocales: context.supportedLocales,
                   locale: context.locale,
@@ -198,10 +199,9 @@ List<BlocProvider> providers = [
 
 
 
-     BlocProvider<ShopProductBloc>(
-    create: (BuildContext context) => ShopProductBloc(),
-    lazy: false,
-  ),
+  // ShopProductBloc is NOT app-wide: each ShopProductScreen route gets its own
+  // (see FullRoutes). A shared one let a pushed "Siz uchun tavsiyalar" product
+  // overwrite the variants/prices of the product screen underneath it.
 
    BlocProvider<ShopByProductBloc>(
     create: (BuildContext context) => ShopByProductBloc(),

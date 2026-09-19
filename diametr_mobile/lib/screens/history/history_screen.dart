@@ -1,10 +1,17 @@
 import 'package:stroymarket/core/extensions/date_extension.dart';
 import 'package:stroymarket/core/extensions/str.dart';
+import 'package:stroymarket/core/utils/search_key.dart';
 
 import '../../bloc/orderAll/orderAll_bloc.dart';
 import '../../bloc/orderAll/orderAll_state.dart';
 import '../../export_files.dart';
 import '../../manager/3_order_manager.dart';
+import '../../widgets/common/pull_to_refresh_fill.dart';
+
+// Search keys (see searchKey) of each order's id and status, computed once per
+// order. Digits are left untouched, so order ids still match.
+final SearchKeyIndex _orderKeys =
+    SearchKeyIndex((o) => [o["id"], o["status"]]);
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -16,12 +23,16 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _searchCtrl = TextEditingController();
-  String _query = '';
+  String _query = ''; // typed text — drives the clear button / empty state
+  String _queryKey = ''; // searchKey of it — drives the matching
 
   @override
   void initState() {
     OrderManager.getAll(context);
-    _searchCtrl.addListener(() => setState(() => _query = _searchCtrl.text.trim().toLowerCase()));
+    _searchCtrl.addListener(() => setState(() {
+          _query = _searchCtrl.text.trim();
+          _queryKey = searchKey(_searchCtrl.text);
+        }));
     super.initState();
   }
 
@@ -32,10 +43,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   List _filtered(List data) {
-    if (_query.isEmpty) return data;
-    return data.where((o) =>
-        o["id"].toString().contains(_query) ||
-        (o["status"] ?? '').toString().toLowerCase().contains(_query)).toList();
+    if (_queryKey.isEmpty) return data;
+    return data.where((o) => _orderKeys.matches(o, _queryKey)).toList();
   }
 
   @override
@@ -102,23 +111,44 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   if (state is OrderAllSuccessState) {
                     final items = _filtered(state.data ?? []);
                     if (items.isEmpty) {
-                      return EmptyState(
-                        icon: _query.isEmpty
-                            ? Iconsax.receipt_1
-                            : Iconsax.search_normal_1,
-                        title: _query.isEmpty
-                            ? 'history_empty'.tr()
-                            : 'search_empty'.tr(),
-                        subtitle: _query.isEmpty
-                            ? "Bu yerda buyurtmalaringiz tarixi ko'rinadi."
-                            : null,
+                      // Pullable so pull-to-refresh still works on an empty
+                      // list (e.g. to see an order placed just now).
+                      return PullToRefreshFill(
+                        child: EmptyState(
+                          icon: _query.isEmpty
+                              ? Iconsax.receipt_1
+                              : Iconsax.search_normal_1,
+                          title: _query.isEmpty
+                              ? 'history_empty'.tr()
+                              : 'search_empty'.tr(),
+                          subtitle: _query.isEmpty
+                              ? "Bu yerda buyurtmalaringiz tarixi ko'rinadi."
+                              : null,
+                        ),
                       );
                     }
                     return orderBody(items);
                   } else if (state is OrderAllWaitingState) {
                     return _buildShimmer();
                   }
-                  // Error / Initial → still show the empty state so the
+                  // A failed load is NOT "no orders": say so, and offer a
+                  // retry (pull-to-refresh works here too).
+                  if (state is OrderAllErrorState) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(height: 40.h),
+                        EmptyState(
+                          icon: Iconsax.warning_2,
+                          title: 'load_failed'.tr(),
+                          subtitle: state.message,
+                          actionLabel: 'retry'.tr(),
+                          onAction: () => OrderManager.getAll(context),
+                        ),
+                      ],
+                    );
+                  }
+                  // Initial → still show the empty state so the
                   // user is not left looking at a blank screen.
                   return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),

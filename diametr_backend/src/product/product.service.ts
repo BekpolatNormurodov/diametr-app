@@ -1,5 +1,12 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
+import { LIVE_STOCK_WHERE } from 'src/shop-product/stock.utils';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
@@ -7,8 +14,28 @@ import { UpdateProductDto } from './dto/update-product.dto';
 export class ProductService {
   constructor(private readonly prisma: PrismaClientService) {}
   private logger = new Logger('Product service');
+
+  /** 404 instead of a foreign-key 500 for an unknown unit type. */
+  private async assertUnitType(unitTypeId: number | null | undefined) {
+    if (unitTypeId == null) return;
+    const unitType = await this.prisma.unitType.findUnique({
+      where: { id: unitTypeId },
+      select: { id: true },
+    });
+    if (!unitType) {
+      throw new NotFoundException('UnitType not found');
+    }
+  }
+
   async create(data: CreateProductDto) {
     this.logger.log('create');
+
+    const hasName = [data.name, data.name_uz, data.name_ru].some(
+      (n) => typeof n === 'string' && n.trim() !== '',
+    );
+    if (!hasName) {
+      throw new BadRequestException('Mahsulot nomini kiriting');
+    }
 
     const category = await this.prisma.category.findUnique({
       where: { id: data.category_id },
@@ -17,6 +44,13 @@ export class ProductService {
     if (!category) {
       throw new NotFoundException('category not found');
     }
+    if (category.work_status !== 'WORKING') {
+      throw new BadRequestException(
+        "Bu kategoriya o'chirilgan, unga mahsulot qo'shib bo'lmaydi",
+      );
+    }
+    await this.assertUnitType(data.unit_type_id);
+
     return await this.prisma.product.create({
       data: { ...data, name: data.name ?? data.name_uz ?? data.name_ru },
     });
@@ -35,8 +69,12 @@ export class ProductService {
           where: { work_status: 'WORKING' },
           include: {
             unit_type: true,
+            // Only offers a customer can act on (same rule as the detail's
+            // shop_products): stock of deleted (shop_id NULL) or blocked shops
+            // is not counted, so "Hozircha do'konlarda yo'q" / "Do'konda yo'q"
+            // and the per-variant "Do'konlar" numbers match /product/:id.
             _count: {
-              select: { shop_products: { where: { work_status: 'WORKING' } } },
+              select: { shop_products: { where: LIVE_STOCK_WHERE } },
             },
           },
           orderBy: { id: 'desc' },
@@ -70,52 +108,56 @@ export class ProductService {
       LIMIT ${limit}
     `;
 
-    const ids = rows.map((r) => r.product_id);
-    if (ids.length === 0) {
-      // Fallback: newest products — but only ones with at least one working
-      // variant, so empty catalogue placeholders (no variant, no price) never
-      // surface in the mobile home "popular/cheap" sections.
-      return await this.prisma.product.findMany({
-        where: {
+    // Only products a customer can actually buy: at least one working variant
+    // with live stock (existing WORKING shop, same rule as /shop/by-product).
+    // Keeps empty catalogue placeholders and variantful products no shop
+    // sells out of the mobile home "popular/cheap" carousels.
+    const buyableWhere: Prisma.ProductWhereInput = {
+      work_status: 'WORKING',
+      items: {
+        some: {
           work_status: 'WORKING',
-          items: { some: { work_status: 'WORKING' } },
-        },
-        include: {
-          category: {
-            select: { id: true, name: true, name_uz: true, name_ru: true },
-          },
-          unit_type: true,
-          _count: { select: { items: { where: { work_status: 'WORKING' } } } },
-          items: {
-            where: { work_status: 'WORKING' },
-          },
-        },
-        orderBy: { id: 'desc' },
-        take: limit,
-      });
-    }
-
-    const products = await this.prisma.product.findMany({
-      where: { id: { in: ids }, work_status: 'WORKING' },
-      include: {
-        category: {
-          select: { id: true, name: true, name_uz: true, name_ru: true },
-        },
-        unit_type: true,
-        _count: { select: { items: { where: { work_status: 'WORKING' } } } },
-        items: {
-          where: { work_status: 'WORKING' },
+          shop_products: { some: LIVE_STOCK_WHERE },
         },
       },
+    };
+
+    const include = {
+      category: {
+        select: { id: true, name: true, name_uz: true, name_ru: true },
+      },
+      unit_type: true,
+      _count: { select: { items: { where: { work_status: 'WORKING' } } } },
+      items: {
+        where: { work_status: 'WORKING' },
+      },
+    } satisfies Prisma.ProductInclude;
+
+    const ids = rows.map((r) => r.product_id);
+    if (ids.length > 0) {
+      const products = await this.prisma.product.findMany({
+        where: { AND: [buyableWhere, { id: { in: ids } }] },
+        include,
+      });
+      if (products.length > 0) {
+        const soldMap = new Map<number, number>(
+          rows.map((r) => [r.product_id, Number(r.sold)]),
+        );
+        return products
+          .map((p) => ({ ...p, sold: soldMap.get(p.id) ?? 0 }))
+          .sort((a, b) => (b.sold ?? 0) - (a.sold ?? 0));
+      }
+      // Everything sold lately is out of every shop now: use the fallback
+      // instead of an empty carousel.
+    }
+
+    // Fallback: newest buyable products.
+    return await this.prisma.product.findMany({
+      where: buyableWhere,
+      include,
+      orderBy: { id: 'desc' },
+      take: limit,
     });
-
-    const soldMap = new Map<number, number>(
-      rows.map((r) => [r.product_id, Number(r.sold)]),
-    );
-
-    return products
-      .map((p) => ({ ...p, sold: soldMap.get(p.id) ?? 0 }))
-      .sort((a, b) => (b.sold ?? 0) - (a.sold ?? 0));
   }
 
   async findByCategory(category_id: string | undefined) {
@@ -131,6 +173,13 @@ export class ProductService {
           select: { id: true, name: true, name_uz: true, name_ru: true },
         },
         unit_type: true,
+        // Include working variants so clients can hide empty catalogue
+        // placeholders (no variant → nothing to buy). Without this the mobile
+        // category screen's `items.isNotEmpty` filter dropped every product.
+        items: {
+          where: { work_status: 'WORKING' },
+        },
+        _count: { select: { items: { where: { work_status: 'WORKING' } } } },
       },
       orderBy: { id: 'desc' },
     });
@@ -138,9 +187,13 @@ export class ProductService {
 
   async findOne(id: number) {
     this.logger.log('findOne');
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new NotFoundException('product not found');
+    }
 
-    const product = await this.prisma.product.findUnique({
-      where: { id },
+    // An archived product is gone for customers (404), like in /product/all.
+    const product = await this.prisma.product.findFirst({
+      where: { id, work_status: 'WORKING' },
       include: {
         category: {
           select: { id: true, name: true, name_uz: true, name_ru: true },
@@ -151,7 +204,9 @@ export class ProductService {
           include: {
             unit_type: true,
             shop_products: {
-              where: { work_status: 'WORKING' },
+              // Only offers a customer can act on: live row/variant/product,
+              // existing WORKING shop.
+              where: LIVE_STOCK_WHERE,
               include: {
                 shop: {
                   select: {
@@ -195,7 +250,18 @@ export class ProductService {
       if (!category) {
         throw new NotFoundException('category not found');
       }
+      // Only a MOVE into an archived category is refused: many live products
+      // already sit under archived categories and must stay editable.
+      if (
+        data.category_id !== product.category_id &&
+        category.work_status !== 'WORKING'
+      ) {
+        throw new BadRequestException(
+          "Bu kategoriya o'chirilgan, mahsulotni unga o'tkazib bo'lmaydi",
+        );
+      }
     }
+    await this.assertUnitType(data.unit_type_id);
 
     return await this.prisma.product.update({
       where: { id },
@@ -215,9 +281,30 @@ export class ProductService {
       throw new NotFoundException('product not found');
     }
 
-    return await this.prisma.product.update({
-      where: { id },
-      data: { work_status: 'DELETED' },
-    });
+    // Archive the whole chain atomically: the product, its variants and every
+    // shop's stock of them, so nothing stays listed or orderable. READ
+    // COMMITTED lets the stock step see rows a concurrent "add to shop" (which
+    // locks the variant row) committed while this waited for that lock.
+    return await this.prisma.$transaction(
+      async (tx) => {
+        const archived = await tx.product.update({
+          where: { id },
+          data: { work_status: 'DELETED' },
+        });
+        await tx.productItem.updateMany({
+          where: { product_id: id, work_status: { not: 'DELETED' } },
+          data: { work_status: 'DELETED' },
+        });
+        await tx.shopProduct.updateMany({
+          where: {
+            work_status: { not: 'DELETED' },
+            product_item: { product_id: id },
+          },
+          data: { work_status: 'DELETED' },
+        });
+        return archived;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+    );
   }
 }

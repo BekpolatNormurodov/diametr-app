@@ -1,43 +1,53 @@
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import PageMeta from "../../components/common/PageMeta";
-import { useEffect, useMemo, useState } from "react";
-import axiosClient from "../../service/axios.service";
+import { useMemo, useState } from "react";
+import { fetchOwnStock } from "../../service/ownStock";
 import { toast } from "../../components/ui/toast";
-import ShopProductsTable, { ShopProductItemProps } from "../../components/tables/shopProductsTable";
-import { usePolling } from "../../hooks/usePolling";
+import ShopProductsTable, { ShopProductItemProps, isCatalogArchived } from "../../components/tables/shopProductsTable";
+import { usePolling, useRequestSeq } from "../../hooks/usePolling";
+import { useShopId } from "../../context/ShopSessionContext";
 
 export default function ShopProductsPage() {
   const [data, setData] = useState<ShopProductItemProps[]>([]);
-  const shopId = Number(localStorage.getItem("shop_id") ?? 0);
+  const shopId = useShopId();
+  const req = useRequestSeq();
 
+  // Only the newest request may write (a slow poll never overwrites a post-save refetch).
   const fetchData = async () => {
+    const id = req.next();
     try {
-      const res = await axiosClient.get("/shop-product/all");
-      const all: ShopProductItemProps[] = res.data?.data ?? res.data ?? [];
-      setData(shopId ? all.filter((p: any) => p.shop_id === shopId) : all);
+      // Own stock via /shop-product/my: still listed while the shop is BLOCKED.
+      const all: ShopProductItemProps[] = await fetchOwnStock();
+      if (!req.isLatest(id)) return;
+      // Always scope to the owner's own shop (never show other shops' stock).
+      setData(all.filter((p) => p.shop_id === shopId));
     } catch {
+      if (!req.isLatest(id)) return;
       toast.error("Ma'lumotlarni yuklashda xatolik");
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
-  usePolling(fetchData, 20000);
+  // usePolling runs immediately on mount (and again when the shop id changes).
+  usePolling(fetchData, 20000, true, shopId);
+
+  // Stock whose catalog product/variant was deleted is not sellable — keep it out of the stats.
+  const liveData = useMemo(() => data.filter((p) => !isCatalogArchived(p)), [data]);
 
   const stats = useMemo(() => {
-    const totalProducts = data.length;
-    const totalStock = data.reduce((s, p) => s + (p.count ?? 0), 0);
-    const totalValue = data.reduce((s, p) => s + (p.count ?? 0) * (p.price ?? 0), 0);
-    const totalSold = data.reduce((s, p) => s + (p.sold_count ?? 0), 0);
-    const lowStock = data.filter((p) => (p.count ?? 0) > 0 && (p.count ?? 0) <= 5).length;
-    const outOfStock = data.filter((p) => (p.count ?? 0) === 0).length;
+    const totalProducts = liveData.length;
+    const totalStock = liveData.reduce((s, p) => s + (p.count ?? 0), 0);
+    const totalValue = liveData.reduce((s, p) => s + (p.count ?? 0) * (p.price ?? 0), 0);
+    const totalSold = liveData.reduce((s, p) => s + (p.sold_count ?? 0), 0);
+    const lowStock = liveData.filter((p) => (p.count ?? 0) > 0 && (p.count ?? 0) <= 5).length;
+    const outOfStock = liveData.filter((p) => (p.count ?? 0) === 0).length;
     return { totalProducts, totalStock, totalValue, totalSold, lowStock, outOfStock };
-  }, [data]);
+  }, [liveData]);
 
   const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}K` : String(n);
 
   const catStats = useMemo(() => {
     const map = new Map<number, { name: string; count: number; stock: number; value: number; sold: number }>();
-    for (const p of data) {
+    for (const p of liveData) {
       const cat = p.product_item?.product?.category;
       const catId = cat?.id ?? 0;
       const catName = cat?.name_uz ?? cat?.name ?? 'Boshqa';
@@ -49,7 +59,7 @@ export default function ShopProductsPage() {
       entry.sold += p.sold_count ?? 0;
     }
     return [...map.values()].sort((a, b) => b.stock - a.stock);
-  }, [data]);
+  }, [liveData]);
 
   return (
     <>

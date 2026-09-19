@@ -1,9 +1,27 @@
 import 'package:stroymarket/bloc/categoryAll/categoryAll_bloc.dart';
 import 'package:stroymarket/bloc/categoryAll/categoryAll_state.dart';
+import 'package:stroymarket/core/utils/search_key.dart';
 
 
 import '../../export_files.dart';
 import '../../manager/4_category_manager.dart';
+import '../../widgets/common/pull_to_refresh_fill.dart';
+
+// Search keys (see searchKey) of a record's own names/description AND its
+// variants', computed once per record instead of on every keystroke.
+final SearchKeyIndex _searchKeys = SearchKeyIndex((m) => [
+      m['name'],
+      m['name_uz'],
+      m['name_ru'],
+      m['desc'],
+      if (m['items'] is List)
+        for (final it in m['items'] as List) ...[
+          it['name'],
+          it['name_uz'],
+          it['name_ru'],
+          it['desc'],
+        ],
+    ]);
 
 // ignore: must_be_immutable
 class CategoryScreen extends StatefulWidget {
@@ -18,13 +36,17 @@ class _CategoryScreenState extends State<CategoryScreen> {
   final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey();
   final GlobalKey<FormState> formKey = GlobalKey();
   final TextEditingController _searchCtrl = TextEditingController();
-  String _query = '';
+  String _query = ''; // typed text — drives the clear button / empty state
+  String _queryKey = ''; // searchKey of it — drives the matching
 
   @override
   void initState() {
     CategoryManager.getAll(context,);
     _searchCtrl.addListener(
-      () => setState(() => _query = _searchCtrl.text.trim().toLowerCase()),
+      () => setState(() {
+        _query = _searchCtrl.text.trim();
+        _queryKey = searchKey(_searchCtrl.text);
+      }),
     );
     super.initState();
   }
@@ -43,32 +65,13 @@ class _CategoryScreenState extends State<CategoryScreen> {
   }
 
   List _filtered(List data) {
-    if (_query.isEmpty) return data;
-    bool matches(dynamic v) =>
-        v != null && v.toString().toLowerCase().contains(_query);
-    return data.where((c) {
-      final m = c as Map;
-      // Match the product's own names AND its variant names — a shopper can
-      // search by a variant (e.g. "seyf") that is not the product's own name.
-      if (matches(m['name']) ||
-          matches(m['name_uz']) ||
-          matches(m['name_ru']) ||
-          matches(m['desc'])) {
-        return true;
-      }
-      final items = m['items'];
-      if (items is List) {
-        for (final it in items) {
-          if (matches(it['name']) ||
-              matches(it['name_uz']) ||
-              matches(it['name_ru']) ||
-              matches(it['desc'])) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }).toList();
+    if (_queryKey.isEmpty) return data;
+    // Match the product's own names AND its variant names — a shopper can
+    // search by a variant (e.g. "seyf") that is not the product's own name.
+    // Latin and Cyrillic spellings match each other (searchKey).
+    return data
+        .where((c) => _searchKeys.matches(c as Map, _queryKey))
+        .toList();
   }
 
   @override
@@ -128,35 +131,44 @@ class _CategoryScreenState extends State<CategoryScreen> {
           ),
           // ── Body ──
           Expanded(
-            child: BlocBuilder<CategoryAllBloc, CategoryAllState>(
-              builder: (context, state) {
-                if (state is CategoryAllSuccessState) {
-                  // Backend already returns newest first (orderBy id desc).
-                  final all = (state.data ?? []).toList();
-                  final items = _filtered(all);
-                  if (items.isEmpty) {
-                    return EmptyState(
-                      icon: _query.isEmpty
-                          ? Iconsax.category
-                          : Iconsax.search_normal_1,
-                      title: _query.isEmpty
-                          ? 'category_empty'.tr()
-                          : 'search_empty'.tr(),
-                      subtitle: _query.isEmpty
-                          ? "Kategoriyalar tez orada qo'shiladi."
-                          : null,
-                    );
+            child: RefreshIndicator(
+              color: AppConstant.primaryColor,
+              backgroundColor: context.tCard,
+              onRefresh: () => CategoryManager.getAll(context),
+              child: BlocBuilder<CategoryAllBloc, CategoryAllState>(
+                builder: (context, state) {
+                  if (state is CategoryAllSuccessState) {
+                    // Backend already returns newest first (orderBy id desc).
+                    final all = (state.data ?? []).toList();
+                    final items = _filtered(all);
+                    if (items.isEmpty) {
+                      return PullToRefreshFill(
+                        child: EmptyState(
+                          icon: _query.isEmpty
+                              ? Iconsax.category
+                              : Iconsax.search_normal_1,
+                          title: _query.isEmpty
+                              ? 'category_empty'.tr()
+                              : 'search_empty'.tr(),
+                          subtitle: _query.isEmpty
+                              ? "Kategoriyalar tez orada qo'shiladi."
+                              : null,
+                        ),
+                      );
+                    }
+                    return categoryGrid(items);
+                  } else if (state is CategoryAllWaitingState) {
+                    return _buildShimmer();
                   }
-                  return categoryGrid(items);
-                } else if (state is CategoryAllWaitingState) {
-                  return _buildShimmer();
-                }
-                return EmptyState(
-                  icon: Iconsax.category,
-                  title: 'category_empty'.tr(),
-                  subtitle: "Kategoriyalar tez orada qo'shiladi.",
-                );
-              },
+                  return PullToRefreshFill(
+                    child: EmptyState(
+                      icon: Iconsax.category,
+                      title: 'category_empty'.tr(),
+                      subtitle: "Kategoriyalar tez orada qo'shiladi.",
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],

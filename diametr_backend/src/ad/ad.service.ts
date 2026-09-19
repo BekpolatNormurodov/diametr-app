@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 
 import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
+import { WORKER_PUBLIC_SELECT } from 'src/_utils/password';
+import { SHOP_PUBLIC_SELECT } from 'src/shop/shop-public.select';
 import { CreateAdDto } from './dto/create-ad-dto';
 import { AD_TYPE } from '@prisma/client';
 import { UpdateAdDto } from './dto/update-ad-dto';
@@ -44,8 +46,9 @@ export class AdService {
     const payments = await this.prisma.ad.findMany({
       orderBy: { id: 'desc' },
       include: {
-        shop: true,
-        worker: true,
+        // PUBLIC route: no billing/internal shop fields.
+        shop: { select: SHOP_PUBLIC_SELECT },
+        worker: { select: WORKER_PUBLIC_SELECT },
         region: true,
         product: true,
       },
@@ -58,8 +61,8 @@ export class AdService {
       where: { id },
 
       include: {
-        shop: true,
-        worker: true,
+        shop: { select: SHOP_PUBLIC_SELECT },
+        worker: { select: WORKER_PUBLIC_SELECT },
         region: true,
         product: true,
       },

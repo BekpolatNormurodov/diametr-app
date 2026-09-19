@@ -24,6 +24,7 @@ import UnitTypesPage from "./pages/diametr/UnitTypes";
 import SubscriptionsPage from "./pages/diametr/Subscriptions";
 import { PrivateRoute } from "./layout/PrivateRoute";
 import SplashScreen from "./components/common/SplashScreen";
+import VersionWatcher from "./components/common/VersionWatcher";
 import { useState, useCallback } from "react";
 import { useLocation } from "react-router";
 
@@ -40,6 +41,7 @@ export default function App() {
   return (
     <DiametrToastProvider>
       <Router basename="/">
+        <VersionWatcher />
         <SplashWrapper>
           <ScrollToTop />
           <Routes>

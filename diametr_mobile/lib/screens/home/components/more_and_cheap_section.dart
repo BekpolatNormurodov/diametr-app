@@ -3,6 +3,7 @@ import 'package:stroymarket/core/endpoints/endpoints.dart';
 import 'package:stroymarket/core/network/dio_Client.dart';
 
 import '../../../export_files.dart';
+import '../../../services/storage/storage_service.dart';
 import '../../../widgets/common/fade_up_widget.dart';
 
 class MoreAndCheapSection extends StatefulWidget {
@@ -10,10 +11,12 @@ class MoreAndCheapSection extends StatefulWidget {
   final Widget header;
 
   @override
-  State<MoreAndCheapSection> createState() => _MoreAndCheapSectionState();
+  State<MoreAndCheapSection> createState() => MoreAndCheapSectionState();
 }
 
-class _MoreAndCheapSectionState extends State<MoreAndCheapSection> {
+/// Public so HomeScreen can reload it (pull-to-refresh, reconnect, resume)
+/// through a GlobalKey; before, it fetched once per process.
+class MoreAndCheapSectionState extends State<MoreAndCheapSection> {
   final DioClient _dioClient = DioClient();
   bool _loading = true;
   List<dynamic> _items = const [];
@@ -24,11 +27,21 @@ class _MoreAndCheapSectionState extends State<MoreAndCheapSection> {
     _fetchPopular();
   }
 
+  /// Reloads the list, keeping the current cards on screen while it loads
+  /// (and if the reload fails).
+  Future<void> refresh() => _fetchPopular();
+
   Future<void> _fetchPopular() async {
     try {
+      final String? token = StorageService().read(StorageService.token);
       final dio.Response response = await _dioClient.get(
         Endpoints.ProductPopular,
         queryParameters: {'key': Endpoints.authKey, 'limit': 30},
+        // Same header as every other bloc: an anonymous request is served from
+        // the 30s edge cache, so a refresh could return the old list.
+        options: dio.Options(
+          headers: {"Authorization": "Bearer ${token ?? ""}"},
+        ),
       );
       if (!mounted) return;
       if (response.statusCode == 200 && response.data is List) {

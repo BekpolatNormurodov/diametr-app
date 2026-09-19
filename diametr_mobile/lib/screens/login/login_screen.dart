@@ -385,6 +385,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 BlocListener<SendSmsBloc, SendSmsState>(
                   child: const SizedBox.shrink(),
                   listener: (context, state) async {
+                    // The SMS screen re-sends through the same bloc; only the
+                    // visible screen may react (else a resend would push a
+                    // second SMS screen from here).
+                    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
                     if (state is SendSmsWaitingState) {
                       loadingService.showLoading(context);
                     } else if (state is SendSmsErrorState) {
@@ -398,7 +402,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       loadingService.closeLoading(context);
                       Navigator.of(context).pushNamed(
                         '/smsScreen',
-                        arguments: {'id': state.data["id"]},
+                        arguments: {
+                          'id': state.data["id"],
+                          'phone': '998' +
+                              phoneMask.unmaskText(phonecontroller.text),
+                        },
                       );
                     }
                   },

@@ -4,16 +4,19 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "../ui/table"
 import Moment from "moment";
 import Button from "../ui/button/Button";
 import { PlusIcon, DownloadIcon } from "../../icons";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useModal } from "../../hooks/useModal";
 import Input from "../form/input/InputField";
 import Label from "../form/Label";
 import { Modal } from "../ui/modal";
 import Select from "../form/Select";
 import axiosClient from "../../service/axios.service";
+import { useShopId } from "../../context/ShopSessionContext";
 import { toast } from "../ui/toast";
 import { formatMoney } from "../../service/formatters/money.format";
 import * as XLSX from "xlsx";
+import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
+import { apiMessage } from "../../utils/apiMessage";
 
 export interface PaymentItemProps {
   id: number;
@@ -51,14 +54,15 @@ export default function PaymentsTable({
   const [optionValue, setOptionValue] = useState("10");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const shopId = Number(localStorage.getItem("shop_id") ?? 0);
+  const shopId = useShopId();
 
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
 
+  const searchIndex = useMemo(() => buildSearchIndex(tableData, (s) => [s.type]), [tableData]);
   const filteredData = search.trim() === ""
     ? tableData
-    : tableData.filter((s) => (s.type ?? "").toLowerCase().includes(search.toLowerCase()));
+    : filterSearchIndex(searchIndex, search);
 
   const maxPage = Math.ceil(filteredData.length / +optionValue);
   const currentItems = filteredData.sort((a: any, b: any) => b.id - a.id).slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
@@ -105,7 +109,7 @@ export default function PaymentsTable({
       onRefetch?.();
       closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(apiMessage(e));
     } finally {
       setSaving(false);
     }
@@ -116,8 +120,8 @@ export default function PaymentsTable({
       await axiosClient.delete(`/payment/${id}`);
       toast.success("To'lov o'chirildi");
       onRefetch?.();
-    } catch {
-      toast.error("Xatolik yuz berdi");
+    } catch (e) {
+      toast.error(apiMessage(e));
     }
   };
 

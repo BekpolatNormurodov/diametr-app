@@ -20,10 +20,14 @@ import { RolesGuardFactory } from 'src/_guard/roles.guard';
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
+  // Panels only: SUPER sees every order, a shop owner (ADMIN) only their own
+  // shop's orders. Each row carries the customer's name/phone for the panel.
   @Get('/all')
-  @ApiOperation({ summary: 'Barcha buyurtmalar ro’yxati' })
-  findAll() {
-    return this.orderService.findAll();
+  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Barcha buyurtmalar ro’yxati (ADMIN: o‘z do‘koni, SUPER)' })
+  findAll(@Request() req: any) {
+    return this.orderService.findAll(req);
   }
 
   @Get('/my')
@@ -34,18 +38,25 @@ export class OrderController {
     return this.orderService.findByUser(req['user'].id);
   }
 
+  // USER: own order (mobile order-status screen); ADMIN: order of own shop;
+  // SUPER: any.
   @Get(':id')
-  @ApiOperation({ summary: 'Bitta buyurtma' })
+  @UseGuards(RolesGuardFactory([Role.USER, Role.ADMIN, Role.SUPER]))
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Bitta buyurtma (USER: o‘ziniki, ADMIN: o‘z do‘koni, SUPER)' })
   @ApiParam({ name: 'id', type: Number })
-  findOne(@Param('id') id: string) {
-    return this.orderService.findOne(+id);
+  findOne(@Param('id') id: string, @Request() req: any) {
+    return this.orderService.findOne(+id, req);
   }
 
+  // ADMIN may only delete orders of their own shop (403 otherwise).
   @Delete(':id')
-  @ApiOperation({ summary: 'Buyurtmani o’chirish' })
+  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Buyurtmani o’chirish (ADMIN/SUPER)' })
   @ApiParam({ name: 'id', type: Number })
-  remove(@Param('id') id: string) {
-    return this.orderService.remove(+id);
+  remove(@Param('id') id: string, @Request() req: any) {
+    return this.orderService.remove(+id, req);
   }
 
   @Post()
@@ -59,22 +70,24 @@ export class OrderController {
     return this.orderService.create(data, req['user']?.id);
   }
 
+  // ADMIN may only act on orders of their own shop (403 otherwise).
   @Put('/finish/:id')
   @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Buyurtmani yakunlash (ADMIN/SUPER)' })
   @ApiParam({ name: 'id', type: Number })
-  finish(@Param('id') id: string) {
-    return this.orderService.finish(+id);
+  finish(@Param('id') id: string, @Request() req: any) {
+    return this.orderService.finish(+id, req);
   }
 
+  // USER: own order; ADMIN: order of own shop; SUPER: any.
   @Put('/confirm/:id')
-  @UseGuards(RolesGuardFactory([Role.USER]))
+  @UseGuards(RolesGuardFactory([Role.USER, Role.ADMIN, Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Buyurtmani tasdiqlash (USER)' })
+  @ApiOperation({ summary: 'Buyurtmani tasdiqlash (USER/ADMIN/SUPER)' })
   @ApiParam({ name: 'id', type: Number })
-  confirm(@Param('id') id: string) {
-    return this.orderService.confirm(+id);
+  confirm(@Param('id') id: string, @Request() req: any) {
+    return this.orderService.confirm(+id, req);
   }
 
   @Put('/cancel/:id')
@@ -82,7 +95,7 @@ export class OrderController {
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Buyurtmani bekor qilish (ADMIN/SUPER)' })
   @ApiParam({ name: 'id', type: Number })
-  cancel(@Param('id') id: string) {
-    return this.orderService.cancel(+id);
+  cancel(@Param('id') id: string, @Request() req: any) {
+    return this.orderService.cancel(+id, req);
   }
 }

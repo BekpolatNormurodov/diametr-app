@@ -3,6 +3,7 @@ import 'package:stroymarket/core/endpoints/endpoints.dart';
 import 'package:stroymarket/core/network/dio_Client.dart';
 
 import '../../export_files.dart';
+import '../../services/storage/storage_service.dart';
 
 class PopularProductsScreen extends StatefulWidget {
   const PopularProductsScreen({super.key});
@@ -24,9 +25,15 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
 
   Future<void> _fetch() async {
     try {
+      final String? token = StorageService().read(StorageService.token);
       final dio.Response r = await _dio.get(
         Endpoints.ProductPopular,
         queryParameters: {'key': Endpoints.authKey, 'limit': 50},
+        // Same header as every other bloc: an anonymous request is served from
+        // the 30s edge cache, so pull-to-refresh returned the old list.
+        options: dio.Options(
+          headers: {"Authorization": "Bearer ${token ?? ""}"},
+        ),
       );
       if (!mounted) return;
       if (r.statusCode == 200 && r.data is List) {

@@ -12,6 +12,7 @@ import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import TranslateButton from "../../common/TranslateButton";
 import * as XLSX from "xlsx";
+import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 
 export interface UnitTypeItemProps {
   id: number;
@@ -38,15 +39,10 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
 
-  const filteredData = search.trim() === ""
+  const searchQueryKey = searchKey(search);
+  const filteredData = searchQueryKey === ""
     ? tableData
-    : tableData.filter((s) => {
-        const q = search.toLowerCase();
-        return s.name.toLowerCase().includes(q)
-          || (s.name_uz ?? "").toLowerCase().includes(q)
-          || (s.name_ru ?? "").toLowerCase().includes(q)
-          || s.symbol.toLowerCase().includes(q);
-      });
+    : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.name, s.name_uz, s.name_ru, s.symbol]));
   const maxPage = Math.ceil(filteredData.length / +optionValue);
   const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
 

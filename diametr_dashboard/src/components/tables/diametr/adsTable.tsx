@@ -18,6 +18,7 @@ import ImageField, { ImageFieldResult } from "../../common/ImageField";
 import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
+import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 
 export interface AdItemProps {
   id: number;
@@ -72,19 +73,27 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
   const imgKey = useRef(0);
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const staticUrl = import.meta.env.VITE_STATIC_PATH ?? "";
-  // Link-target lists, fetched lazily per type and cached.
+  // Link-target lists, fetched lazily per type. Opening the modal always refreshes;
+  // switching type reuses a non-empty list younger than 60s. A failed load keeps the
+  // previous list (if any) and is retried next time.
   const [targetOptions, setTargetOptions] = useState<Record<string, any[]>>({});
   const [targetLoading, setTargetLoading] = useState(false);
+  const targetFetchedAt = useRef<Record<string, number>>({});
 
-  const loadTargets = async (type: string) => {
-    if (!TARGET_CONFIG[type] || targetOptions[type]) return;
+  const loadTargets = async (type: string, force = false) => {
+    if (!TARGET_CONFIG[type]) return;
+    const fresh =
+      (targetOptions[type]?.length ?? 0) > 0 &&
+      Date.now() - (targetFetchedAt.current[type] ?? 0) < 60_000;
+    if (!force && fresh) return;
     setTargetLoading(true);
     try {
       const res = await axiosClient.get(TARGET_CONFIG[type].endpoint);
       const list = res.data?.data ?? res.data ?? [];
+      targetFetchedAt.current[type] = Date.now();
       setTargetOptions((prev) => ({ ...prev, [type]: Array.isArray(list) ? list : [] }));
     } catch {
-      setTargetOptions((prev) => ({ ...prev, [type]: [] }));
+      delete targetFetchedAt.current[type];
     } finally {
       setTargetLoading(false);
     }
@@ -93,7 +102,8 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
 
-  const filteredData = search.trim() === "" ? tableData : tableData.filter((s) => { const q = search.toLowerCase(); return (s.title ?? "").toLowerCase().includes(q) || (s.subtitle ?? "").toLowerCase().includes(q); });
+  const searchQueryKey = searchKey(search);
+  const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.title, s.subtitle]));
   const maxPage = Math.ceil(filteredData.length / +optionValue);
   const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
 
@@ -116,7 +126,7 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
       type: t,
       targetId: tid != null ? String(tid) : "",
     });
-    loadTargets(t);
+    loadTargets(t, true);
     imageResultRef.current = null;
     imgKey.current += 1;
     setImgPreview(item.image ? `${staticUrl}/static/ads/${item.image}` : null);
@@ -129,7 +139,7 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
   const openCreate = () => {
     setEditItem(null);
     setForm({ ...emptyForm });
-    loadTargets(emptyForm.type);
+    loadTargets(emptyForm.type, true);
     imageResultRef.current = null;
     imgKey.current += 1;
     setImgPreview(null);

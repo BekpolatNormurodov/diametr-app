@@ -18,12 +18,17 @@ import '../export_files.dart';
 
 class ServicesManager {
   static Future<void> getAll(
-    BuildContext context, ) async {
+    BuildContext context, {
+    bool silent = false,
+  }) async {
     try {
-      await BlocProvider.of<ServiceAllBloc>(context).getAll(
-        
-      );
+      await BlocProvider.of<ServiceAllBloc>(context).getAll(silent: silent);
     } catch (e) {
+      if (silent &&
+          BlocProvider.of<ServiceAllBloc>(context).state
+              is ServiceAllSuccessState) {
+        return;
+      }
       final msg = e is DioExceptions ? e.message : e.toString();
       BlocProvider.of<ServiceAllBloc>(context).emit(ServiceAllErrorState(
         message: msg,

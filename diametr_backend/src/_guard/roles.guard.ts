@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -29,8 +30,11 @@ export function RolesGuardFactory(roles: Role[]): any {
         throw new UnauthorizedException('Invalid or expired token');
       }
 
+      // A valid session with the wrong role is 403, not 401: the panels and
+      // the site end the session on any 401, which must only happen for a
+      // missing/invalid/expired token.
       const isAllowed = roles.includes(payload.role);
-      if (!isAllowed) throw new UnauthorizedException('Access denied');
+      if (!isAllowed) throw new ForbiddenException('Access denied');
 
       const user = await this.prisma[payload.role.toLowerCase()].findUnique({
         where: { id: payload.user_id },
@@ -39,6 +43,8 @@ export function RolesGuardFactory(roles: Role[]): any {
       if (!user) throw new UnauthorizedException(`${payload.role.toLowerCase()} not found`);
 
       request['user'] = user;
+      // The role the token was verified for (services use it for ownership).
+      request['role'] = payload.role;
       // Expose JWT source so controllers can use it (e.g. ORDER_SOURCE derivation)
       if (payload.source) request['tokenSource'] = payload.source;
       return true;

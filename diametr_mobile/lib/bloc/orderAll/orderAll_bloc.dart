@@ -40,7 +40,11 @@ class OrderAllBloc extends Cubit<OrderAllState> {
     return response.data;
   }
     Future refreshAll() async {
-   
+   // Pull-to-refresh after an error (or before the first load finished) used
+   // to be a silent no-op; do a normal load instead. A load already in flight
+   // is left alone.
+   if (state is OrderAllWaitingState) return null;
+   if (state is! OrderAllSuccessState) return getAll();
    if (state is OrderAllSuccessState) {
       String? token = await StorageService().read(
       StorageService.token,

@@ -40,6 +40,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Position? _userPosition;
   Timer? _locationTimer;
   StreamSubscription? _reconnectSub;
+  AppLifecycleListener? _lifecycle;
+
+  /// The bestsellers row fetches on its own; the key lets every reload path
+  /// below refresh it too (it used to load once per process).
+  final GlobalKey<MoreAndCheapSectionState> _popularKey =
+      GlobalKey<MoreAndCheapSectionState>();
+
+  /// When the home data was last (re)loaded; a resume sooner than
+  /// [_resumeRefreshAfter] after it does not reload again.
+  DateTime _lastLoad = DateTime.now();
+  static const Duration _resumeRefreshAfter = Duration(seconds: 60);
 
   Future<void> _updateLocation() async {
     final pos = await LocationService.getCurrentPoint();
@@ -54,33 +65,50 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppUpdateService.checkAndUpdate();
     });
-    OrderManager.getAll(context);
-    CategoryManager.getAll(context);
-    ShopManager.getAll(context);
-    AdsManager.getAll(context);
-    ServicesManager.getAll(context);
-    ProductManager.getAll(context);
-    NewsManager.getAll(context);
+    _reloadAll();
     final savatchaItem = StorageService().read(StorageService.savatcha) ?? [];
     context.read<SavatchaBloc>().changeValue(savatchaItem);
     _updateLocation();
     _locationTimer = Timer.periodic(const Duration(seconds: 15), (_) => _updateLocation());
     _reconnectSub = ConnectivityService.instance.onReconnect.listen((_) {
       if (!mounted) return;
-      OrderManager.getAll(context);
-      CategoryManager.getAll(context);
-      ShopManager.getAll(context);
-      AdsManager.getAll(context);
-      ServicesManager.getAll(context);
-      ProductManager.getAll(context);
-      NewsManager.getAll(context);
+      _reloadAll();
     });
+    // Android keeps the process alive for days; without this the home screen
+    // kept showing data from when the app was started.
+    _lifecycle = AppLifecycleListener(onResume: _onResume);
+  }
+
+  /// Loads every home section. [silent] (used on app resume) keeps the data
+  /// already on screen instead of flashing the skeletons.
+  void _reloadAll({bool silent = false}) {
+    _lastLoad = DateTime.now();
+    if (silent) {
+      OrderManager.refreshAll(context);
+    } else {
+      OrderManager.getAll(context);
+    }
+    CategoryManager.getAll(context, silent: silent);
+    ShopManager.getAll(context, silent: silent);
+    AdsManager.getAll(context, silent: silent);
+    ServicesManager.getAll(context, silent: silent);
+    ProductManager.getAll(context, silent: silent);
+    NewsManager.getAll(context, silent: silent);
+    _popularKey.currentState?.refresh();
+  }
+
+  void _onResume() {
+    if (!mounted) return;
+    AppUpdateService.checkAndUpdate(); // throttled inside
+    if (DateTime.now().difference(_lastLoad) < _resumeRefreshAfter) return;
+    _reloadAll(silent: true);
   }
 
   @override
   void dispose() {
     _locationTimer?.cancel();
     _reconnectSub?.cancel();
+    _lifecycle?.dispose();
     super.dispose();
   }
 
@@ -94,13 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
       triggerMode: RefreshIndicatorTriggerMode.onEdge,
       onRefresh: () async {
         setState(() {});
-        OrderManager.getAll(context);
-        CategoryManager.getAll(context);
-        ShopManager.getAll(context);
-        AdsManager.getAll(context);
-        ServicesManager.getAll(context);
-        ProductManager.getAll(context);
-        NewsManager.getAll(context);
+        _reloadAll();
         List savatchaItem =
             StorageService().read(StorageService.savatcha) ?? [];
          context.read<SavatchaBloc>().changeValue(
@@ -263,6 +285,7 @@ class _HomeScreenState extends State<HomeScreen> {
               FadeUpWidget(
                 delay: const Duration(milliseconds: 400),
                 child: MoreAndCheapSection(
+                  key: _popularKey,
                   header: HeaderSections(
                     title: 'bestsellers_header'.tr(),
                     onTap: () => Navigator.of(ctx)
@@ -315,6 +338,10 @@ class _NotificationSheetState extends State<_NotificationSheet>
     super.initState();
     _tab = TabController(length: 2, vsync: this);
     _tab.addListener(() => setState(() {}));
+    // Opening the sheet shows current order statuses and news, not the ones
+    // loaded when the home screen was first built.
+    OrderManager.refreshAll(context);
+    NewsManager.getAll(context, silent: true);
   }
 
   @override

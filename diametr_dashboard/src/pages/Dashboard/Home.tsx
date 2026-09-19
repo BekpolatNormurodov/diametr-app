@@ -8,6 +8,7 @@ import RecentOrders from "../../components/ecommerce/RecentOrders";
 import PageMeta from "../../components/common/PageMeta";
 import axiosClient from "../../service/axios.service";
 import { usePolling } from "../../hooks/usePolling";
+import { isSoldOrder } from "../../utils/orderStatus";
 
 export default function Home() {
   const [clientsCount, setClientsCount] = useState(0);
@@ -32,8 +33,10 @@ export default function Home() {
           ? ordersRes.value.data
           : ordersRes.value.data?.data ?? [];
         setOrdersCount(orders.length);
+        // Sales = sold orders only (FINISHED or CONFIRMED); new and canceled
+        // orders are not revenue.
         const sum = orders.reduce(
-          (acc: number, o: any) => acc + (Number(o.amount) || 0),
+          (acc: number, o: any) => acc + (isSoldOrder(o) ? Number(o.amount) || 0 : 0),
           0
         );
         setTotalSales(sum);
@@ -73,7 +76,7 @@ export default function Home() {
       const d = Moment(o.createdt ?? o.createdAt);
       if (d.isValid() && d.year() === currentYear) {
         mo[d.month()]++;
-        if (o.status === "FINISHED") mr[d.month()] += Number(o.amount) || 0;
+        if (isSoldOrder(o)) mr[d.month()] += Number(o.amount) || 0;
       }
     });
     return { monthlyOrders: mo, monthlyRevenue: mr };

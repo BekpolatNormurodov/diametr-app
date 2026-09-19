@@ -13,6 +13,7 @@ import Select from "../../form/Select";
 import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
+import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 
 export interface ShopItemProps {
   id: number;
@@ -71,14 +72,18 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
 
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
-  useEffect(() => {
+  // Regions can be added elsewhere — loaded on mount and refreshed whenever the edit modal opens
+  // (a failed refresh keeps the previous list).
+  const loadRegions = () => {
     axiosClient.get("/region/all").then((res) => {
       const list = res.data?.data ?? res.data ?? [];
-      setRegionOptions(list.map((r: any) => ({ value: String(r.id), label: r.name ?? String(r.id) })));
+      if (Array.isArray(list)) setRegionOptions(list.map((r: any) => ({ value: String(r.id), label: r.name ?? String(r.id) })));
     }).catch(() => {});
-  }, []);
+  };
+  useEffect(() => { loadRegions(); }, []);
 
-  const filteredData = search.trim() === "" ? tableData : tableData.filter((s) => { const q = search.toLowerCase(); return (s.name ?? "").toLowerCase().includes(q) || (s.inn ?? "").toLowerCase().includes(q) || (s.address ?? "").toLowerCase().includes(q) || (s.region?.name ?? "").toLowerCase().includes(q); });
+  const searchQueryKey = searchKey(search);
+  const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.name, s.inn, s.address, s.region?.name]));
   const maxPage = Math.ceil(filteredData.length / +optionValue);
   const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
   const staticUrl = import.meta.env.VITE_STATIC_PATH ?? "";
@@ -98,15 +103,24 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
       lat: item.lat != null ? String(item.lat) : "",
       lon: item.lon != null ? String(item.lon) : "",
     });
+    loadRegions();
     openModal();
   };
 
   const handleSave = async () => {
+    const lat = form.lat.trim();
+    const lon = form.lon.trim();
+    if ((lat !== "" && !Number.isFinite(Number(lat))) || (lon !== "" && !Number.isFinite(Number(lon)))) {
+      toast.error("Latitude va Longitude son bo'lishi kerak");
+      return;
+    }
     setSaving(true);
     try {
-      const payload: any = { name: form.name, inn: form.inn, address: form.address };
+      // INN: blank is sent as null (clears it); "" would fail the number-string validation.
+      const payload: any = { name: form.name, inn: form.inn.trim() || null, address: form.address };
       if (form.region_id) payload.region_id = Number(form.region_id);
       if (form.delivery_amount) payload.delivery_amount = Number(form.delivery_amount);
+      // Subscription bonus / cancel travel as `expired` ("YYYY-MM-DD") in PUT /shop/:id.
       if (cancelSub) {
         payload.expired = Moment().format("YYYY-MM-DD");
       } else if (bonusDays > 0) {
@@ -114,15 +128,29 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
         const startMs = Math.max(Date.now(), baseMs);
         payload.expired = Moment(startMs).add(bonusDays, "days").format("YYYY-MM-DD");
       }
-      if (form.lat.trim() !== "") payload.lat = Number(form.lat);
-      if (form.lon.trim() !== "") payload.lon = Number(form.lon);
+      if (lat !== "") payload.lat = Number(lat);
+      if (lon !== "") payload.lon = Number(lon);
       if (editItem) {
-        await axiosClient.put(`/shop/${editItem.id}`, payload);
+        const res = await axiosClient.put(`/shop/${editItem.id}`, payload);
         // Update auto_payment separately
         if (form.auto_payment !== (editItem.auto_payment !== false)) {
           await axiosClient.patch(`/subscription/auto-payment/${editItem.id}`, { auto_payment: form.auto_payment });
         }
-        toast.success("Do'kon yangilandi");
+        const updated = res.data?.data ?? res.data;
+        const expiryDropped =
+          payload.expired &&
+          updated && typeof updated === "object" && "expired" in updated &&
+          (updated.expired == null ||
+            Math.abs(new Date(updated.expired).getTime() - new Date(payload.expired).getTime()) > 36 * 3600 * 1000);
+        if (expiryDropped) {
+          // The server ignored the subscription change — never report it as saved.
+          toast.error("Do'kon ma'lumotlari saqlandi, lekin obuna muddati o'zgarmadi. Server bu o'zgarishni qabul qilmadi.");
+        } else {
+          toast.success(cancelSub ? "Do'kon yangilandi, obuna bugun tugaydi" : bonusDays > 0 ? `Do'kon yangilandi, obuna +${bonusDays} kun uzaytirildi` : "Do'kon yangilandi");
+          if (bonusDays > 0 && updated?.work_status === "BLOCKED") {
+            toast.warning("Do'kon hali bloklangan. Kerak bo'lsa \"Blokdan chiqarish\" amalini bosing.");
+          }
+        }
       }
       onRefetch?.(); closeModal();
     } catch (e: any) {
@@ -135,7 +163,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
       await axiosClient.delete(`/shop/${id}`);
       toast.success("Do'kon o'chirildi");
       onRefetch?.();
-    } catch { toast.error("Xatolik yuz berdi"); }
+    } catch (e: any) { toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi"); }
   };
 
   const handleToggleBlock = async (item: ShopItemProps) => {

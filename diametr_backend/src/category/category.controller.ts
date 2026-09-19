@@ -21,9 +21,14 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Express } from 'express';
 import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { writeFileSync } from 'fs';
-import axios from 'axios';
+import { join } from 'path';
+import {
+  IMAGE_MAX_BYTES,
+  downloadImageFromUrl,
+  imageFileFilter,
+  imageFileName,
+  uploadedImageName,
+} from 'src/_utils/image-upload';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -36,17 +41,17 @@ export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
   @Post()
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Kategoriya yaratish (ADMIN/SUPER)' })
+  @ApiOperation({ summary: 'Kategoriya yaratish (SUPER)' })
   create(@Body() data: CreateCategoryDto) {
     return this.categoryService.create(data);
   }
 
   @Post('/upload-image')
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Kategoriya rasmi yuklash (ADMIN/SUPER)' })
+  @ApiOperation({ summary: 'Kategoriya rasmi yuklash (SUPER)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -58,45 +63,27 @@ export class CategoryController {
     FileInterceptor('image', {
       storage: diskStorage({
         destination: join(process.cwd(), 'public', 'categories'),
-        filename: (_req, file, cb) => {
-          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, unique + extname(file.originalname));
-        },
+        filename: imageFileName,
       }),
-      fileFilter: (_req, file, cb) => {
-        const allowed = /\.(jpg|jpeg|png|webp|gif|svg|bmp)$/i;
-        cb(null, allowed.test(file.originalname));
-      },
-      limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+      fileFilter: imageFileFilter,
+      limits: { fileSize: IMAGE_MAX_BYTES, files: 1 },
     }),
   )
   uploadImage(@UploadedFile() file: Express.Multer.File) {
-    return { image: file.filename };
+    return { image: uploadedImageName(file) };
   }
 
   @Post('/upload-image-url')
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
   @ApiOperation({
-    summary: "URL dan rasm yuklab PNG saqlab qo'yish (ADMIN/SUPER)",
+    summary: "URL dan rasm yuklab PNG saqlab qo'yish (SUPER)",
   })
   @ApiBody({
     schema: { type: 'object', properties: { url: { type: 'string' } } },
   })
   async uploadImageFromUrl(@Body() body: { url: string }) {
-    const response = await axios.get(body.url, {
-      responseType: 'arraybuffer',
-      maxContentLength: 15 * 1024 * 1024,
-      maxBodyLength: 15 * 1024 * 1024,
-      timeout: 15000,
-    });
-    const filename =
-      Date.now() + '-' + Math.round(Math.random() * 1e9) + '.jpg';
-    writeFileSync(
-      join(process.cwd(), 'public', 'categories', filename),
-      Buffer.from(response.data),
-    );
-    return { image: filename };
+    return { image: await downloadImageFromUrl(body?.url, 'categories') };
   }
 
   @Get('/all')
@@ -119,18 +106,18 @@ export class CategoryController {
   }
 
   @Put(':id')
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Kategoriyani tahrirlash (ADMIN/SUPER)' })
+  @ApiOperation({ summary: 'Kategoriyani tahrirlash (SUPER)' })
   @ApiParam({ name: 'id', type: Number })
   update(@Param('id') id: string, @Body() data: UpdateCategoryDto) {
     return this.categoryService.update(+id, data);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: "Kategoriyani o'chirish (ADMIN/SUPER)" })
+  @ApiOperation({ summary: "Kategoriyani o'chirish (SUPER)" })
   @ApiParam({ name: 'id', type: Number })
   remove(@Param('id') id: string) {
     return this.categoryService.remove(+id);

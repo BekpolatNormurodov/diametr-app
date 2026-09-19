@@ -11,6 +11,14 @@ const bcrypt: {
 const ROUNDS = 10;
 
 /**
+ * Shortest password the panel login accepts (LoginDto @MinLength). Every place
+ * that SETS a panel password must enforce the same minimum, otherwise the
+ * owner saves a password they can never log in with.
+ */
+export const PASSWORD_MIN_LENGTH = 8;
+export const PASSWORD_TOO_SHORT_MESSAGE = `Parol kamida ${PASSWORD_MIN_LENGTH} ta belgidan iborat bo'lishi kerak`;
+
+/**
  * Passwords used to be stored in plain text and compared with `!==`.
  * They are bcrypt hashes now, but rows written before the migration may still
  * hold plain text, so `verifyPassword` accepts both and the caller upgrades the
@@ -70,3 +78,22 @@ export function withoutPassword(entity: any): any {
   const { password: _password, ...rest } = entity;
   return rest;
 }
+
+/**
+ * Prisma `select` for a Worker relation embedded in a PUBLIC response (ads,
+ * payments): every column except `password`. Prisma 6.1 has no GA `omit`.
+ */
+export const WORKER_PUBLIC_SELECT = {
+  id: true,
+  fullname: true,
+  phone: true,
+  image: true,
+  work_status: true,
+  service_id: true,
+  expired: true,
+  amount: true,
+  date_type: true,
+  role: true,
+  createdt: true,
+  updatedAt: true,
+} as const;

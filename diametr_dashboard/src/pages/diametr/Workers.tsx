@@ -36,7 +36,7 @@ export default function WorkersPage() {
 
   const fetchServices = useCallback(
     () => axiosClient.get("/service/all").then((res) => res.data), []);
-  const { data: svcData } = useFetchWithLoader<{ id: number; name: string }[]>({ fetcher: fetchServices });
+  const { data: svcData, refetch: refetchServices } = useFetchWithLoader<{ id: number; name: string }[]>({ fetcher: fetchServices });
   const service_options = Array.isArray(svcData)
     ? svcData.map((s) => ({ value: String(s.id), label: s.name }))
     : [];
@@ -67,7 +67,7 @@ export default function WorkersPage() {
       <PageBreadcrumb pageTitle="Ishchilar" />
       <div className="space-y-6">
         <ComponentCard title="Ishchilar" action={
-            <Button size="sm" variant="primary" startIcon={<PlusIcon className="size-5 fill-white" />} onClick={() => { setWorker(emptyWorker); openModal(); }}>
+            <Button size="sm" variant="primary" startIcon={<PlusIcon className="size-5 fill-white" />} onClick={() => { setWorker(emptyWorker); refetchServices(); openModal(); }}>
               Ishchi qo'shish
             </Button>
           }>

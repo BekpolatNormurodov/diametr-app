@@ -8,8 +8,11 @@ class ServiceAllBloc extends Cubit<ServiceAllState> {
   DioClient dioClient = DioClient();
   ServiceAllBloc() : super(ServiceAllIntialState());
 
-  Future getAll() async {
-    emit(ServiceAllWaitingState());
+  /// [silent] is a background refresh (app resume): keep what is on screen
+  /// instead of flashing the skeleton, and keep it if the refresh fails.
+  Future getAll({bool silent = false}) async {
+    final bool keep = silent && state is ServiceAllSuccessState;
+    if (!keep) emit(ServiceAllWaitingState());
     String? token = await StorageService().read(
       StorageService.token,
     );
@@ -30,7 +33,7 @@ class ServiceAllBloc extends Cubit<ServiceAllState> {
           data: response.data,
         ),
       );
-    } else {
+    } else if (!keep) {
       emit(
         ServiceAllErrorState(
             title: response.data["name"], message: response.data["message"]),

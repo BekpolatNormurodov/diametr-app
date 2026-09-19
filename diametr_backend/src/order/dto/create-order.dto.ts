@@ -4,6 +4,7 @@ import {
   ArrayNotEmpty,
   IsArray,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -22,11 +23,16 @@ export class CreateOrderDto {
   @IsNumber()
   lon?: number;
 
-  @IsNumber()
+  @IsInt()
   @IsNotEmpty()
   @Min(1)
   shop_id: number;
 
+  /**
+   * The total the client showed (undiscounted items + delivery). Kept for
+   * compatibility only: the stored order amount is always computed on the
+   * server from current prices, delivery and the promo code.
+   */
   @IsNotEmpty()
   @IsNumber()
   @Min(0)

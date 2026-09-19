@@ -8,6 +8,8 @@ import { useEffect, useMemo, useState } from "react";
 import axiosClient from "../../service/axios.service";
 import { toast } from "../ui/toast";
 import * as XLSX from "xlsx";
+import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
+import { apiMessage } from "../../utils/apiMessage";
 
 interface OrderProduct {
   id: number;
@@ -56,12 +58,16 @@ export interface OrderItemProps {
   discount_amount?: number | null;
 }
 
+// Platform wording (Telegram): FINISHED = confirmed by the shop, ready for delivery;
+// CONFIRMED = delivered, the final state.
 const statusConfig: Record<string, { label: string; className: string }> = {
   STARTED:   { label: "Yangi",          className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
-  CONFIRMED: { label: "Tasdiqlangan",   className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  FINISHED:  { label: "Bajarilgan",     className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  FINISHED:  { label: "Tasdiqlangan",   className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  CONFIRMED: { label: "Yetkazilgan",    className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
   CANCELED:  { label: "Bekor qilingan", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
 };
+
+const customerPhone = (o: OrderItemProps) => o.user?.phone || o.phone || "";
 
 const payLabel: Record<string, string> = { cash: "Naqd", payme: "Payme", click: "Click", uzum: "Uzum" };
 const deliveryLabel: Record<string, string> = { MARKET: "Olib ketish", YANDEX: "Yandex", FIXED: "Yetkazish" };
@@ -93,17 +99,15 @@ export default function OrdersTable({
     });
   };
 
+  // Keys are built once per list, not on every keystroke.
+  const searchIndex = useMemo(
+    () => buildSearchIndex(tableData, (s) => [s.address, s.phone, s.user?.fullname, s.user?.phone, s.id]),
+    [tableData],
+  );
   const filteredData = useMemo(() => {
     if (search.trim() === "") return tableData;
-    const q = search.toLowerCase();
-    return tableData.filter((s) =>
-      (s.address ?? "").toLowerCase().includes(q) ||
-      (s.phone ?? "").toLowerCase().includes(q) ||
-      (s.user?.fullname ?? "").toLowerCase().includes(q) ||
-      (s.user?.phone ?? "").toLowerCase().includes(q) ||
-      String(s.id).includes(q)
-    );
-  }, [tableData, search]);
+    return filterSearchIndex(searchIndex, search);
+  }, [tableData, searchIndex, search]);
 
   const sorted = useMemo(() => [...filteredData].sort((a, b) => b.id - a.id), [filteredData]);
   const maxPage = Math.ceil(sorted.length / +optionValue);
@@ -113,12 +117,12 @@ export default function OrdersTable({
     setLoadingId(id);
     try {
       await axiosClient.put(`/order/${action}/${id}`);
-      const label = action === "confirm" ? "Tasdiqlandi" : action === "cancel" ? "Bekor qilindi" : "Bajarildi";
+      // finish: STARTED → FINISHED ("Tasdiqlandi"); confirm: FINISHED → CONFIRMED ("Yetkazildi").
+      const label = action === "finish" ? "Tasdiqlandi" : action === "confirm" ? "Yetkazildi" : "Bekor qilindi";
       toast.success(label);
       onRefetch?.();
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      toast.error(err?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(apiMessage(e));
     } finally {
       setLoadingId(null);
     }
@@ -129,8 +133,8 @@ export default function OrdersTable({
       await axiosClient.delete(`/order/${id}`);
       toast.success("Buyurtma o'chirildi");
       onRefetch?.();
-    } catch {
-      toast.error("Xatolik yuz berdi");
+    } catch (e: unknown) {
+      toast.error(apiMessage(e));
     }
   };
 
@@ -138,8 +142,8 @@ export default function OrdersTable({
     const ws = XLSX.utils.json_to_sheet(
       tableData.map((o) => ({
         ID: o.id,
-        Mijoz: o.user?.fullname ?? o.user?.phone ?? "",
-        Telefon: o.phone ?? o.user?.phone ?? "",
+        Mijoz: o.user?.fullname || o.user?.phone || "",
+        Telefon: customerPhone(o),
         Manzil: o.address ?? "",
         Summa: (o.amount ?? 0).toLocaleString(),
         Status: statusConfig[o.status ?? ""]?.label ?? o.status ?? "",
@@ -197,11 +201,16 @@ export default function OrdersTable({
                         {(currentPage - 1) * +optionValue + idx + 1}
                       </div>
                     </TableCell>
+                    {/* Customer from order.user ({id, fullname, phone}, sent by /order/all for the owner's shop) */}
                     <TableCell className="px-5 py-4 font-medium text-gray-800 dark:text-white">
-                      {item.user?.fullname ?? item.phone ?? "-"}
+                      {item.user?.fullname || item.phone || "-"}
                     </TableCell>
                     <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                      {item.phone ?? item.user?.phone ?? "-"}
+                      {customerPhone(item) ? (
+                        <a href={`tel:${customerPhone(item)}`} onClick={(e) => e.stopPropagation()} className="hover:text-brand-500 hover:underline">
+                          {customerPhone(item)}
+                        </a>
+                      ) : "-"}
                     </TableCell>
                     <TableCell className="px-5 py-4 text-sm font-semibold text-green-600 dark:text-green-400">
                       {item.amount != null ? `${item.amount.toLocaleString()} so'm` : "-"}
@@ -236,7 +245,7 @@ export default function OrdersTable({
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 disabled:opacity-40 transition-all"
                           >
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            {busy ? "..." : "Yakunlash"}
+                            {busy ? "..." : "Yetkazildi"}
                           </button>
                         )}
                         {(item.status === "STARTED" || item.status === "FINISHED") && (

@@ -7,6 +7,7 @@ import { useState } from "react";
 import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
+import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 import { useModal } from "../../../hooks/useModal";
 import { Modal } from "../../ui/modal";
 import Input from "../../form/input/InputField";
@@ -61,12 +62,9 @@ export default function UsersTable({
     }
   };
 
-  const filtered = search.trim()
-    ? data.filter((u) =>
-        [u.fullname, u.phone].some((v) =>
-          v?.toLowerCase().includes(search.toLowerCase())
-        )
-      )
+  const searchQueryKey = searchKey(search);
+  const filtered = searchQueryKey
+    ? data.filter((u) => matchesSearchKey(searchQueryKey, [u.fullname, u.phone]))
     : data;
 
   const pageSize = parseInt(showValue);

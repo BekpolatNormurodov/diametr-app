@@ -15,7 +15,8 @@ interface RecentOrdersProps {
 function statusColor(status: string): "success" | "warning" | "error" | "info" {
   if (!status) return "info";
   const s = status.toLowerCase();
-  if (s === "finished" || s === "completed") return "success";
+  // FINISHED and CONFIRMED are both sold (stock taken).
+  if (s === "finished" || s === "confirmed" || s === "completed") return "success";
   if (s === "canceled" || s === "cancelled") return "error";
   return "warning";
 }

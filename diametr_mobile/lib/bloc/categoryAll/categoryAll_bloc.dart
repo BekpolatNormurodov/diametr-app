@@ -8,8 +8,11 @@ class CategoryAllBloc extends Cubit<CategoryAllState> {
   DioClient dioClient = DioClient();
   CategoryAllBloc() : super(CategoryAllIntialState());
 
-  Future getAll() async {
-    emit(CategoryAllWaitingState());
+  /// [silent] is a background refresh (app resume): keep what is on screen
+  /// instead of flashing the skeleton, and keep it if the refresh fails.
+  Future getAll({bool silent = false}) async {
+    final bool keep = silent && state is CategoryAllSuccessState;
+    if (!keep) emit(CategoryAllWaitingState());
     String? token = await StorageService().read(
       StorageService.token,
     );
@@ -30,7 +33,7 @@ class CategoryAllBloc extends Cubit<CategoryAllState> {
           data: response.data,
         ),
       );
-    } else {
+    } else if (!keep) {
       emit(
         CategoryAllErrorState(
             title: response.data["name"], message: response.data["message"]),

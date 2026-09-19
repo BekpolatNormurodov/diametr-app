@@ -3,7 +3,7 @@ import TableToolbar from "./TableToolbar";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "../ui/table";
 import Moment from "moment";
 import Button from "../ui/button/Button";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useModal } from "../../hooks/useModal";
 import Input from "../form/input/InputField";
 import Label from "../form/Label";
@@ -11,6 +11,7 @@ import { Modal } from "../ui/modal";
 import axiosClient from "../../service/axios.service";
 import { toast } from "../ui/toast";
 import * as XLSX from "xlsx";
+import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
 
 export interface WorkerItemProps {
   id: number;
@@ -48,15 +49,10 @@ export default function WorkersTable({
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
 
+  const searchIndex = useMemo(() => buildSearchIndex(tableData, (s) => [s.fullname, s.phone]), [tableData]);
   const filteredData = search.trim() === ""
     ? tableData
-    : tableData.filter((s) => {
-        const q = search.toLowerCase();
-        return (
-          (s.fullname ?? "").toLowerCase().includes(q) ||
-          (s.phone ?? "").toLowerCase().includes(q)
-        );
-      });
+    : filterSearchIndex(searchIndex, search);
 
   const maxPage = Math.ceil(filteredData.length / +optionValue);
   const currentItems = filteredData.sort((a: any, b: any) => b.id - a.id).slice((currentPage - 1) * +optionValue, currentPage * +optionValue);

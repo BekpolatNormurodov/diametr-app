@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useScrollReveal } from '../../../hooks/useScrollReveal'
 import { useLang } from '../../../context/AppContext'
+import { searchKey, buildSearchKeys, matchesSearch } from '../../../utils/searchKey'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
@@ -68,28 +69,33 @@ export default function ProductMarketplace() {
   const getCatName = (c: Category) =>
     lang === 'ru' ? c.name_ru || c.name_uz || c.name || '' : c.name_uz || c.name_ru || c.name || ''
 
+  // Match the product's names AND its variant names — e.g. "seyf" is a variant
+  // of "Xavfsizlik tizimlari", so searching the product name alone missed it.
+  // Keys are Latin/Cyrillic-normalized (searchKey) and built once per list.
+  const productKeys = useMemo(() => buildSearchKeys(products, p => [
+    p.name, p.name_uz, p.name_ru, p.desc,
+    ...(p.items ?? []).flatMap(it => [it.name, it.name_uz, it.name_ru, it.desc]),
+  ]), [products])
+  const q = searchKey(search)
+
   const filtered = products.filter(p => {
-    // Skip catalogue placeholders with no variants — nothing to buy, no price.
-    if (!(p.items ?? []).length) return false
+    // Landing-page catalog PREVIEW stays buyable-only so it doesn't flood the
+    // home page with hundreds of "coming soon" cards. The full browse (with
+    // coming-soon items) lives on CategoryPage; every category still gets a chip.
+    // A search, though, must find them too (shown with the "Qo'shilmoqda" badge).
+    if (!(p.items ?? []).length && q === '') return false
     const matchCat = activeCatId === null || p.category?.id === activeCatId
-    const q = search.toLowerCase()
-    // Match the product's names AND its variant names — e.g. "seyf" is a variant
-    // of "Xavfsizlik tizimlari", so searching the product name alone missed it.
-    const haystack = [
-      p.name, p.name_uz, p.name_ru, p.desc,
-      ...(p.items ?? []).flatMap(it => [it.name, it.name_uz, it.name_ru, it.desc]),
-    ]
-    const matchSearch = q === '' || haystack.some(s => s?.toLowerCase().includes(q))
+    const matchSearch = matchesSearch(productKeys.get(p), q)
     return matchCat && matchSearch
   })
 
-  // Build the chips from the categories stocked products are ACTUALLY linked to
-  // (a newer /category/all set most products aren't attached to yet would show
-  // chips opening to an empty page). Fall back to /category/all if none carried one.
+  // Build the chips from every category a product is linked to (variantless
+  // "coming soon" products are shown too now, so any category with ANY product
+  // gets a navigable chip). Fall back to /category/all if none carried one.
   const catMap = new Map<number, Category>()
   products.forEach(p => {
     const c = p.category
-    if ((p.items?.length ?? 0) > 0 && c?.id != null && !catMap.has(c.id)) {
+    if (c?.id != null && !catMap.has(c.id)) {
       catMap.set(c.id, { id: c.id, name: c.name, name_uz: c.name_uz, name_ru: c.name_ru })
     }
   })
@@ -130,7 +136,7 @@ export default function ProductMarketplace() {
             {visibleCategories.map(c => (
               <button
                 key={c.id}
-                onClick={() => { setActiveCatId(prev => prev === c.id ? null : c.id); navigate(`/category/${c.id}`) }}
+                onClick={() => navigate(`/category/${c.id}`)}
                 className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all ${
                   activeCatId === c.id
                     ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
@@ -212,6 +218,11 @@ export default function ProductMarketplace() {
                       {getCat(p)}
                     </span>
                   )}
+                  {!(p.items ?? []).length && (
+                    <span className="absolute bottom-2 left-2 bg-slate-800/80 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-sm">
+                      {lang === 'uz' ? "Qo'shilmoqda" : 'Добавляется'}
+                    </span>
+                  )}
                 </div>
 
                 {/* Info */}
@@ -224,7 +235,7 @@ export default function ProductMarketplace() {
                   )}
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-xs text-primary font-semibold">
-                      {lang === 'uz' ? "Savatga qo'shish →" : "В корзину →"}
+                      {lang === 'uz' ? 'Batafsil →' : 'Подробнее →'}
                     </span>
                     <div className="w-7 h-7 rounded-full bg-primary/10 group-hover:bg-primary flex items-center justify-center transition-colors duration-200">
                       <svg className="w-3.5 h-3.5 text-primary group-hover:text-white transition-colors" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">

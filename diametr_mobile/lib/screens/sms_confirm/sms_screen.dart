@@ -2,14 +2,19 @@
 import 'package:stroymarket/export_files.dart';
 import 'package:stroymarket/manager/1_phone_manager.dart';
 
+import '../../bloc/1_send_sms/send_sms_bloc.dart';
+import '../../bloc/1_send_sms/send_sms_state.dart';
 import '../../bloc/2_verify/verify_bloc.dart';
 import '../../bloc/2_verify/verify_state.dart';
 import '../../services/loading/loading_service.dart';
 import '../../services/storage/storage_service.dart';
 
 class SmsScreen extends StatefulWidget {
-  const SmsScreen({super.key, required this.id});
+  const SmsScreen({super.key, required this.id, this.phone});
   final String? id;
+
+  /// Digits with the country code (e.g. 998901234567) — used to re-send.
+  final String? phone;
 
   @override
   State<SmsScreen> createState() => _SmsScreenState();
@@ -28,6 +33,10 @@ class _SmsScreenState extends State<SmsScreen>
   bool _canResend = false;
 
   bool _isSubmitting = false;
+
+  /// Id of the code being verified. A resend creates a new code (and makes the
+  /// old one invalid), so the screen must switch to the new id.
+  late String? _id = widget.id;
 
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
@@ -306,7 +315,7 @@ class _SmsScreenState extends State<SmsScreen>
                             setState(() => _isSubmitting = true);
                             await PhoneManager.verify(
                                 context,
-                                id: widget.id,
+                                id: _id,
                                 code: val);
                             if (mounted) setState(() => _isSubmitting = false);
                           },
@@ -364,9 +373,17 @@ class _SmsScreenState extends State<SmsScreen>
                           )
                         else
                           GestureDetector(
-                            onTap: () {
-                              _startTimer();
+                            onTap: () async {
                               smscontroller.clear();
+                              final phone = widget.phone;
+                              if (phone == null || phone.isEmpty) {
+                                // No number to re-send to: request a new code
+                                // from the login screen instead.
+                                Navigator.of(context).pop();
+                                return;
+                              }
+                              await PhoneManager.sendSms(context,
+                                  phone: phone);
                             },
                             child: Container(
                               padding: EdgeInsets.symmetric(
@@ -407,7 +424,7 @@ class _SmsScreenState extends State<SmsScreen>
                             setState(() => _isSubmitting = true);
                             await PhoneManager.verify(
                               context,
-                              id: widget.id,
+                              id: _id,
                               code: smscontroller.text,
                             );
                             if (mounted) setState(() => _isSubmitting = false);
@@ -464,6 +481,26 @@ class _SmsScreenState extends State<SmsScreen>
                     ),
                   ),
 
+                  BlocListener<SendSmsBloc, SendSmsState>(
+                    child: const SizedBox.shrink(),
+                    listener: (context, state) {
+                      if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
+                      if (state is SendSmsWaitingState) {
+                        loadingService.showLoading(context);
+                      } else if (state is SendSmsErrorState) {
+                        loadingService.closeLoading(context);
+                        AppToast.error(
+                          context,
+                          state.message ?? 'error_occurred'.tr(),
+                          title: 'send_failed'.tr(),
+                        );
+                      } else if (state is SendSmsSuccessState) {
+                        loadingService.closeLoading(context);
+                        setState(() => _id = state.data["id"]?.toString());
+                        _startTimer();
+                      }
+                    },
+                  ),
                   BlocListener<VerifyBloc, VerifyState>(
                     child: const SizedBox.shrink(),
                     listener: (context, state) async {
@@ -478,10 +515,18 @@ class _SmsScreenState extends State<SmsScreen>
                         );
                       } else if (state is VerifySuccessState) {
                         loadingService.closeLoading(context);
+                        final String token = state.token?.toString() ?? '';
+                        if (token.isEmpty || token == 'null') {
+                          // Never store "null" as a session: every request
+                          // would then 401 and bounce the user back here.
+                          AppToast.error(context, 'error_occurred'.tr(),
+                              title: 'not_confirmed'.tr());
+                          return;
+                        }
                         await Future.wait([
                           StorageService().write(
                               StorageService.token,
-                              state.token.toString()),
+                              token),
                           StorageService()
                               .write(StorageService.user, state.user),
                         ]);

@@ -1,7 +1,23 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
+import {
+  CATALOG_LIVE_STOCK_WHERE,
+  LIVE_STOCK_WHERE,
+  SOLD_ORDER_PRODUCT_WHERE,
+} from 'src/shop-product/stock.utils';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
+import {
+  SHOP_PUBLIC_ADMIN_SELECT,
+  SHOP_PUBLIC_SELECT,
+  toPublicShop,
+} from './shop-public.select';
 
 @Injectable()
 export class ShopService {
@@ -54,24 +70,51 @@ export class ShopService {
     return shop;
   }
 
-  async findAll(regions?: string, allStatus = false) {
+  /**
+   * `full` = every column plus stock totals (SUPER only: /shop/all-admin, or
+   * /shop/all with a SUPER token). Otherwise the PUBLIC shape: no billing or
+   * internal fields (balance, expired, auto_payment, inn, stock value).
+   */
+  async findAll(regions?: string, allStatus = false, full = false) {
     this.logger.log('findAll');
     const regionIds = regions
       ? regions.split(',').map(Number).filter(Boolean)
       : null;
+    const where: Prisma.ShopWhereInput = {
+      ...(allStatus
+        ? { work_status: { not: 'DELETED' } }
+        : { work_status: 'WORKING' }),
+      ...(regionIds && regionIds.length > 0
+        ? { region_id: { in: regionIds } }
+        : {}),
+    };
+
+    if (!full) {
+      const publicShops = await this.prisma.shop.findMany({
+        where,
+        select: {
+          ...SHOP_PUBLIC_SELECT,
+          region: { select: { id: true, name: true } },
+          _count: {
+            select: { products: { where: CATALOG_LIVE_STOCK_WHERE } },
+          },
+        },
+        orderBy: { id: 'desc' },
+      });
+      return publicShops.map(({ _count, ...shop }) => ({
+        ...shop,
+        product_count: _count.products,
+      }));
+    }
+
     const shops = await this.prisma.shop.findMany({
-      where: {
-        ...(allStatus
-          ? { work_status: { not: 'DELETED' } }
-          : { work_status: 'WORKING' }),
-        ...(regionIds && regionIds.length > 0
-          ? { region_id: { in: regionIds } }
-          : {}),
-      },
+      where,
       include: {
         region: { select: { id: true, name: true } },
         products: {
-          where: { work_status: 'WORKING' },
+          // Not filtered by shop status: /all-admin also lists blocked shops
+          // and their stock counts.
+          where: CATALOG_LIVE_STOCK_WHERE,
           select: { count: true, price: true },
         },
       },
@@ -113,12 +156,13 @@ export class ShopService {
           : {}),
         products: {
           some: {
-            work_status: 'WORKING',
-            product_item: { product_id: productId },
+            AND: [LIVE_STOCK_WHERE, { product_item: { product_id: productId } }],
           },
         },
       },
-      include: {
+      // PUBLIC: no billing/internal columns.
+      select: {
+        ...SHOP_PUBLIC_SELECT,
         region: { select: { id: true, name: true } },
       },
       orderBy: { id: 'desc' },
@@ -127,14 +171,36 @@ export class ShopService {
     return shops;
   }
 
-  async findOne(id: number) {
+  /**
+   * `full` (valid SUPER token) keeps every shop column and the owners' chat_id.
+   * The PUBLIC answer (site, mobile) drops balance, expired, auto_payment, inn
+   * and gives only the owner's id/fullname/phone/image (mobile shop, cart and
+   * order-status screens call the owner's phone).
+   */
+  async findOne(id: number, full = false) {
     this.logger.log('findOne');
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new NotFoundException('shop not found');
+    }
     const shop = await this.prisma.shop.findUnique({
       where: { id },
       include: {
-        admins: true,
+        // Never return the owner's password (the public answer is narrowed
+        // further below).
+        admins: {
+          select: {
+            ...SHOP_PUBLIC_ADMIN_SELECT,
+            chat_id: true,
+            shop_id: true,
+            role: true,
+            createdt: true,
+            updatedAt: true,
+          },
+        },
         products: {
-          where: { work_status: 'WORKING' },
+          // Empty for a blocked shop; never lists stock of archived catalogue
+          // products/variants.
+          where: LIVE_STOCK_WHERE,
           include: {
             product_item: {
               include: {
@@ -161,7 +227,8 @@ export class ShopService {
               },
             },
             order_products: {
-              where: { order: { status: 'FINISHED' } },
+              // FINISHED and CONFIRMED orders both took the stock: both are sold.
+              where: SOLD_ORDER_PRODUCT_WHERE,
               select: { count: true, order: { select: { createdt: true } } },
             },
           },
@@ -209,11 +276,26 @@ export class ShopService {
       })
       .filter((p) => p.name != null || p.name_uz != null || p.name_ru != null);
 
-    return { ...shop, products };
+    if (full) return { ...shop, products };
+
+    const { admins, products: _stock, ...row } = shop;
+    return {
+      ...toPublicShop(row),
+      admins: admins.map(({ id, fullname, phone, image }) => ({
+        id,
+        fullname,
+        phone,
+        image,
+      })),
+      products,
+    };
   }
 
   async update(id: number, data: UpdateShopDto) {
     this.logger.log('update');
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new NotFoundException('shop not found');
+    }
     const shop = await this.prisma.shop.findUnique({
       where: { id },
     });
@@ -230,14 +312,33 @@ export class ShopService {
       }
     }
 
+    // free_trial_months only applies on create (not a column); `expired` is
+    // the dashboard's subscription bonus / cancel. work_status is left as is:
+    // unblocking stays an explicit admin action (the dashboard warns).
+    const { free_trial_months: _trial, expired, ...fields } = data;
+    let expiredDate: Date | undefined;
+    if (expired !== undefined) {
+      expiredDate = new Date(expired);
+      const year = expiredDate.getUTCFullYear();
+      if (isNaN(expiredDate.getTime()) || year < 2020 || year > 2100) {
+        throw new BadRequestException("Obuna tugash sanasi noto'g'ri");
+      }
+    }
+
     return await this.prisma.shop.update({
       where: { id },
-      data,
+      data: {
+        ...fields,
+        ...(expiredDate ? { expired: expiredDate } : {}),
+      },
     });
   }
 
   async remove(id: number) {
     this.logger.log('remove');
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new NotFoundException('shop not found');
+    }
     const shop = await this.prisma.shop.findUnique({
       where: { id },
     });
@@ -245,9 +346,33 @@ export class ShopService {
       throw new NotFoundException('shop not found');
     }
 
-    return await this.prisma.shop.delete({
-      where: { id },
-    });
+    // Deleting the shop would leave its stock WORKING with shop_id NULL
+    // (a buyable offer that can never be checked out). Archive it in the same
+    // transaction, so a failed delete leaves everything as it was.
+    try {
+      const [, deleted] = await this.prisma.$transaction([
+        this.prisma.shopProduct.updateMany({
+          where: { shop_id: id, work_status: { not: 'DELETED' } },
+          data: { work_status: 'DELETED' },
+        }),
+        this.prisma.shop.delete({
+          where: { id },
+        }),
+      ]);
+      return deleted;
+    } catch (e) {
+      // shop_balance_log keeps the shop's payment history and may not lose
+      // its shop (FK RESTRICT). Say so instead of a 500.
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2003'
+      ) {
+        throw new BadRequestException(
+          "Do'konni o'chirib bo'lmaydi: unda to'lov tarixi bor. Uning o'rniga do'konni bloklang",
+        );
+      }
+      throw e;
+    }
   }
 
   async toggleBlock(id: number) {

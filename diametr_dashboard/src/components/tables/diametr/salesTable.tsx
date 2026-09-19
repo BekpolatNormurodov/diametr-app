@@ -8,21 +8,28 @@ import { useEffect, useState } from "react";
 import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
+import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 
 export interface SaleItemProps {
   id: number;
   status?: string;
   amount?: number;
   address?: string;
+  /** Not an Order column; kept only as a fallback. The customer's phone comes from `user`. */
   phone?: string;
   payment_type?: string;
   shop?: { id: number; name?: string };
-  user?: { id: number; phone?: string; fullname?: string };
+  // GET /order/all includes the customer as user: { id, fullname, phone } (null for a deleted user).
+  user?: { id: number; phone?: string | null; fullname?: string | null } | null;
   createdt?: string;
   createdAt?: string;
 }
 
 const showOptions = [{ value: "10", label: "10" }, { value: "20", label: "20" }, { value: "50", label: "50" }];
+
+// The customer's name and phone (either may be empty for a fresh SMS account).
+const customerName = (o: SaleItemProps) => o.user?.fullname?.trim() || "";
+const customerPhone = (o: SaleItemProps) => o.user?.phone || o.phone || "";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   STARTED:   { label: "Yangi",         className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
@@ -42,7 +49,8 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
 
-  const filteredData = search.trim() === "" ? tableData : tableData.filter((s) => { const q = search.toLowerCase(); return (s.address ?? "").toLowerCase().includes(q) || (s.phone ?? "").toLowerCase().includes(q) || (s.user?.fullname ?? "").toLowerCase().includes(q); });
+  const searchQueryKey = searchKey(search);
+  const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.address, customerPhone(s), customerName(s)]));
   const maxPage = Math.ceil(filteredData.length / +optionValue);
   const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
 
@@ -68,8 +76,8 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
 
   const handleExport = () => {
     const ws = XLSX.utils.json_to_sheet(tableData.map((o) => ({
-      ID: o.id, "Do'kon": o.shop?.name ?? "", Mijoz: o.user?.fullname ?? o.user?.phone ?? "",
-      Telefon: o.phone ?? o.user?.phone ?? "", Manzil: o.address ?? "",
+      ID: o.id, "Do'kon": o.shop?.name ?? "", Mijoz: customerName(o) || customerPhone(o),
+      Telefon: customerPhone(o), Manzil: o.address ?? "",
       Summa: (o.amount ?? 0).toLocaleString(),
       Status: statusConfig[o.status ?? ""]?.label ?? o.status ?? "",
       Sana: Moment(o.createdt ?? o.createdAt).format("DD.MM.YYYY HH:mm"),
@@ -105,7 +113,12 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
                 <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                   <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(currentPage - 1) * +optionValue + idx + 1}</TableCell>
                   <TableCell className="px-5 py-4 font-medium text-gray-800 dark:text-white">{item.shop?.name ?? "-"}</TableCell>
-                  <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{item.user?.fullname ?? item.user?.phone ?? item.phone ?? "-"}</TableCell>
+                  <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                    {customerName(item) || customerPhone(item) || "-"}
+                    {customerName(item) && customerPhone(item) && (
+                      <div className="text-xs text-gray-400 dark:text-gray-500">{customerPhone(item)}</div>
+                    )}
+                  </TableCell>
                   <TableCell className="px-5 py-4 text-sm font-semibold text-green-600 dark:text-green-400">
                     {item.amount != null ? `${item.amount.toLocaleString()} so'm` : "-"}
                   </TableCell>
@@ -115,12 +128,11 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
                   <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{Moment(item.createdt ?? item.createdAt).format("DD.MM.YYYY HH:mm")}</TableCell>
                   <TableCell className="px-5 py-4">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {/* 'Tasdiqlash' (confirm) removed: the backend confirm()
-                          is the customer-side ack of an already-FINISHED order
-                          and is [USER]-guarded — calling it from the SUPER
-                          dashboard 401'd and logged the admin out. Admins move
-                          STARTED → finish() directly (button below). */}
-                      {(item.status === "STARTED" || item.status === "CONFIRMED") && (
+                      {/* Backend flow: STARTED → finish() → FINISHED (stock taken)
+                          → confirm() → CONFIRMED (delivered). finish() rejects
+                          every status except STARTED with a 400, so the button
+                          is offered for STARTED orders only. */}
+                      {item.status === "STARTED" && (
                         <button
                           disabled={busy}
                           onClick={() => doAction(item.id, "finish")}

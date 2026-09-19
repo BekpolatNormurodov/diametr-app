@@ -9,8 +9,11 @@ class ShopAllBloc extends Cubit<ShopAllState> {
   DioClient dioClient = DioClient();
   ShopAllBloc() : super(ShopAllIntialState());
 
-  Future getAll(BuildContext context) async {
-    emit(ShopAllWaitingState());
+  /// [silent] is a background refresh (app resume): keep what is on screen
+  /// instead of flashing the skeleton, and keep it if the refresh fails.
+  Future getAll(BuildContext context, {bool silent = false}) async {
+    final bool keep = silent && state is ShopAllSuccessState;
+    if (!keep) emit(ShopAllWaitingState());
     String? token = await StorageService().read(
       StorageService.token,
     );
@@ -33,7 +36,7 @@ class ShopAllBloc extends Cubit<ShopAllState> {
           data: response.data,
         ),
       );
-    } else {
+    } else if (!keep) {
       emit(
         ShopAllErrorState(
             title: response.data["name"], message: response.data["message"]),

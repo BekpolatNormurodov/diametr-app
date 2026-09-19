@@ -9,11 +9,17 @@ import '../export_files.dart';
 
 class ShopManager {
   static Future<void> getAll(
-    BuildContext context,
-  ) async {
+    BuildContext context, {
+    bool silent = false,
+  }) async {
     try {
-      await BlocProvider.of<ShopAllBloc>(context).getAll(context);
+      await BlocProvider.of<ShopAllBloc>(context)
+          .getAll(context, silent: silent);
     } catch (e) {
+      if (silent &&
+          BlocProvider.of<ShopAllBloc>(context).state is ShopAllSuccessState) {
+        return;
+      }
       final msg = e is DioExceptions ? e.message : e.toString();
       BlocProvider.of<ShopAllBloc>(context).emit(ShopAllErrorState(message: msg, title: msg));
     }

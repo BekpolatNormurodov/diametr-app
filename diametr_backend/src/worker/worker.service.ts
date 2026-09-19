@@ -7,7 +7,12 @@ import {
 
 import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
 import { generatePassword } from 'src/_utils/number.gen';
-import { hashPassword } from 'src/_utils/password';
+import { assertPanelPhoneFree } from 'src/_utils/panel-phone';
+import {
+  hashPassword,
+  withoutPassword,
+  WORKER_PUBLIC_SELECT,
+} from 'src/_utils/password';
 import { CreateWorkerDto } from './dto/create-worker.dto';
 import { UpdateWorkerDto } from './dto/update-worker.dto';
 
@@ -17,12 +22,9 @@ export class WorkerService {
   private logger = new Logger('Worker service');
   async create(data: CreateWorkerDto) {
     this.logger.log('create');
-    let worker = await this.prisma.worker.findUnique({
-      where: { phone: data.phone },
-    });
-    if (worker) {
-      throw new BadRequestException('This phone is used');
-    }
+    // Unique across admin/super/worker: a worker row with a shop owner's phone
+    // would otherwise take over that owner's panel login.
+    await assertPanelPhoneFree(this.prisma, data.phone);
 
     let service = await this.prisma.service.findUnique({
       where: {
@@ -38,7 +40,7 @@ export class WorkerService {
     // from the panel (see auth.service for the rationale).
     data.password = generatePassword({ length: 8 });
 
-    worker = await this.prisma.worker.create({
+    const worker = await this.prisma.worker.create({
       data: data,
     });
     return worker;
@@ -46,8 +48,10 @@ export class WorkerService {
 
   async findAll() {
     this.logger.log('findAll');
+    // Public route (mobile + panels): never expose passwords.
     const workers = await this.prisma.worker.findMany({
       orderBy: { id: 'desc' },
+      select: WORKER_PUBLIC_SELECT,
     });
     return workers;
   }
@@ -55,6 +59,7 @@ export class WorkerService {
     this.logger.log('findOne');
     let worker = await this.prisma.worker.findUnique({
       where: { id },
+      select: WORKER_PUBLIC_SELECT,
     });
     if (!worker) {
       throw new NotFoundException('worker not found');
@@ -65,14 +70,23 @@ export class WorkerService {
 
   async update(id: number, data: UpdateWorkerDto) {
     this.logger.log('update');
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new NotFoundException('worker not found');
+    }
     let worker = await this.prisma.worker.findUnique({
       where: { id },
     });
     if (!worker) {
       throw new NotFoundException('worker not found');
     }
+    if (data.phone !== undefined && data.phone !== worker.phone) {
+      await assertPanelPhoneFree(this.prisma, data.phone, {
+        table: 'worker',
+        id,
+      });
+    }
     if (data.service_id) {
-      let service = await this.prisma.shop.findUnique({
+      let service = await this.prisma.service.findUnique({
         where: {
           id: data.service_id,
         },
@@ -82,10 +96,12 @@ export class WorkerService {
       }
     }
 
-    return await this.prisma.worker.update({
-      where: { id },
-      data,
-    });
+    return withoutPassword(
+      await this.prisma.worker.update({
+        where: { id },
+        data,
+      }),
+    );
   }
 
   async remove(id: number) {
@@ -97,8 +113,10 @@ export class WorkerService {
       throw new NotFoundException('worker not found');
     }
 
-    return await this.prisma.worker.delete({
-      where: { id },
-    });
+    return withoutPassword(
+      await this.prisma.worker.delete({
+        where: { id },
+      }),
+    );
   }
 }

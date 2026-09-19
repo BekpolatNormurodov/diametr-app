@@ -23,9 +23,14 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Express } from 'express';
 import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { writeFileSync } from 'fs';
-import axios from 'axios';
+import { join } from 'path';
+import {
+  IMAGE_MAX_BYTES,
+  downloadImageFromUrl,
+  imageFileFilter,
+  imageFileName,
+  uploadedImageName,
+} from 'src/_utils/image-upload';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -38,17 +43,17 @@ export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
   @Post()
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Mahsulot yaratish (ADMIN/SUPER)' })
+  @ApiOperation({ summary: 'Mahsulot yaratish (SUPER)' })
   create(@Body() data: CreateProductDto) {
     return this.productService.create(data);
   }
 
   @Post('/upload-image')
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Mahsulot rasmi yuklash (ADMIN/SUPER)' })
+  @ApiOperation({ summary: 'Mahsulot rasmi yuklash (SUPER)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -60,43 +65,25 @@ export class ProductController {
     FileInterceptor('image', {
       storage: diskStorage({
         destination: join(process.cwd(), 'public', 'products'),
-        filename: (_req, file, cb) => {
-          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, unique + extname(file.originalname));
-        },
+        filename: imageFileName,
       }),
-      fileFilter: (_req, file, cb) => {
-        const allowed = /\.(jpg|jpeg|png|webp|gif|svg|bmp)$/i;
-        cb(null, allowed.test(file.originalname));
-      },
-      limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+      fileFilter: imageFileFilter,
+      limits: { fileSize: IMAGE_MAX_BYTES, files: 1 },
     }),
   )
   uploadImage(@UploadedFile() file: Express.Multer.File) {
-    return { image: file.filename };
+    return { image: uploadedImageName(file) };
   }
 
   @Post('/upload-image-url')
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: "URL dan rasm yuklab saqlab qo'yish (ADMIN/SUPER)" })
+  @ApiOperation({ summary: "URL dan rasm yuklab saqlab qo'yish (SUPER)" })
   @ApiBody({
     schema: { type: 'object', properties: { url: { type: 'string' } } },
   })
   async uploadImageFromUrl(@Body() body: { url: string }) {
-    const response = await axios.get(body.url, {
-      responseType: 'arraybuffer',
-      maxContentLength: 15 * 1024 * 1024,
-      maxBodyLength: 15 * 1024 * 1024,
-      timeout: 15000,
-    });
-    const filename =
-      Date.now() + '-' + Math.round(Math.random() * 1e9) + '.jpg';
-    writeFileSync(
-      join(process.cwd(), 'public', 'products', filename),
-      Buffer.from(response.data),
-    );
-    return { image: filename };
+    return { image: await downloadImageFromUrl(body?.url, 'products') };
   }
 
   @Get('/all')
@@ -128,18 +115,18 @@ export class ProductController {
   }
 
   @Put(':id')
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Mahsulotni tahrirlash (ADMIN/SUPER)' })
+  @ApiOperation({ summary: 'Mahsulotni tahrirlash (SUPER)' })
   @ApiParam({ name: 'id', type: Number })
   update(@Param('id') id: string, @Body() data: UpdateProductDto) {
     return this.productService.update(+id, data);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: "Mahsulotni o'chirish (ADMIN/SUPER)" })
+  @ApiOperation({ summary: "Mahsulotni o'chirish (SUPER)" })
   @ApiParam({ name: 'id', type: Number })
   remove(@Param('id') id: string) {
     return this.productService.remove(+id);

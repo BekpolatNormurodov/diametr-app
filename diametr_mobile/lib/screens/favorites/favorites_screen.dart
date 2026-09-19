@@ -30,6 +30,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     _tabCtrl = TabController(length: 2, vsync: this);
     _tabCtrl.addListener(() => setState(() {}));
     _loadFavs();
+    // The lists were loaded when Home opened (possibly long ago): refresh
+    // them, keeping what is already on screen until the new data arrives.
+    ProductManager.getAll(context, silent: true);
+    ShopManager.getAll(context, silent: true);
   }
 
   void _loadFavs() {
@@ -154,10 +158,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       builder: (context, state) {
         if (state is ProductAllWaitingState) return _shimmerGrid(context);
         if (state is ProductAllSuccessState) {
+          // Show every favorited product, including variantless ones (marked
+          // "Turlari qo'shilmoqda" on the card) — a user who saved it should still see it.
           final all = (state.data ?? [])
-              .where((e) =>
-                  _favProductIds.contains(e["id"]) &&
-                  ((e["items"] as List?)?.isNotEmpty ?? false))
+              .where((e) => _favProductIds.contains(e["id"]))
               .toList();
 
           if (all.isEmpty) {
@@ -349,6 +353,7 @@ class _FavProductCard extends StatelessWidget {
         ?.toString() ??
         '';
     final dynamic price = item["price"];
+    final bool hasVariant = (item["items"] as List?)?.isNotEmpty ?? false;
 
     return GestureDetector(
       onTap: () => Navigator.of(context).pushNamed('/productScreen',
@@ -448,6 +453,26 @@ class _FavProductCard extends StatelessWidget {
                           fontSize: 12.sp,
                           fontWeight: FontWeight.w700),
                       maxLines: 1,
+                    ),
+                  ] else if (!hasVariant) ...[
+                    SizedBox(height: 4.h),
+                    Row(
+                      children: [
+                        Icon(Iconsax.clock,
+                            size: 11.sp, color: const Color(0xFF8A94A6)),
+                        SizedBox(width: 3.w),
+                        Expanded(
+                          child: Text(
+                            'coming_soon'.tr(),
+                            style: TextStyle(
+                                color: const Color(0xFF8A94A6),
+                                fontSize: 11.sp,
+                                fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ],

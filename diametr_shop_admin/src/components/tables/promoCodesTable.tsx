@@ -3,7 +3,7 @@ import TableActions from "./TableActions";
 import TableToolbar from "./TableToolbar";
 import Button from "../ui/button/Button";
 import { PlusIcon, DownloadIcon } from "../../icons";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useModal } from "../../hooks/useModal";
 import Input from "../form/input/InputField";
 import Label from "../form/Label";
@@ -14,6 +14,8 @@ import { toast } from "../ui/toast";
 import { formatMoney } from "../../service/formatters/money.format";
 import Moment from "moment";
 import * as XLSX from "xlsx";
+import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
+import { apiMessage } from "../../utils/apiMessage";
 
 export interface PromoCodeItemProps {
   id: number;
@@ -62,9 +64,10 @@ export default function PromoCodesTable({
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
 
+  const searchIndex = useMemo(() => buildSearchIndex(tableData, (p) => [p.code]), [tableData]);
   const filteredData = search.trim() === ""
     ? tableData
-    : tableData.filter((p) => p.code.toLowerCase().includes(search.toLowerCase()));
+    : filterSearchIndex(searchIndex, search);
 
   const maxPage = Math.ceil(filteredData.length / +optionValue);
   const startIndex = (currentPage - 1) * +optionValue;
@@ -94,6 +97,11 @@ export default function PromoCodesTable({
       toast.error("Kod va chegirma miqdorini kiriting");
       return;
     }
+    // Same rule as the backend: a percentage discount cannot exceed 100%.
+    if (form.discount_type === "PERCENT" && Number(form.discount_value) > 100) {
+      toast.error("Foizli chegirma 100% dan oshmasligi kerak");
+      return;
+    }
     setSaving(true);
     try {
       const payload: any = {
@@ -115,7 +123,7 @@ export default function PromoCodesTable({
       onRefetch();
       closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(apiMessage(e));
     } finally {
       setSaving(false);
     }
@@ -126,8 +134,9 @@ export default function PromoCodesTable({
       await axiosClient.delete(`/promo-code/${id}`);
       toast.success("O'chirildi");
       onRefetch();
-    } catch {
-      toast.error("Xatolik yuz berdi");
+    } catch (e) {
+      // e.g. 400 for a code already used in orders — the server explains it in Uzbek.
+      toast.error(apiMessage(e));
     }
   };
 
@@ -136,8 +145,8 @@ export default function PromoCodesTable({
       await axiosClient.patch(`/promo-code/${item.id}`, { is_active: !item.is_active });
       toast.success(item.is_active ? "O'chirildi" : "Yoqildi");
       onRefetch();
-    } catch {
-      toast.error("Xatolik");
+    } catch (e) {
+      toast.error(apiMessage(e, "Xatolik"));
     }
   };
 

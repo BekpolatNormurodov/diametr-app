@@ -3,7 +3,7 @@ import TableToolbar from "./TableToolbar";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "../../ui/table";
 import Moment from "moment";
 import Button from "../../ui/button/Button";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useModal } from "../../../hooks/useModal";
 import Input from "../../form/input/InputField";
 import Label from "../../form/Label";
@@ -15,6 +15,7 @@ import * as XLSX from "xlsx";
 import ImageField, { ImageFieldResult } from "../../common/ImageField";
 import ColorPalette from "../../common/ColorPalette";
 import TranslateButton from "../../common/TranslateButton";
+import { cachedSearchKey, searchKey } from "../../../utils/searchKey";
 
 /* ─── Types ────────────────────────────────────────────────── */
 export interface VariantProps {
@@ -26,6 +27,8 @@ export interface VariantProps {
   size?: string;
   value?: number | string | null;
   unit_type?: { id: number; name: string; name_uz?: string | null; name_ru?: string | null; symbol: string } | null;
+  // Live stock rows only (backend LIVE_STOCK_WHERE: row, variant and product
+  // WORKING, in an existing WORKING shop) — the offers customers can buy.
   _count?: { shop_products?: number };
   createdt?: string;
   createdAt?: string;
@@ -51,6 +54,19 @@ export interface ProductItemProps {
 const emptyProductForm = { name_uz: "", name_ru: "", category_id: "", unit_type_id: "" };
 const emptyVariantForm = { name: "", desc: "", color: "", size: "", value: "", size_x: "", size_y: "", size_z: "" };
 
+const variantsOf = (p: ProductItemProps): VariantProps[] => p.items ?? p.product_items ?? [];
+const categoryIdOf = (p: ProductItemProps): string =>
+  p.category?.id ? String(p.category.id) : (p.categoryId ? String(p.categoryId) : "");
+const productLabel = (p: ProductItemProps) => p.name_uz ?? p.name ?? `#${p.id}`;
+// One-click default variant: lets shops stock a product that has no real variants yet.
+const defaultVariantPayload = (p: ProductItemProps) => ({
+  name: "Standart",
+  product_id: p.id,
+  unit_type_id: p.unit_type?.id ?? p.unit_type_id ?? undefined,
+});
+// ProductItem.value is Decimal(10,3)
+const MAX_VARIANT_VALUE = 9_999_999;
+
 export default function ProductsTable({
   data,
   onRefetch,
@@ -59,6 +75,7 @@ export default function ProductsTable({
   autoExpandId,
   onAutoExpandHandled,
   onCategoryFilterChange,
+  onOptionsRefresh,
 }: {
   data: ProductItemProps[];
   onRefetch?: () => void;
@@ -67,6 +84,8 @@ export default function ProductsTable({
   autoExpandId?: number | null;
   onAutoExpandHandled?: () => void;
   onCategoryFilterChange?: (categoryId: string) => void;
+  /** Re-fetch category / unit type option lists (called when the edit modal opens). */
+  onOptionsRefresh?: () => void;
 }) {
   const [tableData, setTableData] = useState(data);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -91,7 +110,20 @@ export default function ProductsTable({
   const [varImgChanged, setVarImgChanged] = useState(false);
 
   /* variant delete confirm */
-  const [variantToDelete, setVariantToDelete] = useState<VariantProps | null>(null);
+  const [variantToDelete, setVariantToDelete] = useState<{ v: VariantProps; isLast: boolean } | null>(null);
+
+  /* duplicate-name confirm (product edit) */
+  const [dupConfirm, setDupConfirm] = useState<string | null>(null);
+
+  /* default ("Standart") variant — single and bulk */
+  const [defaultAddingId, setDefaultAddingId] = useState<number | null>(null);
+  const [defaultAddedIds, setDefaultAddedIds] = useState<Set<number>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState<ProductItemProps[] | null>(null);
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
+  const bulkCancelRef = useRef(false);
+  // Synchronous guards: state updates land only after re-render, a ref blocks a second click immediately.
+  const defaultBusyRef = useRef(false);
+  const latestDataRef = useRef<ProductItemProps[]>(data);
 
   /* table state */
   const [optionValue, setOptionValue] = useState("20");
@@ -99,48 +131,87 @@ export default function ProductsTable({
   const [currentPage, setCurrentPage] = useState(1);
   const [categoryFilter, setCategoryFilterState] = useState<string>(""); // "" = hammasi
   const setCategoryFilter = (v: string) => { setCategoryFilterState(v); onCategoryFilterChange?.(v); };
+  const [onlyVariantless, setOnlyVariantless] = useState(false);
   const [groupByCategory, setGroupByCategory] = useState(false);
   const staticUrl = import.meta.env.VITE_STATIC_PATH ?? "";
 
-  useEffect(() => { setTableData(data); }, [data]);
-  useEffect(() => { setCurrentPage(1); }, [optionValue, categoryFilter, groupByCategory]);
+  const defaultAddedRef = useRef(defaultAddedIds);
+  latestDataRef.current = tableData;
+  defaultAddedRef.current = defaultAddedIds;
 
-  // Auto-expand newly created product
   useEffect(() => {
-    if (autoExpandId && data.some(p => p.id === autoExpandId)) {
-      setExpandedId(autoExpandId);
-      onAutoExpandHandled?.();
-    }
+    setTableData(data);
+    // Forget "just added a default variant" marks once the server list shows the variant.
+    setDefaultAddedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set(Array.from(prev).filter((id) => {
+        const p = data.find((x) => x.id === id);
+        return !!p && variantsOf(p).length === 0;
+      }));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [data]);
+  useEffect(() => { setCurrentPage(1); }, [optionValue, categoryFilter, groupByCategory, onlyVariantless]);
+  // Stop a running bulk job if the page is left.
+  useEffect(() => () => { bulkCancelRef.current = true; }, []);
+
+  // Newly created product: make sure its row is visible, expand it and open the variant modal.
+  useEffect(() => {
+    if (!autoExpandId) return;
+    const created = data.find(p => p.id === autoExpandId);
+    if (!created) return;
+    setSearch("");
+    if (categoryFilter && categoryFilter !== categoryIdOf(created)) setCategoryFilter("");
+    setGroupByCategory(false);
+    setCurrentPage(1);
+    setExpandedId(created.id);
+    startAddVariant(created.id, created);
+    onAutoExpandHandled?.();
   }, [autoExpandId, data]);
 
   // Kategoriya bo'yicha mahsulotlar soni (chip ko'rsatish uchun)
   const categoryCounts = (() => {
     const m = new Map<string, number>();
     tableData.forEach((p) => {
-      const id = p.category?.id ? String(p.category.id) : (p.categoryId ? String(p.categoryId) : "");
+      const id = categoryIdOf(p);
       if (id) m.set(id, (m.get(id) ?? 0) + 1);
     });
     return m;
   })();
+  const variantlessCount = tableData.filter((p) => variantsOf(p).length === 0).length;
+
+  // Search keys per product (Latin/Cyrillic-insensitive, see utils/searchKey), built once per data
+  // change rather than on every keystroke: names, category name and variant names.
+  const searchKeysById = useMemo(() => {
+    const m = new Map<number, string[]>();
+    tableData.forEach((p) => {
+      m.set(p.id, [
+        p.name,
+        p.name_uz,
+        p.name_ru,
+        p.category?.name_uz,
+        ...variantsOf(p).map((v) => v.name),
+      ].map(cachedSearchKey).filter((k) => k !== ""));
+    });
+    return m;
+  }, [tableData]);
+  const searchQueryKey = searchKey(search);
 
   const filteredData = tableData.filter((s) => {
+    // Variantsiz filter
+    if (onlyVariantless && variantsOf(s).length > 0) return false;
     // Kategoriya filter
     if (categoryFilter) {
-      const cid = s.category?.id ? String(s.category.id) : (s.categoryId ? String(s.categoryId) : "");
-      if (cid !== categoryFilter) return false;
+      if (categoryIdOf(s) !== categoryFilter) return false;
     }
     // Search filter
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return (
-        (s.name ?? "").toLowerCase().includes(q) ||
-        (s.name_uz ?? "").toLowerCase().includes(q) ||
-        (s.name_ru ?? "").toLowerCase().includes(q) ||
-        (s.category?.name_uz ?? "").toLowerCase().includes(q)
-      );
+    if (searchQueryKey) {
+      return (searchKeysById.get(s.id) ?? []).some((k) => k.includes(searchQueryKey));
     }
     return true;
   });
+  // Bulk "Standart variant" acts on exactly what the current filters show.
+  const bulkTargets = filteredData.filter((p) => variantsOf(p).length === 0 && !defaultAddedIds.has(p.id));
   // Guruhlash yoqilganda: butun filteredData bo'yicha guruhlaymiz, pagination o'chadi
   const maxPage = groupByCategory
     ? 1
@@ -148,6 +219,8 @@ export default function ProductsTable({
   const currentItems = groupByCategory
     ? filteredData
     : filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
+  // Rows can leave the active filter (e.g. "Variantsiz" after a variant is added) — never stay on an empty page past the end.
+  useEffect(() => { if (currentPage > maxPage) setCurrentPage(maxPage); }, [currentPage, maxPage]);
 
   // Group by category: filteredData'ning hammasini kategoriya bo'yicha guruhlash
   const groupedItems = (() => {
@@ -190,15 +263,47 @@ export default function ProductsTable({
     setPForm({
       name_uz: item.name_uz ?? item.name ?? "",
       name_ru: item.name_ru ?? "",
-      category_id: item.category?.id ? String(item.category.id) : (item.categoryId ? String(item.categoryId) : ""),
+      category_id: categoryIdOf(item),
       unit_type_id: item.unit_type?.id ? String(item.unit_type.id) : (item.unit_type_id ? String(item.unit_type_id) : ""),
     });
     pImgRef.current = null;
     pImgKey.current++;
+    onOptionsRefresh?.();
     openEdit();
   };
 
-  const saveProduct = async () => {
+  // The category list only has active categories; keep an archived current category selectable/visible.
+  const editCategoryOptions =
+    editItem?.category?.id && !categoryOptions.some((c) => c.value === String(editItem.category!.id))
+      ? [
+          ...categoryOptions,
+          { value: String(editItem.category.id), label: `${editItem.category.name_uz ?? editItem.category.name ?? `#${editItem.category.id}`} (arxivda)` },
+        ]
+      : categoryOptions;
+
+  const saveProduct = async (skipDuplicateCheck = false) => {
+    const nameUz = pForm.name_uz.trim();
+    if (nameUz.length < 2) {
+      toast.error("Mahsulot nomini kiriting (kamida 2 ta belgi)");
+      return;
+    }
+    if (editItem && !skipDuplicateCheck) {
+      // Compare by search key so Latin/Cyrillic spellings of one name count as duplicates.
+      const key = searchKey(nameUz);
+      const nameChanged = key !== searchKey(editItem.name_uz ?? editItem.name ?? "");
+      const categoryChanged = pForm.category_id !== categoryIdOf(editItem);
+      if (nameChanged || categoryChanged) {
+        const dup = tableData.find((p) =>
+          p.id !== editItem.id &&
+          categoryIdOf(p) === pForm.category_id &&
+          searchKey(p.name_uz ?? p.name ?? "") === key
+        );
+        if (dup) {
+          setDupConfirm(`Bu kategoriyada "${productLabel(dup)}" nomli mahsulot allaqachon bor (#${dup.id}). Baribir saqlansinmi?`);
+          return;
+        }
+      }
+    }
     setPSaving(true);
     try {
       let imageFilename: string | undefined;
@@ -214,7 +319,7 @@ export default function ProductsTable({
         const res = await axiosClient.post("/product/upload-image-url", { url: imgResult.url });
         imageFilename = res.data?.data?.image ?? res.data?.image ?? imgResult.url;
       }
-      const payload: any = { name_uz: pForm.name_uz, name_ru: pForm.name_ru };
+      const payload: any = { name_uz: nameUz, name_ru: pForm.name_ru.trim() || null };
       if (pForm.category_id) payload.category_id = Number(pForm.category_id);
       if (pForm.unit_type_id) payload.unit_type_id = Number(pForm.unit_type_id);
       else payload.unit_type_id = null;
@@ -237,16 +342,93 @@ export default function ProductsTable({
       await axiosClient.delete(`/product/${id}`);
       toast.success("Mahsulot o'chirildi");
       onRefetch?.();
-    } catch {
-      toast.error("Xatolik yuz berdi");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
     }
   };
 
+  // Backend archives the product together with its variants and all shop stock.
+  const productDeleteDesc = (item: ProductItemProps) => {
+    const variants = variantsOf(item);
+    if (variants.length === 0) {
+      return "Mahsulot o'chiriladi va mijozlarga boshqa ko'rinmaydi. Bu amalni qaytarib bo'lmaydi.";
+    }
+    // `stock` counts live offers only; stock of blocked shops is archived too but not counted.
+    const stock = variants.reduce((sum, v) => sum + (v._count?.shop_products ?? 0), 0);
+    return `Mahsulot bilan birga uning ${variants.length} ta varianti va do'konlardagi barcha zaxiralari ham o'chiriladi${stock > 0 ? ` (hozir ${stock} ta sotuvda)` : ""}. Mijozlar uni endi ko'rmaydi va buyurtma bera olmaydi. Bu amalni qaytarib bo'lmaydi.`;
+  };
+
+  /* ─── Default ("Standart") variant ────────────────────── */
+  const markDefaultAdded = (productId: number) => {
+    defaultAddedRef.current = new Set(defaultAddedRef.current).add(productId);
+    setDefaultAddedIds((prev) => new Set(prev).add(productId));
+  };
+
+  const addDefaultVariant = async (item: ProductItemProps) => {
+    if (defaultBusyRef.current || defaultAddedRef.current.has(item.id) || variantsOf(item).length > 0) return;
+    defaultBusyRef.current = true;
+    setDefaultAddingId(item.id);
+    try {
+      await axiosClient.post("/product-item", defaultVariantPayload(item));
+      markDefaultAdded(item.id);
+      toast.success(`"${productLabel(item)}" uchun standart variant qo'shildi`);
+      onRefetch?.();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+    } finally {
+      defaultBusyRef.current = false;
+      setDefaultAddingId(null);
+    }
+  };
+
+  // Sequential on purpose: one request at a time, visible counter, stop on 401.
+  const runBulkDefaultVariants = async (targets: ProductItemProps[]) => {
+    setBulkConfirm(null);
+    if (targets.length === 0 || defaultBusyRef.current) return;
+    defaultBusyRef.current = true;
+    bulkCancelRef.current = false;
+    let added = 0, failed = 0, skipped = 0;
+    setBulk({ done: 0, total: targets.length });
+    for (let i = 0; i < targets.length; i++) {
+      if (bulkCancelRef.current) break;
+      // Re-check against the latest list: someone may have added a variant meanwhile.
+      const current = latestDataRef.current.find((p) => p.id === targets[i].id);
+      if (!current || variantsOf(current).length > 0 || defaultAddedRef.current.has(current.id)) {
+        skipped++;
+      } else {
+        try {
+          await axiosClient.post("/product-item", defaultVariantPayload(current));
+          added++;
+          markDefaultAdded(current.id);
+        } catch (e: any) {
+          if (e?.response?.status === 401) {
+            // Session expired — the axios interceptor redirects to /signin.
+            defaultBusyRef.current = false;
+            setBulk(null);
+            return;
+          }
+          failed++;
+        }
+      }
+      setBulk({ done: i + 1, total: targets.length });
+    }
+    const stopped = bulkCancelRef.current;
+    defaultBusyRef.current = false;
+    setBulk(null);
+    const parts = [`${added} ta qo'shildi`];
+    if (failed) parts.push(`${failed} ta xatolik`);
+    if (skipped) parts.push(`${skipped} ta o'tkazib yuborildi`);
+    const msg = `Standart variant: ${parts.join(", ")}${stopped ? " (to'xtatildi)" : ""}`;
+    if (failed || stopped) toast.warning(msg);
+    else toast.success(msg);
+    onRefetch?.();
+  };
+
   /* ─── Variant CRUD ────────────────────────────────────── */
-  const startAddVariant = (productId: number) => {
+  const startAddVariant = (productId: number, productOverride?: ProductItemProps) => {
     setEditVariant(null);
     setVarProductId(productId);
-    const product = tableData.find(p => p.id === productId);
+    const product = productOverride ?? tableData.find(p => p.id === productId);
     setVarUnitSymbol(product?.unit_type?.symbol ?? "");
     setVForm({ ...emptyVariantForm });
     varImgRef.current = null;
@@ -285,10 +467,44 @@ export default function ProductsTable({
   };
 
   const saveVariant = async () => {
-    if (!vForm.name.trim()) {
+    const name = vForm.name.trim();
+    if (!name) {
       toast.error("Variant nomi kiritish shart");
       return;
     }
+    // Miqdor / o'lcham depend on the product's unit type (same rule as the inputs shown).
+    const isDims = varUnitSymbol === "x*y" || varUnitSymbol === "x*y*z";
+    const isValue = !!varUnitSymbol && varUnitSymbol !== "dona" && !isDims;
+    let size: string | null = null;
+    let value: number | null = null;
+    if (isDims) {
+      const dims = (varUnitSymbol === "x*y"
+        ? [vForm.size_x, vForm.size_y]
+        : [vForm.size_x, vForm.size_y, vForm.size_z]
+      ).map((d) => d.trim());
+      const filled = dims.filter(Boolean).length;
+      if (filled > 0 && filled < dims.length) {
+        toast.error("O'lchamlarni to'liq kiriting");
+        return;
+      }
+      if (filled === dims.length) {
+        const nums = dims.map(Number);
+        if (nums.some((n) => !Number.isFinite(n) || n <= 0)) {
+          toast.error("O'lchamlar musbat son bo'lishi kerak");
+          return;
+        }
+        size = nums.join("x");
+      }
+    } else if (isValue && vForm.value.trim()) {
+      const n = Number(vForm.value);
+      if (!Number.isFinite(n) || n <= 0 || n > MAX_VARIANT_VALUE) {
+        toast.error("Miqdor musbat son bo'lishi kerak");
+        return;
+      }
+      value = n;
+    }
+    const product = tableData.find((p) => p.id === varProductId) ?? data.find((p) => p.id === varProductId);
+    const unitTypeId = product?.unit_type?.id ?? product?.unit_type_id ?? null;
     setVSaving(true);
     try {
       let imageFilename: string | undefined;
@@ -304,19 +520,20 @@ export default function ProductsTable({
         const res = await axiosClient.post("/product-item/upload-image-url", { url: imgResult.url });
         imageFilename = res.data?.data?.image ?? res.data?.image ?? imgResult.url;
       }
-      const payload: any = {
-        name: vForm.name,
-        desc: vForm.desc || undefined,
-        color: vForm.color || undefined,
-        product_id: varProductId,
-      };
-      // Unit type ga qarab value/size yuborish
-      if (varUnitSymbol === "x*y" && vForm.size_x && vForm.size_y) {
-        payload.size = `${vForm.size_x}x${vForm.size_y}`;
-      } else if (varUnitSymbol === "x*y*z" && vForm.size_x && vForm.size_y && vForm.size_z) {
-        payload.size = `${vForm.size_x}x${vForm.size_y}x${vForm.size_z}`;
-      } else if (varUnitSymbol && varUnitSymbol !== "dona" && varUnitSymbol !== "x*y" && varUnitSymbol !== "x*y*z" && vForm.value) {
-        payload.value = Number(vForm.value);
+      const payload: any = { name, product_id: varProductId };
+      if (editVariant) {
+        // Edit: send every field the form owns, so a cleared field is cleared (null) on the server.
+        payload.desc = vForm.desc.trim() || null;
+        payload.color = vForm.color || null;
+        payload.unit_type_id = unitTypeId;
+        payload.value = value;
+        payload.size = size;
+      } else {
+        if (vForm.desc.trim()) payload.desc = vForm.desc.trim();
+        if (vForm.color) payload.color = vForm.color;
+        if (unitTypeId) payload.unit_type_id = unitTypeId;
+        if (value != null) payload.value = value;
+        if (size) payload.size = size;
       }
       if (imageFilename) payload.image = imageFilename;
 
@@ -336,13 +553,23 @@ export default function ProductsTable({
     }
   };
 
-  const requestDeleteVariant = (v: VariantProps) => {
-    setVariantToDelete(v);
+  const requestDeleteVariant = (v: VariantProps, product: ProductItemProps) => {
+    setVariantToDelete({ v, isLast: variantsOf(product).length === 1 });
+  };
+
+  // Backend archives the variant together with its shop stock.
+  const variantDeleteDesc = ({ v, isLast }: { v: VariantProps; isLast: boolean }) => {
+    const stock = v._count?.shop_products ?? 0;
+    const base = stock > 0
+      ? `Diqqat! Bu variant ${stock} ta do'konda sotuvda. O'chirilsa, do'konlardagi bu variant zaxiralari ham o'chiriladi va mijozlar uni buyurtma qila olmaydi.`
+      : "Variant o'chiriladi. Hozir hech bir do'kon uni sotmayapti.";
+    const last = isLast ? " Bu mahsulotning oxirgi varianti — o'chirilgach mahsulot mijozlarga \"Tovar turlari qo'shilmoqda\" deb ko'rinadi." : "";
+    return `${base}${last} Bu amalni qaytarib bo'lmaydi.`;
   };
 
   const confirmDeleteVariant = async () => {
     if (!variantToDelete) return;
-    const id = variantToDelete.id;
+    const id = variantToDelete.v.id;
     setVariantToDelete(null);
     try {
       await axiosClient.delete(`/product-item/${id}`);
@@ -401,7 +628,7 @@ export default function ProductsTable({
           }
         />
         {/* Kategoriya chip filter */}
-        {categoryOptions.length > 0 && (
+        {(categoryOptions.length > 0 || variantlessCount > 0 || onlyVariantless || bulk) && (
           <div className="px-4 py-2.5 flex flex-wrap gap-1.5 border-b border-gray-100 dark:border-white/[0.05] bg-gray-50/50 dark:bg-white/[0.01]">
             <button
               onClick={() => setCategoryFilter("")}
@@ -418,6 +645,27 @@ export default function ProductsTable({
                 {tableData.length}
               </span>
             </button>
+            {/* Variantsiz — mijozlar sotib ololmaydigan mahsulotlar (kategoriya filtri bilan birga ishlaydi) */}
+            <button
+              onClick={() => setOnlyVariantless((v) => !v)}
+              title="Faqat varianti yo'q mahsulotlar — ularni sotib bo'lmaydi"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                onlyVariantless
+                  ? "bg-amber-500 text-white border-amber-500 shadow-sm shadow-amber-500/25"
+                  : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50 dark:bg-white/[0.03] dark:text-amber-400 dark:border-amber-800/40 dark:hover:bg-amber-900/20"
+              }`}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+              Variantsiz
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                onlyVariantless ? "bg-white/25 text-white" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
+              }`}>
+                {variantlessCount}
+              </span>
+            </button>
+            {categoryOptions.length > 0 && (
+              <span className="self-center w-px h-4 mx-0.5 bg-gray-200 dark:bg-white/[0.08]" />
+            )}
             {categoryOptions.map((c) => {
               const count = categoryCounts.get(c.value) ?? 0;
               const active = categoryFilter === c.value;
@@ -442,6 +690,30 @@ export default function ProductsTable({
                 </button>
               );
             })}
+            {bulk ? (
+              <span className="ml-auto inline-flex items-center gap-2">
+                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/40 whitespace-nowrap">
+                  <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  Standart variant: {bulk.done} / {bulk.total}
+                </span>
+                <button
+                  onClick={() => { bulkCancelRef.current = true; }}
+                  className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-white text-gray-600 border-gray-200 hover:bg-gray-100 dark:bg-white/[0.03] dark:text-gray-400 dark:border-white/[0.08] dark:hover:bg-white/[0.05] transition-all"
+                >
+                  To'xtatish
+                </button>
+              </span>
+            ) : onlyVariantless && bulkTargets.length > 0 ? (
+              <button
+                onClick={() => setBulkConfirm(bulkTargets)}
+                disabled={defaultAddingId !== null}
+                title="Ro'yxatdagi (joriy filtr bo'yicha) barcha variantsiz mahsulotlarga 'Standart' variant qo'shish"
+                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600 shadow-sm shadow-emerald-500/25 disabled:opacity-50 transition-all whitespace-nowrap"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
+                Standart variant qo'shish ({bulkTargets.length})
+              </button>
+            ) : null}
           </div>
         )}
         <Table>
@@ -482,7 +754,9 @@ export default function ProductsTable({
                 )}
                 {group.items.map((item, idx) => {
               const isExpanded = expandedId === item.id;
-              const variants = item.items ?? item.product_items ?? [];
+              const variants = variantsOf(item);
+              const noStock = variants.length > 0 && variants.every((v) => (v._count?.shop_products ?? 0) === 0);
+              const canAddDefault = variants.length === 0 && !defaultAddedIds.has(item.id);
               return (
                 <Fragment key={item.id}>
                   {/* Product row */}
@@ -516,11 +790,20 @@ export default function ProductsTable({
                         <span>{item.name_uz ?? item.name ?? "-"}</span>
                         {variants.length === 0 && (
                           <span
-                            title="Bu mahsulotga variant qo'shilmagan, shuning uchun ilova va saytda mijozlarga ko'rinmaydi. Mahsulotni ochib variant qo'shing."
+                            title={`Mijozlarga "Tovar turlari qo'shilmoqda" deb ko'rsatiladi, lekin savatga qo'shib bo'lmaydi va do'konlar uni sotuvga qo'sha olmaydi. Mahsulotni ochib variant qo'shing yoki "Standart" tugmasini bosing.`}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 text-[10px] font-semibold whitespace-nowrap"
                           >
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
-                            Variant yo'q — ko'rinmaydi
+                            Variant yo'q — sotib bo'lmaydi
+                          </span>
+                        )}
+                        {noStock && (
+                          <span
+                            title="Variantlari bor, lekin hech bir faol do'konda sotuvda emas — mijozlar hozircha sotib ola olmaydi."
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700 text-[10px] font-semibold whitespace-nowrap"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
+                            Do'konda yo'q
                           </span>
                         )}
                       </div>
@@ -552,12 +835,37 @@ export default function ProductsTable({
                         </svg>
                         {variants.length} ta
                       </span>
+                      {canAddDefault && (
+                        <button
+                          // Not `disabled`: a click must never fall through to the row (expand toggle).
+                          onClick={(e) => { e.stopPropagation(); addDefaultVariant(item); }}
+                          aria-disabled={defaultAddingId !== null || !!bulk}
+                          title="Standart variant qo'shish — bir bosishda 'Standart' nomli variant yaratiladi"
+                          className={`ml-1.5 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/40 transition-all ${
+                            defaultAddingId !== null || bulk
+                              ? "opacity-50 cursor-not-allowed"
+                              : "hover:bg-emerald-500 hover:text-white hover:border-emerald-500 dark:hover:bg-emerald-500 dark:hover:text-white"
+                          }`}
+                        >
+                          {defaultAddingId === item.id ? (
+                            <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                          ) : (
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14" /></svg>
+                          )}
+                          Standart
+                        </button>
+                      )}
                     </TableCell>
                     <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                       {Moment(item.createdt ?? item.createdAt).format("DD.MM.YYYY")}
                     </TableCell>
                     <TableCell className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
-                      <TableActions onEdit={() => startEditProduct(item)} onDelete={() => deleteProduct(item.id)} />
+                      <TableActions
+                        onEdit={() => startEditProduct(item)}
+                        onDelete={() => deleteProduct(item.id)}
+                        confirmTitle="Mahsulotni o'chirishni tasdiqlaysizmi?"
+                        confirmDesc={productDeleteDesc(item)}
+                      />
                     </TableCell>
                   </TableRow>
 
@@ -598,7 +906,21 @@ export default function ProductsTable({
                                   </svg>
                                 </div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Variantlar hali yo'q</p>
-                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Yuqoridagi tugmani bosib yangi variant qo'shing</p>
+                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Yuqoridagi tugmani bosib yangi variant qo'shing yoki bir bosishda standart variant yarating</p>
+                                {canAddDefault && (
+                                  <button
+                                    onClick={() => addDefaultVariant(item)}
+                                    disabled={defaultAddingId !== null || !!bulk}
+                                    className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold hover:bg-emerald-500 hover:text-white hover:border-emerald-500 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/40 dark:hover:bg-emerald-500 dark:hover:text-white disabled:opacity-50 disabled:pointer-events-none transition-all"
+                                  >
+                                    {defaultAddingId === item.id ? (
+                                      <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                    ) : (
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
+                                    )}
+                                    Standart variant qo'shish
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/[0.06] shadow-sm">
@@ -609,7 +931,7 @@ export default function ProductsTable({
                                       <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">O'lchov</th>
                                       <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Rang</th>
                                       <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">O'lcham</th>
-                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Do'konlar</th>
+                                      <th title="Bu variantni hozir sotayotgan faol do'konlar soni" className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Do'konlar</th>
                                       <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Amallar</th>
                                     </tr>
                                   </thead>
@@ -682,7 +1004,7 @@ export default function ProductsTable({
                                               </svg>
                                             </button>
                                             <button
-                                              onClick={() => requestDeleteVariant(v)}
+                                              onClick={() => requestDeleteVariant(v, item)}
                                               className="group inline-flex items-center justify-center w-8 h-8 rounded-lg
                                                 bg-red-50 text-red-600 border border-red-100
                                                 hover:bg-red-500 hover:text-white hover:border-red-500 hover:shadow-md hover:shadow-red-500/30
@@ -808,7 +1130,7 @@ export default function ProductsTable({
               {categoryOptions.length > 0 && (
                 <div>
                   <Label>Kategoriya</Label>
-                  <Select options={categoryOptions} defaultValue={pForm.category_id} onChange={(v) => setPForm({ ...pForm, category_id: v })} />
+                  <Select options={editCategoryOptions} defaultValue={pForm.category_id} onChange={(v) => setPForm({ ...pForm, category_id: v })} />
                 </div>
               )}
               {unitTypes.length > 0 && (
@@ -819,7 +1141,7 @@ export default function ProductsTable({
               )}
               <div>
                 <Label>Rasm (barcha variantlar uchun)</Label>
-                <ImageField key={pImgKey.current} label="" onChange={(r) => { pImgRef.current = r; }} />
+                <ImageField key={pImgKey.current} label="" allowUrl={false} onChange={(r) => { pImgRef.current = r; }} />
                 {editItem?.image && !pImgRef.current && (
                   <div className="mt-2 flex items-center gap-2">
                     <img src={`${staticUrl}/static/products/${editItem.image}`} className="w-10 h-10 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
@@ -830,7 +1152,7 @@ export default function ProductsTable({
             </div>
             <div className="flex items-center gap-3 mt-6 justify-end">
               <Button size="sm" variant="outline" onClick={closeEdit}>Bekor qilish</Button>
-              <Button size="sm" onClick={saveProduct} disabled={pSaving}>
+              <Button size="sm" onClick={() => saveProduct()} disabled={pSaving}>
                 {pSaving ? (
                   <span className="inline-flex items-center gap-2">
                     <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
@@ -931,7 +1253,7 @@ export default function ProductsTable({
                 <Input type="text" placeholder="Ixtiyoriy tavsif" value={vForm.desc} onChange={(e) => setVForm({ ...vForm, desc: e.target.value })} />
               </div>
               <div className="lg:col-span-2">
-                <ImageField key={varImgKey.current} label="Rasm (ixtiyoriy)" onChange={(r) => { varImgRef.current = r; if (r?.file || r?.url) setVarImgChanged(true); }} />
+                <ImageField key={varImgKey.current} label="Rasm (ixtiyoriy)" allowUrl={false} onChange={(r) => { varImgRef.current = r; if (r?.file || r?.url) setVarImgChanged(true); }} />
                 {editVariant?.image && !varImgChanged && (
                   <div className="mt-2 flex items-center gap-2">
                     <img src={`${staticUrl}/static/product-items/${editVariant.image}`} className="w-10 h-10 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
@@ -959,13 +1281,33 @@ export default function ProductsTable({
       {variantToDelete && (
         <ConfirmDeleteModal
           title="Variantni o'chirishni tasdiqlaysizmi?"
-          desc={
-            (variantToDelete._count?.shop_products ?? 0) > 0
-              ? `Diqqat! Bu variant ${variantToDelete._count?.shop_products} ta do'kon mahsulotida ishlatilgan. O'chirilsa, do'konlardagi tegishli mahsulotlar ham o'chiriladi. Davom etilsinmi?`
-              : "Bu amalni qaytarib bo'lmaydi."
-          }
+          desc={variantDeleteDesc(variantToDelete)}
           onConfirm={confirmDeleteVariant}
           onCancel={() => setVariantToDelete(null)}
+        />
+      )}
+
+      {/* Duplicate product name confirm (edit) */}
+      {dupConfirm && (
+        <ConfirmDeleteModal
+          tone="primary"
+          title="Bunday mahsulot allaqachon bor"
+          desc={dupConfirm}
+          confirmLabel="Baribir saqlash"
+          onConfirm={() => { setDupConfirm(null); saveProduct(true); }}
+          onCancel={() => setDupConfirm(null)}
+        />
+      )}
+
+      {/* Bulk default variant confirm */}
+      {bulkConfirm && (
+        <ConfirmDeleteModal
+          tone="primary"
+          title="Standart variant qo'shilsinmi?"
+          desc={`Ro'yxatdagi ${bulkConfirm.length} ta variantsiz mahsulotning har biriga "Standart" nomli bitta variant qo'shiladi. Shundan so'ng do'konlar ularni sotuvga qo'sha oladi. So'rovlar birma-bir yuboriladi — tugaguncha sahifadan chiqmang.`}
+          confirmLabel="Qo'shish"
+          onConfirm={() => runBulkDefaultVariants(bulkConfirm)}
+          onCancel={() => setBulkConfirm(null)}
         />
       )}
     </div>

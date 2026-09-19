@@ -5,9 +5,11 @@ import Navbar from '../components/home/sections/navbar'
 import Footer from '../components/home/sections/footer'
 import AuthModal from '../components/auth/AuthModal'
 import CartDrawer from '../components/cart/CartDrawer'
-import { authService, AuthUser } from '../service/authService'
+import { authService } from '../service/authService'
+import { useAuthUser } from '../hooks/useAuthUser'
 import { useLang } from '../context/AppContext'
 import { useScrollReveal } from '../hooks/useScrollReveal'
+import { searchKey, buildSearchKeys, matchesSearch } from '../utils/searchKey'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
@@ -42,7 +44,7 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
-  const [user, setUser] = useState<AuthUser | null>(() => authService.getUser())
+  const [user, setUser] = useAuthUser()
   const [authOpen, setAuthOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
 
@@ -69,13 +71,16 @@ export default function CategoriesPage() {
     return cat.name_uz || cat.name_ru || cat.name || ''
   }
 
+  // Latin/Cyrillic-normalized (searchKey): "xavfsizlik" finds "Хавфсизлик".
+  const categoryKeys = useMemo(
+    () => buildSearchKeys(categories, c => [c.name_uz, c.name_ru, c.name]),
+    [categories]
+  )
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = searchKey(search)
     if (!q) return categories
-    return categories.filter(c =>
-      [c.name_uz, c.name_ru, c.name].filter(Boolean).join(' ').toLowerCase().includes(q)
-    )
-  }, [categories, search])
+    return categories.filter(c => matchesSearch(categoryKeys.get(c), q))
+  }, [categories, categoryKeys, search])
 
   const totalProducts = useMemo(
     () => Object.values(productCounts).reduce((s, n) => s + n, 0),

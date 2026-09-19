@@ -8,8 +8,11 @@ class NewsBloc extends Cubit<NewsState> {
   DioClient dioClient = DioClient();
   NewsBloc() : super(NewsIntialState());
 
-  Future get() async {
-    emit(NewsWaitingState());
+  /// [silent] is a background refresh (app resume): keep what is on screen
+  /// instead of flashing the skeleton, and keep it if the refresh fails.
+  Future get({bool silent = false}) async {
+    final bool keep = silent && state is NewsSuccessState;
+    if (!keep) emit(NewsWaitingState());
     String? token = await StorageService().read(
       StorageService.token,
     );
@@ -30,7 +33,7 @@ class NewsBloc extends Cubit<NewsState> {
           data: response.data,
         ),
       );
-    } else {
+    } else if (!keep) {
       emit(
         NewsErrorState(
             title: response.data["name"], message: response.data["message"]),

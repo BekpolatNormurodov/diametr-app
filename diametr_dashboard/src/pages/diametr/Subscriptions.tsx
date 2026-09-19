@@ -1,6 +1,6 @@
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import PageMeta from "../../components/common/PageMeta";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axiosClient from "../../service/axios.service";
 import { toast } from "../../components/ui/toast";
 import Button from "../../components/ui/button/Button";
@@ -8,6 +8,7 @@ import Input from "../../components/form/input/InputField";
 import Label from "../../components/form/Label";
 import Moment from "moment";
 import { formatMoney } from "../../service/formatters/money.format";
+import { matchesSearchKey, searchKey } from "../../utils/searchKey";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function subStatusInfo(expired?: string | null) {
@@ -62,17 +63,39 @@ export default function SubscriptionsPage() {
     }
   }, []);
 
-  const fetchLogs = useCallback(async (shopId: number) => {
+  const selectedShopRef = useRef<number | null>(null);
+  selectedShopRef.current = selectedShop;
+
+  const fetchLogs = useCallback(async (shopId: number, keepOnError = false) => {
     try {
       const res = await axiosClient.get(`/subscription/logs/${shopId}?take=30`);
       const d = res.data;
-      setLogs(Array.isArray(d) ? d : d?.data ?? []);
+      // Ignore a late answer for a shop that is no longer selected.
+      if (selectedShopRef.current === shopId) setLogs(Array.isArray(d) ? d : d?.data ?? []);
     } catch {
-      setLogs([]);
+      if (!keepOnError && selectedShopRef.current === shopId) setLogs([]);
     }
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Balance / expiry change outside this page (Click/Payme webhooks, hourly auto-renew/block,
+  // other admins). Settings are not re-fetched here so a half-typed settings form is never overwritten.
+  const pollShops = useCallback(async () => {
+    try {
+      const res = await axiosClient.get("/subscription/shops");
+      const d = res.data;
+      setShops(Array.isArray(d) ? d : d?.data ?? []);
+    } catch {
+      /* keep the current list */
+    }
+    const shopId = selectedShopRef.current;
+    if (shopId) await fetchLogs(shopId, true);
+  }, [fetchLogs]);
+  useEffect(() => {
+    const id = setInterval(() => { pollShops(); }, 30_000);
+    return () => clearInterval(id);
+  }, [pollShops]);
   useEffect(() => {
     if (selectedShop) fetchLogs(selectedShop);
     else setLogs([]);
@@ -135,8 +158,9 @@ export default function SubscriptionsPage() {
   const selectedShopData = shops.find((s) => s.id === selectedShop);
   const selectedStatus = subStatusInfo(selectedShopData?.expired);
 
-  const filteredShops = searchShop
-    ? shops.filter((s) => (s.name ?? "").toLowerCase().includes(searchShop.toLowerCase()))
+  const searchShopKey = searchKey(searchShop);
+  const filteredShops = searchShopKey
+    ? shops.filter((s) => matchesSearchKey(searchShopKey, [s.name]))
     : shops;
 
   // counts

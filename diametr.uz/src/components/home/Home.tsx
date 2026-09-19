@@ -12,13 +12,15 @@ import Shops from './sections/shops'
 import GeoPermissionModal, { useGeoPermission } from '../common/GeoPermissionModal'
 import AuthModal from '../auth/AuthModal'
 import CartDrawer from '../cart/CartDrawer'
-import { authService, AuthUser } from '../../service/authService'
+import { authService } from '../../service/authService'
+import { useAuthUser } from '../../hooks/useAuthUser'
 import { useLang } from '../../context/AppContext'
 
 export default function Home() {
   const { lang } = useLang()
   const location = useLocation()
-  const [user, setUser] = useState<AuthUser | null>(() => authService.getUser())
+  // Stays in sync on 401 ('diametr:unauthorized') and on login/logout in other tabs
+  const [user, setUser] = useAuthUser()
   const [authOpen, setAuthOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const geo = useGeoPermission()
@@ -36,18 +38,12 @@ export default function Home() {
 
   const handleAuth = useCallback(() => {
     setUser(authService.getUser())
-  }, [])
+  }, [setUser])
 
   const handleLogout = useCallback(() => {
     authService.logout()
     setUser(null)
-  }, [])
-
-  useEffect(() => {
-    const onUnauthorized = () => setUser(null)
-    window.addEventListener('diametr:unauthorized', onUnauthorized)
-    return () => window.removeEventListener('diametr:unauthorized', onUnauthorized)
-  }, [])
+  }, [setUser])
 
   return (
     <div className="Home w-screen relative flex flex-col overflow-x-hidden bg-white dark:bg-slate-900 transition-colors duration-300">

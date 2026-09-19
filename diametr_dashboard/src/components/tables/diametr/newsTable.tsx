@@ -13,6 +13,7 @@ import ImageField, { ImageFieldResult } from "../../common/ImageField";
 import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
+import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 
 export interface NewsItemProps {
   id: number;
@@ -49,7 +50,8 @@ const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch
     useEffect(() => { setTableData(data); }, [data]);
     useEffect(() => { setCurrentPage(1); }, [optionValue]);
 
-    const filteredData = search.trim() === "" ? tableData : tableData.filter((s) => { const q = search.toLowerCase(); return (s.title ?? "").toLowerCase().includes(q) || (s.subtitle ?? "").toLowerCase().includes(q); });
+    const searchQueryKey = searchKey(search);
+    const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.title, s.subtitle]));
     const maxPage = Math.ceil(filteredData.length / +optionValue);
     const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
 

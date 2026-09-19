@@ -5,10 +5,27 @@ import 'package:map_launcher/map_launcher.dart';
 import 'package:stroymarket/bloc/shop/shop_bloc.dart';
 import 'package:stroymarket/bloc/shop/shop_state.dart';
 import 'package:stroymarket/core/extensions/str.dart';
+import 'package:stroymarket/core/utils/search_key.dart';
 import 'package:stroymarket/manager/8_shop_manager.dart';
 
 import '../../export_files.dart';
 import '../../widgets/common/fade_up_widget.dart';
+
+// Search keys (see searchKey) of a product card's own names/description AND
+// its variants', computed once per card instead of on every keystroke.
+final SearchKeyIndex _searchKeys = SearchKeyIndex((p) => [
+      p['name'],
+      p['name_uz'],
+      p['name_ru'],
+      p['desc'],
+      if (p['items'] is List)
+        for (final it in p['items'] as List) ...[
+          it['name'],
+          it['name_uz'],
+          it['name_ru'],
+          it['desc'],
+        ],
+    ]);
 
 class MarketScreen extends StatefulWidget {
   final String? id;
@@ -21,8 +38,14 @@ class MarketScreen extends StatefulWidget {
 
 class _MarketScreenState extends State<MarketScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
-  String _query = '';
+  String _query = ''; // typed text — drives the clear button / empty state
+  String _queryKey = ''; // searchKey of it — drives the matching
   int _visibleCount = 14;
+  // Last grouped product list and the raw rows it was built from: regrouping
+  // only when the rows change keeps the cards (and their cached search keys)
+  // stable while the user types.
+  List? _groupedFrom;
+  List _grouped = const [];
   int? _selectedCategoryId;
 
   @override
@@ -31,7 +54,8 @@ class _MarketScreenState extends State<MarketScreen> {
     ShopManager.getById(context, ShopId: widget.id ?? '');
     _searchCtrl.addListener(() {
       setState(() {
-        _query = _searchCtrl.text.toLowerCase().trim();
+        _query = _searchCtrl.text.trim();
+        _queryKey = searchKey(_searchCtrl.text);
         _visibleCount = 14;
         _selectedCategoryId = null;
       });
@@ -48,16 +72,48 @@ class _MarketScreenState extends State<MarketScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.tBg,
-      body: BlocBuilder<ShopBloc, ShopState>(
-        builder: (context, state) {
-          if (state is ShopSuccessState) {
-            if (state.data == null) return _buildNotFound(context);
-            return _buildContent(context, state.data, state.admin, state.products);
-          }
-          return _buildLoading(context);
-        },
+      body: RefreshIndicator(
+        color: AppConstant.primaryColor,
+        backgroundColor: context.tCard,
+        onRefresh: () => ShopManager.getById(context, ShopId: widget.id ?? ''),
+        child: BlocBuilder<ShopBloc, ShopState>(
+          builder: (context, state) {
+            if (state is ShopSuccessState) {
+              if (state.data == null) return _buildNotFound(context);
+              return _buildContent(context, state.data, state.admin, state.products);
+            }
+            return _buildLoading(context);
+          },
+        ),
       ),
     );
+  }
+
+  /// /shop/:id returns one row per stock row (i.e. per variant), so a product
+  /// stocked in three variants showed as three identical cards. Keep one card
+  /// per product (the variant is picked on the next screen); sold counts are
+  /// summed and variant names kept for the search below.
+  List _groupByProduct(List rows) {
+    final Map<dynamic, Map> byProduct = {};
+    final List grouped = [];
+    for (final row in rows) {
+      if (row is! Map) continue;
+      final existing = byProduct[row['id']];
+      final num sold = (row['sold_count'] as num?) ?? 0;
+      if (existing == null) {
+        final Map card = Map.from(row);
+        card['sold_count'] = sold;
+        card['items'] = [
+          {'name': row['variant_name']}
+        ];
+        byProduct[row['id']] = card;
+        grouped.add(card);
+      } else {
+        existing['sold_count'] = (existing['sold_count'] as num) + sold;
+        (existing['items'] as List).add({'name': row['variant_name']});
+      }
+    }
+    return grouped;
   }
 
   // ── Shimmer skeleton ──────────────────────────────────────────────────────────
@@ -147,37 +203,22 @@ class _MarketScreenState extends State<MarketScreen> {
     final bool fixed = data['fixed_delivery'] == true;
     final bool market = data['market_delivery'] == true;
     final String? deliveryAmount = data['delivery_amount']?.toString();
-    final List allList = (products as List);
+    final List rows = (products as List?) ?? const [];
+    if (!identical(rows, _groupedFrom)) {
+      _groupedFrom = rows;
+      _grouped = _groupByProduct(rows);
+    }
+    final List allList = _grouped;
     final List catFiltered = _selectedCategoryId == null
         ? allList
         : allList
             .where((p) => p['category_id'] == _selectedCategoryId)
             .toList();
-    bool matches(dynamic v) =>
-        v != null && v.toString().toLowerCase().contains(_query);
-    final List filtered = _query.isEmpty
+    // Match names in either language AND variant names (e.g. "seyf"), in
+    // Latin or Cyrillic (searchKey).
+    final List filtered = _queryKey.isEmpty
         ? catFiltered
-        : catFiltered.where((p) {
-            // Match names in either language AND variant names (e.g. "seyf").
-            if (matches(p['name']) ||
-                matches(p['name_uz']) ||
-                matches(p['name_ru']) ||
-                matches(p['desc'])) {
-              return true;
-            }
-            final items = p['items'];
-            if (items is List) {
-              for (final it in items) {
-                if (matches(it['name']) ||
-                    matches(it['name_uz']) ||
-                    matches(it['name_ru']) ||
-                    matches(it['desc'])) {
-                  return true;
-                }
-              }
-            }
-            return false;
-          }).toList();
+        : catFiltered.where((p) => _searchKeys.matches(p, _queryKey)).toList();
     final List displayed = filtered.take(_visibleCount).toList();
 
     // collect unique categories from all products
@@ -188,7 +229,9 @@ class _MarketScreenState extends State<MarketScreen> {
       if (cat != null && seenCats.add(cat['id'])) cats.add(cat);
     }
     return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
+      // Always scrollable so pull-to-refresh works on a short product list.
+      physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics()),
       slivers: [
         // ── Hero SliverAppBar ────────────────────────────────────────────────────
         SliverAppBar(
@@ -376,7 +419,7 @@ class _MarketScreenState extends State<MarketScreen> {
                           borderRadius: BorderRadius.circular(20.r),
                         ),
                         child: Text(
-                          (products).length.toString(),
+                          allList.length.toString(),
                           style: TextStyle(
                             color: AppConstant.primaryColor,
                             fontSize: 12.sp,
@@ -827,7 +870,9 @@ class _ProductCard extends StatelessWidget {
         ?.toString()
         .trim() ??
         '';
-    final int count = int.tryParse(product['count']?.toString() ?? '0') ?? 0;
+    // `count` is the stock, not sales; the old label showed stock as "sold".
+    final int sold =
+        int.tryParse(product['sold_count']?.toString() ?? '0') ?? 0;
 
     return GestureDetector(
       onTap: onTap,
@@ -879,9 +924,9 @@ class _ProductCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const Spacer(),
-                      if (count > 0)
+                      if (sold > 0)
                         Text(
-                          count.toString() + '+ ' + 'sold'.tr(),
+                          sold.toString() + ' ' + 'sold'.tr(),
                           style: TextStyle(color: context.tSub, fontSize: 11.sp),
                         ),
                     ],

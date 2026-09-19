@@ -1,23 +1,32 @@
 import { useCallback, useState } from "react";
 import PageMeta from "../../components/common/PageMeta";
 import axiosClient from "../../service/axios.service";
-import { usePolling } from "../../hooks/usePolling";
+import { usePolling, useRequestSeq } from "../../hooks/usePolling";
+import { useShopId } from "../../context/ShopSessionContext";
+import { fetchOwnStock } from "../../service/ownStock";
 import { formatMoney } from "../../service/formatters/money.format";
 import Moment from "moment";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
+// Platform wording (Telegram): FINISHED = confirmed by the shop, ready for delivery;
+// CONFIRMED = delivered, the final state.
 const statusColors: Record<string, string> = {
   STARTED:   "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  CONFIRMED: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  FINISHED:  "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  FINISHED:  "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  CONFIRMED: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
   CANCELED:  "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
 };
 const statusLabels: Record<string, string> = {
   STARTED:   "Yangi",
-  CONFIRMED: "Tasdiqlangan",
-  FINISHED:  "Bajarildi",
+  FINISHED:  "Tasdiqlangan",
+  CONFIRMED: "Yetkazilgan",
   CANCELED:  "Bekor",
 };
+
+// Both statuses have taken the stock: they count as sold everywhere (revenue, charts, sold counts).
+const SOLD_STATUSES = ["FINISHED", "CONFIRMED"];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const isSold = (o: any) => SOLD_STATUSES.includes(o?.status);
 
 // Build last-N-days revenue array
 function buildWeeklyData(orders: any[]) {
@@ -26,7 +35,7 @@ function buildWeeklyData(orders: any[]) {
     const d = Moment().subtract(i, "days");
     const date = d.format("YYYY-MM-DD");
     const amount = orders
-      .filter((o) => o.status === "FINISHED" && Moment(o.createdAt ?? o.createdt).format("YYYY-MM-DD") === date)
+      .filter((o) => isSold(o) && Moment(o.createdAt ?? o.createdt).format("YYYY-MM-DD") === date)
       .reduce((s, o) => s + (Number(o.amount) || 0), 0);
     days.push({ label: d.format("DD/MM"), date, amount });
   }
@@ -57,7 +66,7 @@ function WeeklyChart({ days }: { days: { label: string; amount: number }[] }) {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-base font-semibold text-gray-800 dark:text-white">Haftalik Daromad</h3>
-          <p className="text-xs text-gray-400 dark:text-gray-500">So&apos;nggi 7 kun (Bajarilgan buyurtmalar)</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">So&apos;nggi 7 kun (Tasdiqlangan va yetkazilgan buyurtmalar)</p>
         </div>
         <div className="text-right">
           <p className="text-xs text-gray-400 dark:text-gray-500">Jami</p>
@@ -104,10 +113,10 @@ function MonthlyRevenue({ orders }: { orders: any[] }) {
   const thisMonth = Moment().format("YYYY-MM");
   const lastMonth = Moment().subtract(1, "month").format("YYYY-MM");
   const this_total = orders
-    .filter((o) => o.status === "FINISHED" && Moment(o.createdAt ?? o.createdt).format("YYYY-MM") === thisMonth)
+    .filter((o) => isSold(o) && Moment(o.createdAt ?? o.createdt).format("YYYY-MM") === thisMonth)
     .reduce((s, o) => s + (Number(o.amount) || 0), 0);
   const last_total = orders
-    .filter((o) => o.status === "FINISHED" && Moment(o.createdAt ?? o.createdt).format("YYYY-MM") === lastMonth)
+    .filter((o) => isSold(o) && Moment(o.createdAt ?? o.createdt).format("YYYY-MM") === lastMonth)
     .reduce((s, o) => s + (Number(o.amount) || 0), 0);
   const pct = last_total > 0 ? Math.round(((this_total - last_total) / last_total) * 100) : null;
 
@@ -134,26 +143,32 @@ function MonthlyRevenue({ orders }: { orders: any[] }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Home() {
-  const shopId = Number(localStorage.getItem("shop_id") ?? 0);
+  const shopId = useShopId();
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [paymentsTotal, setPaymentsTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const req = useRequestSeq();
 
   const fetchData = useCallback(async () => {
+    const id = req.next();
     try {
+      // /order/all and /payment/all are scoped to the owner's shop by the server; the
+      // client-side shop filter below stays as a harmless second check.
       const [ordersRes, shopProductsRes, paymentsRes] = await Promise.allSettled([
         axiosClient.get("/order/all"),
-        axiosClient.get("/shop-product/all"),
+        fetchOwnStock(), // own stock, still listed while the shop is BLOCKED
         axiosClient.get("/payment/all"),
       ]);
+      // A newer request (e.g. after a shop change) already started — drop this one.
+      if (!req.isLatest(id)) return;
 
       if (ordersRes.status === "fulfilled") {
         const all: any[] = Array.isArray(ordersRes.value.data) ? ordersRes.value.data : ordersRes.value.data?.data ?? [];
         setOrders(all.filter((o) => o.shop?.id === shopId || o.shop_id === shopId));
       }
       if (shopProductsRes.status === "fulfilled") {
-        const all: any[] = Array.isArray(shopProductsRes.value.data) ? shopProductsRes.value.data : shopProductsRes.value.data?.data ?? [];
+        const all: any[] = shopProductsRes.value;
         setProducts(all.filter((p) => p.shop_id === shopId || p.shop?.id === shopId));
       }
       if (paymentsRes.status === "fulfilled") {
@@ -164,21 +179,22 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shopId]);
 
-  usePolling(fetchData, 15_000);
+  usePolling(fetchData, 15_000, true, shopId);
 
-  const finishedOrders = orders.filter((o) => o.status === "FINISHED");
-  const activeOrders   = orders.filter((o) => o.status === "STARTED" || o.status === "CONFIRMED");
-  const revenue        = finishedOrders.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+  const soldOrders     = orders.filter(isSold);
+  const activeOrders   = orders.filter((o) => o.status === "STARTED");
+  const revenue        = soldOrders.reduce((s, o) => s + (Number(o.amount) || 0), 0);
   const recentOrders   = [...orders]
-    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+    .sort((a, b) => new Date(b.createdAt ?? b.createdt ?? 0).getTime() - new Date(a.createdAt ?? a.createdt ?? 0).getTime() || (b.id ?? 0) - (a.id ?? 0))
     .slice(0, 5);
 
-  // Recently sold products from finished orders
+  // Best-selling products from sold (confirmed or delivered) orders
   const recentlySold: { name: string; count: number; revenue: number }[] = (() => {
     const map: Record<string, { name: string; count: number; revenue: number }> = {};
-    finishedOrders.forEach((o) => {
+    soldOrders.forEach((o) => {
       const items: any[] = o.products ?? o.order_items ?? o.items ?? [];
       items.forEach((item: any) => {
         const piId = String(item.shop_product?.product_item_id ?? item.product_item_id ?? item.product_item?.id ?? "?");
@@ -221,7 +237,7 @@ export default function Home() {
             label="Jami Tushumlar"
             value={loading ? <span className={skel + " h-6 w-28 block"} /> : `${formatMoney(revenue)} so'm`}
             colorClass="bg-success-50 dark:bg-success-500/15"
-            sub={`${finishedOrders.length} ta bajarildi`}
+            sub={`${soldOrders.length} ta sotilgan`}
             icon={<svg className="w-6 h-6 text-success-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33"/></svg>}
           />
           <StatCard
@@ -273,7 +289,7 @@ export default function Home() {
                   <tbody>
                     {recentOrders.map((order) => (
                       <tr key={order.id} className="border-b border-gray-50 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                        <td className="px-5 py-3 text-sm text-gray-700 dark:text-gray-300">{order.user?.fullname ?? order.phone ?? "—"}</td>
+                        <td className="px-5 py-3 text-sm text-gray-700 dark:text-gray-300">{order.user?.fullname || order.user?.phone || order.phone || "—"}</td>
                         <td className="px-5 py-3 text-sm font-medium text-gray-800 dark:text-white">{order.amount ? `${formatMoney(Number(order.amount))} so'm` : "—"}</td>
                         <td className="px-5 py-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status ?? ""] ?? "bg-gray-100 text-gray-500"}`}>
@@ -363,7 +379,7 @@ export default function Home() {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-sm font-medium text-gray-800 dark:text-white">
-                          {sp.bonus_price ? (
+                          {sp.bonus_price > 0 && sp.bonus_price < (sp.price ?? 0) ? (
                             <span>
                               <span className="text-brand-600 dark:text-brand-400">{formatMoney(sp.bonus_price)}</span>
                               <span className="text-xs text-gray-400 line-through ml-1">{formatMoney(sp.price)}</span>

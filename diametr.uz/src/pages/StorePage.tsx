@@ -1,12 +1,15 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import Navbar from '../components/home/sections/navbar'
 import AuthModal from '../components/auth/AuthModal'
 import CartDrawer from '../components/cart/CartDrawer'
 import { useLang } from '../context/AppContext'
-import { authService, AuthUser } from '../service/authService'
+import { authService } from '../service/authService'
+import { useAuthUser } from '../hooks/useAuthUser'
 import StoreFilter from '../components/store/StoreFilter'
+import { searchKey, buildSearchKeys, matchesSearch } from '../utils/searchKey'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
@@ -33,16 +36,28 @@ interface Shop {
   market_delivery?: boolean
 }
 
+// /product/all: the catalogue only — no prices, no shops
 interface Product {
   id: number
   name?: string
   name_uz?: string
   name_ru?: string
   image?: string
-  price?: number
   category?: { id: number; name_uz?: string; name_ru?: string; name?: string }
-  shop?: { id: number; name?: string }
+  // variants; none yet = "Tovar turlari qo'shilmoqda"
+  items?: Array<{ id?: number; name?: string; name_uz?: string; name_ru?: string }>
 }
+
+// /shop-product/all: live stock rows (prices + the shop that sells them)
+interface StockRow {
+  price?: number | null
+  bonus_price?: number | null
+  count?: number | null
+  shop_id?: number | null
+  product_item?: { product_id?: number | null; product?: { id?: number } | null } | null
+}
+
+interface Offer { shopId: number; price: number }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatCount(n: number) {
@@ -71,13 +86,67 @@ function formatKm(km: number): string {
 
 const SKELETONS = Array.from({ length: 8 })
 
+// ── Telegram Mini App ─────────────────────────────────────────────────────────
+// The store bot opens this page as a `web_app` button. Telegram's script is what
+// defines `window.Telegram.WebApp` (ready/expand, initData); without it the Mini
+// App stays half-height and orders are tagged SITE instead of STORE_BOT. It is
+// only loaded when the page really runs inside Telegram, so plain browser
+// visitors don't fetch a third-party script.
+const TELEGRAM_WEB_APP_SRC = 'https://telegram.org/js/telegram-web-app.js'
+
+function launchedFromTelegram(): boolean {
+  const w = window as any
+  try {
+    // Telegram appends #tgWebAppData=…&tgWebAppVersion=…&tgWebAppPlatform=… on launch
+    if (/[#?&]tgWebApp(Data|Version|Platform)=/.test(window.location.hash + window.location.search)) return true
+    // Telegram's mobile WebViews inject this bridge object
+    if (w.TelegramWebviewProxy != null) return true
+  } catch {
+    // fall through
+  }
+  try {
+    // Telegram's script keeps the launch params for the rest of the tab session
+    return sessionStorage.getItem('__telegram__initParams') != null
+  } catch {
+    return false
+  }
+}
+
+let telegramLoading: Promise<any | null> | null = null
+
+/** Resolves Telegram.WebApp (loading the script inside Telegram), else null. Never rejects. */
+function loadTelegramWebApp(): Promise<any | null> {
+  const w = window as any
+  if (w.Telegram && w.Telegram.WebApp) return Promise.resolve(w.Telegram.WebApp)
+  if (!launchedFromTelegram()) return Promise.resolve(null)
+  if (telegramLoading) return telegramLoading
+  telegramLoading = new Promise<any | null>(resolve => {
+    try {
+      const script = document.createElement('script')
+      script.src = TELEGRAM_WEB_APP_SRC
+      script.async = true
+      script.onload = () => resolve(w.Telegram && w.Telegram.WebApp ? w.Telegram.WebApp : null)
+      script.onerror = () => {
+        telegramLoading = null // a later visit may try again
+        if (script.parentNode) script.parentNode.removeChild(script)
+        resolve(null)
+      }
+      document.head.appendChild(script)
+    } catch {
+      telegramLoading = null
+      resolve(null)
+    }
+  })
+  return telegramLoading
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function StorePage() {
   const { lang } = useLang()
   const navigate = useNavigate()
 
   const [tab, setTab] = useState<'categories' | 'shops'>('categories')
-  const [user, setUser] = useState<AuthUser | null>(() => authService.getUser())
+  const [user, setUser] = useAuthUser()
   const [userCoords, setUserCoords] = useState<{ lat: number; lon: number } | null>(null)
 
   useEffect(() => {
@@ -109,36 +178,57 @@ export default function StorePage() {
   // products filters
   const [filterMinPrice, setFilterMinPrice] = useState('')
   const [filterMaxPrice, setFilterMaxPrice] = useState('')
+  // Live stock for the price/region filters — /product/all has neither prices
+  // nor shops. Loaded once, on the first use of one of those filters.
+  const [stockRows, setStockRows] = useState<StockRow[] | null>(null)
+  const [stockFailed, setStockFailed] = useState(false)
 
-  // Expand Telegram WebApp if available
+  // Opened from the store bot as a Telegram Mini App: load Telegram's script
+  // (defines Telegram.WebApp — full height, and STORE_BOT orders) and expand.
   useEffect(() => {
-    const tg = (window as any).Telegram?.WebApp
-    if (tg) {
-      tg.ready()
-      tg.expand()
-    }
+    loadTelegramWebApp().then(tg => {
+      if (!tg) return
+      try {
+        tg.ready()
+        tg.expand()
+      } catch {
+        // an old Telegram client without these methods — nothing to do
+      }
+    })
   }, [])
 
-  // Auto-login from ?token= URL param (store bot redirect)
+  // Auto-login from ?token= URL param (store bot redirect).
+  // A fresh bot token always wins over whatever is stored (an expired token, or
+  // another account's session); an expired link is refused. A link that looks
+  // expired only because the phone's clock is wrong is checked against the
+  // server's clock first (authService.autoLoginFromLink).
+  // (401 auto-logout is handled by useAuthUser.)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const token = params.get('token')
-    if (token && !authService.getToken()) {
-      const loggedInUser = authService.autoLoginFromToken(token)
-      if (loggedInUser) setUser(loggedInUser)
-    }
-    if (token) {
-      const cleanUrl = window.location.pathname + window.location.hash
-      window.history.replaceState(null, '', cleanUrl)
-    }
-  }, [])
-
-  // Auto-logout on 401
-  useEffect(() => {
-    const handler = () => setUser(null)
-    window.addEventListener('diametr:unauthorized', handler)
-    return () => window.removeEventListener('diametr:unauthorized', handler)
-  }, [])
+    if (!token) return
+    // Take the token out of the address bar right away (keep Telegram's #hash)
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash)
+    authService.autoLoginFromLink(token).then(loggedInUser => {
+      if (loggedInUser) {
+        setUser(loggedInUser)
+      } else if (!authService.getUser()) {
+        toast(
+          <div className="px-4 py-3 w-full">
+            <p className="text-[13px] font-bold text-slate-800">
+              {lang === 'ru' ? 'Ссылка для входа устарела' : "Kirish havolasi eskirgan"}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {lang === 'ru'
+                ? 'Откройте магазин из бота заново или войдите по номеру телефона'
+                : "Do'konni botdan qayta oching yoki telefon raqam orqali kiring"}
+            </p>
+          </div>,
+          { icon: false, autoClose: 6000 }
+        )
+      }
+    })
+  }, []) // eslint-disable-line
 
   // Fetch categories + product counts
   useEffect(() => {
@@ -178,6 +268,27 @@ export default function StorePage() {
       .finally(() => setShopsLoading(false))
   }, [])
 
+  // Price and region filters work on live stock (a product matches when some
+  // shop sells it in range / in that region)
+  const productFilterActive = !!(filterRegion || filterMinPrice || filterMaxPrice)
+  const stockRequestedRef = useRef(false)
+  const loadStock = useCallback(() => {
+    stockRequestedRef.current = true
+    setStockFailed(false)
+    axios.get(`${API_URL}/shop-product/all`)
+      .then(res => {
+        const d = res.data?.data ?? res.data
+        setStockRows(Array.isArray(d) ? d : [])
+      })
+      .catch(() => {
+        stockRequestedRef.current = false
+        setStockFailed(true)
+      })
+  }, [])
+  useEffect(() => {
+    if (productFilterActive && !stockRequestedRef.current) loadStock()
+  }, [productFilterActive, loadStock])
+
   const getCatName = useCallback(
     (c: Category) =>
       lang === 'ru'
@@ -200,15 +311,73 @@ export default function StorePage() {
   // Price/km mask helpers
   const parseNum = (v: string) => Number(v.replace(/\./g, '')) || 0
 
+  // Latin/Cyrillic-normalized search (searchKey): "rakovina" finds "раковина".
+  // Record keys are built once per list, the query key once per keystroke.
+  const searchQ = useMemo(() => searchKey(search), [search])
+  const shopKeys = useMemo(
+    () => buildSearchKeys(shops, s => [s.name, s.address, s.region?.name]),
+    [shops]
+  )
+  const categoryKeys = useMemo(
+    () => buildSearchKeys(categories, c => [c.name_uz, c.name_ru, c.name]),
+    [categories]
+  )
+  // product names in both languages AND variant names (e.g. "seyf")
+  const productKeys = useMemo(
+    () => buildSearchKeys(products, p => [
+      p.name_uz, p.name_ru, p.name,
+      ...(p.items ?? []).flatMap(it => [it?.name, it?.name_uz, it?.name_ru]),
+    ]),
+    [products]
+  )
+
+  // product id → what a customer can buy now: one offer per stock row
+  // (a real shop, in stock) at its effective price (bonus price when lower)
+  const offersByProduct = useMemo(() => {
+    const map = new Map<number, Offer[]>()
+    ;(stockRows ?? []).forEach(r => {
+      const pid = r.product_item?.product_id ?? r.product_item?.product?.id
+      const price = r.price
+      if (pid == null || r.shop_id == null || price == null || r.count == null || r.count <= 0) return
+      const bonus = r.bonus_price
+      const eff = bonus != null && bonus > 0 && bonus < price ? bonus : price
+      const list = map.get(pid)
+      if (list) list.push({ shopId: r.shop_id, price: eff })
+      else map.set(pid, [{ shopId: r.shop_id, price: eff }])
+    })
+    return map
+  }, [stockRows])
+
+  // Cheapest offer of a product that passes the region + price filters (null: none)
+  const bestOfferPrice = useMemo(() => {
+    const regionShopIds = filterRegion
+      ? new Set(shops.filter(s => s.region?.name === filterRegion).map(s => s.id))
+      : null
+    const minP = filterMinPrice ? parseNum(filterMinPrice) : null
+    const maxP = filterMaxPrice ? parseNum(filterMaxPrice) : null
+    return (p: Product): number | null => {
+      let best: number | null = null
+      ;(offersByProduct.get(p.id) ?? []).forEach(o => {
+        if (regionShopIds && !regionShopIds.has(o.shopId)) return
+        if (minP != null && o.price < minP) return
+        if (maxP != null && o.price > maxP) return
+        if (best == null || o.price < best) best = o.price
+      })
+      return best
+    }
+  }, [offersByProduct, shops, filterRegion, filterMinPrice, filterMaxPrice]) // eslint-disable-line
+
+  // Search and/or a price/region filter → list matching categories + products
+  const listMode = !!searchQ || productFilterActive
+  // Stock is still loading (or failed) while a price/region filter needs it
+  const stockPending = productFilterActive && stockRows == null
+  // The list waits for the catalogue too (else it flashes "Topilmadi")
+  const listPending = stockPending || catsLoading
+
   const filteredShops = useMemo(() => {
     let list = shops
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(s =>
-        (s.name || '').toLowerCase().includes(q) ||
-        (s.address || '').toLowerCase().includes(q) ||
-        (s.region?.name || '').toLowerCase().includes(q)
-      )
+    if (searchQ) {
+      list = list.filter(s => matchesSearch(shopKeys.get(s), searchQ))
     }
     if (filterShopRegions.length > 0) list = list.filter(s => filterShopRegions.includes(s.region?.name || ''))
     if (userCoords && (filterMinKm || filterMaxKm)) {
@@ -221,49 +390,36 @@ export default function StorePage() {
       })
     }
     return list
-  }, [shops, search, filterShopRegions, filterMinKm, filterMaxKm, userCoords])
+  }, [shops, shopKeys, searchQ, filterShopRegions, filterMinKm, filterMaxKm, userCoords])
+
+  // With a price/region filter: how many products of each category pass it
+  const filteredCounts = useMemo(() => {
+    const counts: Record<number, number> = {}
+    if (!productFilterActive) return counts
+    products.forEach(p => {
+      const cid = p.category?.id
+      if (cid != null && bestOfferPrice(p) != null) counts[cid] = (counts[cid] || 0) + 1
+    })
+    return counts
+  }, [products, productFilterActive, bestOfferPrice])
 
   const filteredCategories = useMemo(() => {
     let list = categories
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(c =>
-        (c.name_uz || '').toLowerCase().includes(q) ||
-        (c.name_ru || '').toLowerCase().includes(q) ||
-        (c.name || '').toLowerCase().includes(q)
-      )
+    if (searchQ) {
+      list = list.filter(c => matchesSearch(categoryKeys.get(c), searchQ))
     }
-    if (filterRegion) {
-      const shopIdsInRegion = new Set(shops.filter(s => s.region?.name === filterRegion).map(s => s.id))
-      const catIds = new Set(
-        products
-          .filter(p => p.shop && shopIdsInRegion.has(p.shop.id) && p.category?.id)
-          .map(p => p.category!.id)
-      )
-      list = list.filter(c => catIds.has(c.id))
-    }
+    // a category passes a price/region filter when one of its products does
+    if (productFilterActive) list = list.filter(c => (filteredCounts[c.id] || 0) > 0)
     return list
-  }, [categories, search, filterRegion, shops, products])
+  }, [categories, categoryKeys, searchQ, productFilterActive, filteredCounts])
 
   const filteredProducts = useMemo(() => {
-    if (!search.trim()) return []
-    const q = search.toLowerCase()
-    let list = products.filter(p => {
-      // product names in both languages AND variant names (e.g. "seyf")
-      const hay = [
-        p.name_uz, p.name_ru, p.name,
-        ...(((p as any).items ?? []) as any[]).flatMap(it => [it?.name, it?.name_uz, it?.name_ru]),
-      ]
-      return hay.some(s => (s || '').toLowerCase().includes(q))
-    })
-    if (filterRegion) {
-      const shopIds = new Set(shops.filter(s => s.region?.name === filterRegion).map(s => s.id))
-      list = list.filter(p => !p.shop || shopIds.has(p.shop.id))
-    }
-    if (filterMinPrice) list = list.filter(p => p.price == null || p.price >= parseNum(filterMinPrice))
-    if (filterMaxPrice) list = list.filter(p => p.price == null || p.price <= parseNum(filterMaxPrice))
+    if (!listMode) return []
+    let list = searchQ ? products.filter(p => matchesSearch(productKeys.get(p), searchQ)) : products
+    // Variantless products have no stock, so a price/region filter leaves them out
+    if (productFilterActive) list = list.filter(p => bestOfferPrice(p) != null)
     return list
-  }, [products, search, filterRegion, shops, filterMinPrice, filterMaxPrice])
+  }, [products, productKeys, searchQ, listMode, productFilterActive, bestOfferPrice])
 
   const getProductName = useCallback(
     (p: Product) =>
@@ -273,8 +429,8 @@ export default function StorePage() {
     [lang]
   )
 
-  const handleAuth = useCallback(() => setUser(authService.getUser()), [])
-  const handleLogout = useCallback(() => { authService.logout(); setUser(null) }, [])
+  const handleAuth = useCallback(() => setUser(authService.getUser()), [setUser])
+  const handleLogout = useCallback(() => { authService.logout(); setUser(null) }, [setUser])
 
   const hasFilter = !!(filterRegion || filterShopRegions.length > 0 || filterMinKm || filterMaxKm || filterMinPrice || filterMaxPrice)
   const resetAll = () => { setFilterRegion(''); setFilterShopRegions([]); setFilterMinKm(''); setFilterMaxKm(''); setFilterMinPrice(''); setFilterMaxPrice('') }
@@ -389,8 +545,8 @@ export default function StorePage() {
         {/* ── CATEGORIES TAB ── */}
         {tab === 'categories' && (
           <>
-            {/* — No search: show all categories — */}
-            {!search.trim() && (
+            {/* — No search, no price/region filter: show all categories — */}
+            {!listMode && (
               <>
                 <h1 className="text-lg font-bold text-slate-900 dark:text-white mb-5">
                   {lang === 'ru' ? 'Товары' : 'Mahsulotlar'}
@@ -428,8 +584,34 @@ export default function StorePage() {
               </>
             )}
 
-            {/* — Search active: show categories + products separately — */}
-            {search.trim() && (
+            {/* — Price/region filter waiting for live stock (or the catalogue) — */}
+            {listMode && listPending && (
+              stockPending && stockFailed ? (
+                <div className="text-center py-16">
+                  <p className="text-slate-400 text-sm">
+                    {lang === 'ru' ? 'Не удалось загрузить цены' : "Narxlarni yuklab bo'lmadi"}
+                  </p>
+                  <button
+                    onClick={loadStock}
+                    className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-all"
+                  >
+                    {lang === 'ru' ? 'Повторить' : 'Qayta urinish'}
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+                  {SKELETONS.map((_, i) => (
+                    <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden animate-pulse border border-slate-100 dark:border-slate-700">
+                      <div className="h-28 bg-slate-200 dark:bg-slate-700 w-full" />
+                      <div className="px-3 py-2.5"><div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-3/4" /></div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* — Search and/or price/region filter: show categories + products separately — */}
+            {listMode && !listPending && (
               <>
                 {/* Section: Kategoriyalar */}
                 <div className="mb-8">
@@ -442,7 +624,7 @@ export default function StorePage() {
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                       {filteredCategories.map((cat, i) => {
-                        const count = productCounts[cat.id] || 0
+                        const count = (productFilterActive ? filteredCounts[cat.id] : productCounts[cat.id]) || 0
                         return (
                           <div key={cat.id} onClick={() => navigate(`/category/${cat.id}`)} className="group relative flex flex-col bg-white dark:bg-slate-800 border border-primary/20 dark:border-slate-700 rounded-2xl overflow-hidden hover:border-primary hover:shadow-lg hover:shadow-primary/10 transition-all duration-200 cursor-pointer hover:-translate-y-0.5">
                             <div className="relative h-28 sm:h-32 bg-gradient-to-br from-primary/5 to-slate-100 dark:from-primary/10 dark:to-slate-700 overflow-hidden">
@@ -470,10 +652,20 @@ export default function StorePage() {
                     <p className="text-slate-400 text-sm py-4">{lang === 'ru' ? 'Нет совпадений' : 'Topilmadi'}</p>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                      {filteredProducts.map((prod, i) => (
+                      {filteredProducts.map(prod => {
+                        // No variants yet: shown, marked "Tovar turlari qo'shilmoqda" (not buyable)
+                        const comingSoon = !(prod.items ?? []).length
+                        // Known once live stock is loaded (price/region filter): cheapest matching offer
+                        const fromPrice = productFilterActive ? bestOfferPrice(prod) : null
+                        return (
                         <div key={prod.id} onClick={() => prod.category?.id && navigate(`/category/${prod.category.id}`)} className="group flex flex-col bg-white dark:bg-slate-800 border border-primary/20 dark:border-slate-700 rounded-2xl overflow-hidden hover:border-primary hover:shadow-lg hover:shadow-primary/10 transition-all duration-200 cursor-pointer hover:-translate-y-0.5">
                           <div className="relative h-28 sm:h-32 bg-gradient-to-br from-primary/5 to-slate-100 dark:from-primary/10 dark:to-slate-700 overflow-hidden">
                             {prod.image ? (<img src={`${BASE_URL}/static/products/${prod.image}`} alt={getProductName(prod)} width={288} height={128} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={e => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />) : (<div className="w-full h-full flex items-center justify-center"><span className="text-4xl">📦</span></div>)}
+                            {comingSoon && (
+                              <span className="absolute top-2 left-2 bg-slate-800/80 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-sm">
+                                {lang === 'ru' ? 'Добавляется' : "Qo'shilmoqda"}
+                              </span>
+                            )}
                           </div>
                           <div className="px-3 py-2.5 flex flex-col gap-0.5">
                             <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 leading-snug group-hover:text-primary transition-colors line-clamp-2">{getProductName(prod)}</span>
@@ -482,9 +674,19 @@ export default function StorePage() {
                                 {lang === 'ru' ? prod.category.name_ru || prod.category.name_uz || prod.category.name : prod.category.name_uz || prod.category.name_ru || prod.category.name}
                               </span>
                             )}
+                            {comingSoon ? (
+                              <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 line-clamp-1">
+                                {lang === 'ru' ? 'Виды добавляются' : "Turlari qo'shilmoqda"}
+                              </span>
+                            ) : fromPrice != null ? (
+                              <span className="text-xs font-bold text-primary">
+                                {lang === 'ru' ? `от ${fromPrice.toLocaleString()} сум` : `${fromPrice.toLocaleString()} so'm dan`}
+                              </span>
+                            ) : null}
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>

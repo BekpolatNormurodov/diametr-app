@@ -34,9 +34,25 @@ class StatusScreen extends StatefulWidget {
 class _StatusScreenState extends State<StatusScreen> {
   @override
   void initState() {
-    OrderManager.getByid(context, id: widget.id ?? "");
-    ShopManager.getById(context, ShopId: widget.shop_id ?? "");
+    _load();
     super.initState();
+  }
+
+  Future<void> _load() => Future.wait([
+        OrderManager.getByid(context, id: widget.id ?? ""),
+        ShopManager.getById(context, ShopId: widget.shop_id ?? ""),
+      ]);
+
+  /// The status comes from the freshly loaded order; the route argument (copied
+  /// from a possibly old list) is only a fallback while it loads.
+  String? _currentStatus(OrderState state) {
+    if (state is OrderSuccessState && state.data is Map) {
+      final data = state.data as Map;
+      if (data["id"]?.toString() == widget.id && data["status"] != null) {
+        return data["status"].toString();
+      }
+    }
+    return widget.status;
   }
 
   LoadingService loadingService = LoadingService();
@@ -58,63 +74,73 @@ class _StatusScreenState extends State<StatusScreen> {
           SizedBox(
             height: 1.sh,
             width: 1.sw,
-            child: ListView(
-              shrinkWrap: true,
-              scrollDirection: Axis.vertical,
-              children: [
-                BlocBuilder<ShopBloc, ShopState>(builder: (context, state) {
-                  if (state is ShopSuccessState) {
-                    if (state.data == null) {
-                      return EmptyState(
-                        height: 320.h,
-                        icon: Iconsax.shop,
-                        title: "Do'kon ma'lumotlari topilmadi",
-                        subtitle:
-                            "Buyurtma qilingan do'kon hozircha mavjud emas.",
-                      );
+            child: RefreshIndicator(
+              color: AppConstant.primaryColor,
+              backgroundColor: context.tCard,
+              onRefresh: _load,
+              child: ListView(
+                shrinkWrap: true,
+                scrollDirection: Axis.vertical,
+                children: [
+                  BlocBuilder<ShopBloc, ShopState>(builder: (context, state) {
+                    if (state is ShopSuccessState) {
+                      if (state.data == null) {
+                        return EmptyState(
+                          height: 320.h,
+                          icon: Iconsax.shop,
+                          title: "Do'kon ma'lumotlari topilmadi",
+                          subtitle:
+                              "Buyurtma qilingan do'kon hozircha mavjud emas.",
+                        );
+                      }
+                      return _marketSection(
+                          context, state.data, state.admin, state.products);
+                    } else if (state is ShopWaitingState) {
+                      return _loadingWidget(context);
+                    } else {
+                      return const SizedBox();
                     }
-                    return _marketSection(
-                        context, state.data, state.admin, state.products);
-                  } else if (state is ShopWaitingState) {
-                    return _loadingWidget(context);
-                  } else {
-                    return const SizedBox();
-                  }
-                }),
-                BlocBuilder<OrderBloc, OrderState>(builder: (context, state) {
-                  if (state is OrderSuccessState) {
-                    if (state.data == null) {
-                      return EmptyState(
-                        height: 240.h,
-                        icon: Iconsax.receipt_1,
-                        title: "Buyurtma topilmadi",
-                        subtitle: "Bu buyurtma haqida ma'lumot mavjud emas.",
-                      );
+                  }),
+                  BlocBuilder<OrderBloc, OrderState>(builder: (context, state) {
+                    if (state is OrderSuccessState) {
+                      if (state.data == null) {
+                        return EmptyState(
+                          height: 240.h,
+                          icon: Iconsax.receipt_1,
+                          title: "Buyurtma topilmadi",
+                          subtitle: "Bu buyurtma haqida ma'lumot mavjud emas.",
+                        );
+                      }
+                      return _orderSection(context, state.data ?? []);
+                    } else if (state is OrderWaitingState) {
+                      return _loadingWidget(context);
+                    } else {
+                      return const SizedBox();
                     }
-                    return _orderSection(context, state.data ?? []);
-                  } else if (state is OrderWaitingState) {
-                    return _loadingWidget(context);
-                  } else {
-                    return const SizedBox();
-                  }
-                }),
-                SizedBox(height: 120.h),
-              ],
+                  }),
+                  SizedBox(height: 120.h),
+                ],
+              ),
             ),
           ),
           Positioned(
             bottom: 0,
-            child: Image.asset(
-              widget.status == "CANCELED"
-                  ? "assets/images/error_bg.png"
-                  : "assets/images/success_bg.png",
-              width: 1.sw,
-              fit: BoxFit.fitWidth,
-              color: widget.status == "STARTED"
-                  ? const Color(0xFFFFCF5C)
-                  : (widget.status == "FINISHED"
-                      ? const Color(0xFF0084F4)
-                      : null),
+            child: BlocBuilder<OrderBloc, OrderState>(
+              builder: (context, orderState) {
+                final status = _currentStatus(orderState);
+                return Image.asset(
+                  status == "CANCELED"
+                      ? "assets/images/error_bg.png"
+                      : "assets/images/success_bg.png",
+                  width: 1.sw,
+                  fit: BoxFit.fitWidth,
+                  color: status == "STARTED"
+                      ? const Color(0xFFFFCF5C)
+                      : (status == "FINISHED"
+                          ? const Color(0xFF0084F4)
+                          : null),
+                );
+              },
             ),
           ),
         ],

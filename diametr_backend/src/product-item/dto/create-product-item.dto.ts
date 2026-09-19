@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -43,6 +44,7 @@ export class CreateProductItemDto {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(9999999) // column is DECIMAL(10,3); larger values fail inside Prisma
   value?: number;
 
   @ApiPropertyOptional({

@@ -11,7 +11,9 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  Headers,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import {
   ApiBody,
   ApiConsumes,
@@ -24,24 +26,42 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Express } from 'express';
 import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { writeFileSync } from 'fs';
-import axios from 'axios';
+import { join } from 'path';
+import {
+  IMAGE_MAX_BYTES,
+  downloadImageFromUrl,
+  imageFileFilter,
+  imageFileName,
+  uploadedImageName,
+} from 'src/_utils/image-upload';
 import { ShopService } from './shop.service';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
 import { Role } from '@prisma/client';
 import { RolesGuardFactory } from 'src/_guard/roles.guard';
+import { isSuperRequest } from 'src/_guard/optional-auth';
+import { PrismaClientService } from 'src/_prisma_client/prisma_client.service';
 
 @ApiTags('Shop')
 @Controller('shop')
 export class ShopController {
-  constructor(private readonly shopService: ShopService) {}
+  constructor(
+    private readonly shopService: ShopService,
+    private readonly jwt: JwtService,
+    private readonly prisma: PrismaClientService,
+  ) {}
 
+  /** A valid SUPER token (dashboard) gets the full rows; everyone else the public shape. */
+  private isSuper(authorization?: string) {
+    return isSuperRequest(this.jwt, this.prisma, authorization);
+  }
+
+  // Shop create/edit/delete is platform-admin only (the dashboard). A shop
+  // owner (ADMIN) could otherwise rename, re-price delivery or delete any shop.
   @Post()
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: "Do'kon yaratish (ADMIN/SUPER)" })
+  @ApiOperation({ summary: "Do'kon yaratish (SUPER)" })
   create(@Body() data: CreateShopDto) {
     return this.shopService.create(data);
   }
@@ -61,20 +81,14 @@ export class ShopController {
     FileInterceptor('image', {
       storage: diskStorage({
         destination: join(process.cwd(), 'public', 'shops'),
-        filename: (_req, file, cb) => {
-          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, unique + extname(file.originalname));
-        },
+        filename: imageFileName,
       }),
-      fileFilter: (_req, file, cb) => {
-        const allowed = /\.(jpg|jpeg|png|webp|gif|svg|bmp)$/i;
-        cb(null, allowed.test(file.originalname));
-      },
-      limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+      fileFilter: imageFileFilter,
+      limits: { fileSize: IMAGE_MAX_BYTES, files: 1 },
     }),
   )
   uploadImage(@UploadedFile() file: Express.Multer.File) {
-    return { image: file.filename };
+    return { image: uploadedImageName(file) };
   }
 
   @Post('/upload-image-url')
@@ -85,26 +99,20 @@ export class ShopController {
     schema: { type: 'object', properties: { url: { type: 'string' } } },
   })
   async uploadImageFromUrl(@Body() body: { url: string }) {
-    const response = await axios.get(body.url, {
-      responseType: 'arraybuffer',
-      maxContentLength: 15 * 1024 * 1024,
-      maxBodyLength: 15 * 1024 * 1024,
-      timeout: 15000,
-    });
-    const filename =
-      Date.now() + '-' + Math.round(Math.random() * 1e9) + '.jpg';
-    writeFileSync(
-      join(process.cwd(), 'public', 'shops', filename),
-      Buffer.from(response.data),
-    );
-    return { image: filename };
+    return { image: await downloadImageFromUrl(body?.url, 'shops') };
   }
 
+  // PUBLIC: no billing/internal fields (balance, expired, auto_payment, inn)
+  // unless the caller carries a valid SUPER token.
   @Get('/all')
   @ApiOperation({ summary: "Barcha do'konlar ro'yxati" })
   @ApiQuery({ name: 'regions', required: false, type: String })
-  findAll(@Query('regions') regions?: string) {
-    return this.shopService.findAll(regions);
+  async findAll(
+    @Query('regions') regions?: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const full = await this.isSuper(authorization);
+    return this.shopService.findAll(regions, false, full);
   }
 
   @Get('/all-admin')
@@ -113,7 +121,7 @@ export class ShopController {
   @ApiOperation({ summary: "Barcha do'konlar (SUPER, bloklangan ham)" })
   @ApiQuery({ name: 'regions', required: false, type: String })
   findAllAdmin(@Query('regions') regions?: string) {
-    return this.shopService.findAll(regions, true);
+    return this.shopService.findAll(regions, true, true);
   }
 
   @Get('/by-product')
@@ -127,26 +135,31 @@ export class ShopController {
     return this.shopService.findByProduct(+productId, regions);
   }
 
+  // PUBLIC: see findAll — full row only for a valid SUPER token.
   @Get(':id')
   @ApiOperation({ summary: 'Bitta do’kon' })
   @ApiParam({ name: 'id', type: Number })
-  findOne(@Param('id') id: string) {
-    return this.shopService.findOne(+id);
+  async findOne(
+    @Param('id') id: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const full = await this.isSuper(authorization);
+    return this.shopService.findOne(+id, full);
   }
 
   @Put(':id')
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: "Do'konni tahrirlash (ADMIN/SUPER)" })
+  @ApiOperation({ summary: "Do'konni tahrirlash (SUPER)" })
   @ApiParam({ name: 'id', type: Number })
   update(@Param('id') id: string, @Body() data: UpdateShopDto) {
     return this.shopService.update(+id, data);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuardFactory([Role.ADMIN, Role.SUPER]))
+  @UseGuards(RolesGuardFactory([Role.SUPER]))
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: "Do'konni o'chirish (ADMIN/SUPER)" })
+  @ApiOperation({ summary: "Do'konni o'chirish (SUPER)" })
   @ApiParam({ name: 'id', type: Number })
   remove(@Param('id') id: string) {
     return this.shopService.remove(+id);

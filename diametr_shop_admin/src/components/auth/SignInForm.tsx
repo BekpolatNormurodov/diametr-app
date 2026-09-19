@@ -6,6 +6,7 @@ import Input from "../form/input/InputField";
 import Button from "../ui/button/Button";
 import { toast } from "../ui/toast";
 import axiosClient from "../../service/axios.service";
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../../utils/password";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +20,11 @@ export default function SignInForm() {
     if (e) e.preventDefault();
     if (!login.trim() || !password.trim()) {
       toast.error("Login va parolni kiriting");
+      return;
+    }
+    // The server accepts no shorter password at login; say so in Uzbek instead of a 400.
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      toast.error(PASSWORD_TOO_SHORT);
       return;
     }
 

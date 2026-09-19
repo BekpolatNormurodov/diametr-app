@@ -3,7 +3,7 @@ import TableToolbar from "./TableToolbar";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "../ui/table";
 import Button from "../ui/button/Button";
 import { PlusIcon } from "../../icons";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useModal } from "../../hooks/useModal";
 import Input from "../form/input/InputField";
 import Label from "../form/Label";
@@ -12,8 +12,11 @@ import Select from "../form/Select";
 import axiosClient from "../../service/axios.service";
 import { toast } from "../ui/toast";
 import { formatMoney } from "../../service/formatters/money.format";
+import { useShopId } from "../../context/ShopSessionContext";
 import * as XLSX from "xlsx";
 import Moment from "moment";
+import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
+import { beginBusy, endBusy } from "../../utils/busy";
 
 export interface ShopProductItemProps {
   id: number;
@@ -23,6 +26,7 @@ export interface ShopProductItemProps {
   sold_count?: number;
   last_sold?: string | null;
   shop_id?: number;
+  work_status?: string;
   shop?: { id: number; name?: string };
   product_item_id?: number;
   product_item?: {
@@ -32,6 +36,7 @@ export interface ShopProductItemProps {
     value?: number | string;
     color?: string;
     size?: string;
+    work_status?: string;
     unit_type?: { id: number; name?: string; symbol?: string };
     product?: {
       id: number;
@@ -40,11 +45,21 @@ export interface ShopProductItemProps {
       name_ru?: string;
       image?: string;
       category_id?: number;
+      work_status?: string;
       unit_type?: { id: number; name?: string; symbol?: string };
       category?: { id: number; name?: string; name_uz?: string };
     };
   };
 }
+
+const isArchivedStatus = (s?: string) => s != null && s !== "WORKING";
+
+/** Stock whose catalog product was deleted by the platform admin. */
+const isProductArchived = (sp: ShopProductItemProps) => isArchivedStatus(sp.product_item?.product?.work_status);
+
+/** Stock whose catalog variant or product was deleted — it can no longer be sold. */
+export const isCatalogArchived = (sp: ShopProductItemProps) =>
+  isArchivedStatus(sp.product_item?.work_status) || isProductArchived(sp);
 
 interface CategoryOption { value: string; label: string }
 interface ProductRaw {
@@ -86,9 +101,121 @@ interface ProductGroup {
   shopItems: ShopProductItemProps[];
   totalCount: number;
   totalSold: number;
+  /** The catalog product was deleted by the platform admin. */
+  archived: boolean;
 }
 
-type VariantRow = { checked: boolean; count: string; price: string; bonus_price: string };
+type RowValues = { count: string; price: string; bonus_price: string };
+/** `orig` = the stock values the row was prefilled from; present only for stock that already existed. */
+type VariantRow = RowValues & { checked: boolean; orig?: RowValues };
+const EMPTY_ROW: VariantRow = { checked: false, count: "", price: "", bonus_price: "" };
+
+type SaveOp = {
+  kind: "post" | "put" | "delete";
+  piId: number;
+  label: string;
+  spId?: number;
+  payload?: { price?: number; count?: number; bonus_price?: number | null };
+  /** PUT that changes the count: the count the owner started from; refused if it moved meanwhile. */
+  expectCount?: string;
+  /** Row values being saved (become the new baseline after success). */
+  values?: RowValues;
+};
+type SaveResult = { ok: true } | { ok: false; message: string; currentCount?: number; gone?: boolean };
+
+// Same ceiling as the backend DTO (MAX_INT_VALUE), so a too-large number gets an Uzbek message, not a 400.
+const MAX_INT = 2_000_000_000;
+const INT_RE = /^\d+$/;
+
+const stockValues = (sp?: { count?: number; price?: number; bonus_price?: number | null }): RowValues => ({
+  count: sp?.count != null ? String(sp.count) : "",
+  price: sp?.price != null ? String(sp.price) : "",
+  bonus_price: sp?.bonus_price != null && sp.bonus_price > 0 ? String(sp.bonus_price) : "",
+});
+
+const trimValues = (v: RowValues): RowValues => ({ count: v.count.trim(), price: v.price.trim(), bonus_price: v.bonus_price.trim() });
+
+/** "Variant: message", or just "Message" when there is no label (inline edit). */
+const withLabel = (label: string, text: string) => (label ? `${label}: ${text}` : text.charAt(0).toUpperCase() + text.slice(1));
+
+/**
+ * Validation shared by the add, edit and inline paths (same rules as the backend):
+ * price integer >= 1000, count integer >= 0, discount empty or 0 < discount < price.
+ */
+function validateRow(v: RowValues, label: string): string | null {
+  const say = (text: string) => withLabel(label, text);
+  const price = v.price.trim();
+  const count = v.count.trim();
+  const bonus = v.bonus_price.trim();
+  if (!price) return say("narxni kiriting");
+  if (!INT_RE.test(price)) return say("narx butun musbat son bo'lishi kerak (masalan 15000)");
+  if (Number(price) < 1000) return say("narx kamida 1 000 so'm bo'lishi kerak");
+  if (Number(price) > MAX_INT) return say("narx juda katta");
+  if (!count) return say("sonini kiriting (0 ham bo'lishi mumkin)");
+  if (!INT_RE.test(count)) return say("soni 0 yoki undan katta butun son bo'lishi kerak");
+  if (Number(count) > MAX_INT) return say("soni juda katta");
+  if (bonus) {
+    if (!INT_RE.test(bonus) || Number(bonus) <= 0) return say("skidka narxi 0 dan katta butun son bo'lishi kerak (skidkasiz bo'lsa bo'sh qoldiring)");
+    if (Number(bonus) >= Number(price)) return say("skidka narxi narxdan kichik bo'lishi kerak");
+  }
+  return null;
+}
+
+/** Empty discount means "no discount": sent as null so an existing discount is cleared. */
+const bonusOrNull = (v: RowValues) => (v.bonus_price.trim() ? Number(v.bonus_price) : null);
+
+const fullPayload = (v: RowValues) => ({ price: Number(v.price), count: Number(v.count), bonus_price: bonusOrNull(v) });
+
+/**
+ * Only what the owner changed compared with the values the row was prefilled from. Price and
+ * discount travel together (the discount is validated against the price); the count is sent only
+ * when edited, so a count lowered by an order meanwhile is never overwritten by a stale number.
+ */
+function changedPayload(v: RowValues, orig: RowValues): SaveOp["payload"] | null {
+  const num = (x: string) => (x.trim() ? Number(x) : null);
+  const out: NonNullable<SaveOp["payload"]> = {};
+  if (num(v.price) !== num(orig.price) || num(v.bonus_price) !== num(orig.bonus_price)) {
+    out.price = Number(v.price);
+    out.bonus_price = bonusOrNull(v);
+  }
+  if (num(v.count) !== num(orig.count)) out.count = Number(v.count);
+  return Object.keys(out).length ? out : null;
+}
+
+const apiError = (e: unknown): string => {
+  const msg = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+  if (Array.isArray(msg)) return msg.join(", ");
+  return msg || "Xatolik yuz berdi";
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const toList = (body: any): any[] => (Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : []);
+
+const stockVariantId = (sp: ShopProductItemProps) => sp.product_item_id ?? sp.product_item?.id;
+
+function getVariantInfo(sp: ShopProductItemProps) {
+  const pi = sp.product_item;
+  if (!pi) return { label: "", color: "" };
+  const unitSymbol = pi.product?.unit_type?.symbol ?? pi.unit_type?.symbol;
+  const isDona = unitSymbol === "dona";
+  const parts = [
+    pi.name ?? "",
+    !isDona && pi.value != null && unitSymbol ? `${pi.value} ${unitSymbol}` : "",
+    !isDona && pi.size ? pi.size : "",
+  ].filter(Boolean).join(" · ");
+  return { label: parts || (pi.color ?? ""), color: pi.color ?? "" };
+}
+
+function getVariantInfoRaw(pi: ProductItemRaw, unitType?: { symbol?: string }) {
+  const unitSymbol = unitType?.symbol ?? pi.unit_type?.symbol;
+  const isDona = unitSymbol === "dona";
+  const parts = [
+    pi.name ?? "",
+    !isDona && pi.value != null && unitSymbol ? `${pi.value} ${unitSymbol}` : "",
+    !isDona && pi.size ? pi.size : "",
+  ].filter(Boolean).join(" · ");
+  return { label: parts || (pi.color ?? `ID:${pi.id}`), color: pi.color ?? "" };
+}
 
 export default function ShopProductsTable({
   data,
@@ -114,51 +241,108 @@ export default function ShopProductsTable({
   const [optionValue, setOptionValue] = useState("10");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const shopId = Number(localStorage.getItem("shop_id") ?? 0);
+  const shopId = useShopId();
   const [expandedProducts, setExpandedProducts] = useState<Set<number>>(new Set());
 
   const [allCategories, setAllCategories] = useState<CategoryOption[]>([]);
   const [allProducts, setAllProducts] = useState<ProductRaw[]>([]);
   const [allProductItems, setAllProductItems] = useState<ProductItemRaw[]>([]);
+  const [catalogStatus, setCatalogStatus] = useState<"loading" | "ready" | "error">("loading");
+  const catalogInFlight = useRef(false);
+  const catalogLoadedAt = useRef(0);
+  const catalogLoaded = useRef({ products: false, items: false });
+  // product_item_id → stock row created by POST during the open modal (until the refetched list has it)
+  const savedStockIds = useRef(new Map<number, number>());
+  // stock row ids found deleted while saving (the list may still show them until it is refetched)
+  const goneStockIds = useRef(new Set<number>());
 
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
 
-  useEffect(() => {
-    Promise.allSettled([
-      axiosClient.get("/category/all"),
-      axiosClient.get("/product/all"),
-      axiosClient.get("/product-item/all"),
-    ]).then(([catRes, prodRes, itemRes]) => {
+  // ─── Catalog (categories, products, variants) ──────────
+  // Loaded on mount, again every time the add/edit modal opens (cached lists show meanwhile),
+  // and when the tab becomes visible after a minute; one automatic retry on failure.
+  const loadCatalog = useCallback(async (attempt: number = 1) => {
+    if (catalogInFlight.current) return;
+    catalogInFlight.current = true;
+    catalogLoadedAt.current = Date.now();
+    if (!(catalogLoaded.current.products && catalogLoaded.current.items)) setCatalogStatus("loading");
+    let failed = false;
+    try {
+      const [catRes, prodRes, itemRes] = await Promise.allSettled([
+        axiosClient.get("/category/all"),
+        axiosClient.get("/product/all"),
+        axiosClient.get("/product-item/all"),
+      ]);
       if (catRes.status === "fulfilled") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const list: any[] = Array.isArray(catRes.value.data) ? catRes.value.data : catRes.value.data?.data ?? [];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setAllCategories(list.map((c: any) => ({ value: String(c.id), label: c.name_uz ?? c.name ?? c.name_ru ?? `#${c.id}` })));
-      }
+        setAllCategories(toList(catRes.value.data).map((c: any) => ({ value: String(c.id), label: c.name_uz ?? c.name ?? c.name_ru ?? `#${c.id}` })));
+      } else failed = true;
       if (prodRes.status === "fulfilled") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const list: any[] = Array.isArray(prodRes.value.data) ? prodRes.value.data : prodRes.value.data?.data ?? [];
-        setAllProducts(list);
-      }
+        setAllProducts(toList(prodRes.value.data));
+        catalogLoaded.current.products = true;
+      } else failed = true;
       if (itemRes.status === "fulfilled") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const list: any[] = Array.isArray(itemRes.value.data) ? itemRes.value.data : itemRes.value.data?.data ?? [];
-        setAllProductItems(list);
-      }
-    });
+        setAllProductItems(toList(itemRes.value.data));
+        catalogLoaded.current.items = true;
+      } else failed = true;
+    } finally {
+      catalogInFlight.current = false;
+    }
+    const ready = catalogLoaded.current.products && catalogLoaded.current.items;
+    if (failed && attempt < 2) setTimeout(() => { loadCatalog(attempt + 1); }, 1500);
+    setCatalogStatus(ready ? "ready" : failed && attempt >= 2 ? "error" : "loading");
   }, []);
 
+  useEffect(() => {
+    loadCatalog();
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - catalogLoadedAt.current > 60_000) loadCatalog();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [loadCatalog]);
+
+  const productById = useMemo(() => new Map(allProducts.map((p) => [p.id, p])), [allProducts]);
+  const variantById = useMemo(() => new Map(allProductItems.map((v) => [v.id, v])), [allProductItems]);
+  const variantsByProduct = useMemo(() => {
+    const map = new Map<number, ProductItemRaw[]>();
+    for (const pi of allProductItems) {
+      const pid = Number(pi.product?.id ?? pi.product_id);
+      if (!pid) continue;
+      const list = map.get(pid);
+      if (list) list.push(pi); else map.set(pid, [pi]);
+    }
+    return map;
+  }, [allProductItems]);
+  const variantsOf = useCallback((pid: number): ProductItemRaw[] => variantsByProduct.get(pid) ?? [], [variantsByProduct]);
+
+  const variantTitle = (v: ProductItemRaw) => {
+    const prod = productById.get(Number(v.product?.id ?? v.product_id));
+    const pName = prod?.name_uz ?? prod?.name ?? prod?.name_ru ?? v.product?.name_uz ?? v.product?.name ?? "";
+    return [pName, getVariantInfoRaw(v, prod?.unit_type).label].filter(Boolean).join(" · ");
+  };
+
+  /** This shop's stock row for a variant in the latest fetched list (ignoring rows known to be deleted). */
+  const stockInList = (piId: number) =>
+    data.find((s) => stockVariantId(s) === piId && s.shop_id === shopId && !goneStockIds.current.has(s.id));
+  /** Stock row id to write to: latest list first, then a row created by POST in the open modal. */
+  const stockIdFor = (piId: number): number | undefined => stockInList(piId)?.id ?? savedStockIds.current.get(piId);
+
   // ─── Group data by product ────────────────────────────
+  // Search keys are built once per list, not on every keystroke.
+  // Product names in every language AND the variant name, so "rakovina" finds the
+  // stocked variant "раковина" and a Russian product name works too.
+  const tableSearchIndex = useMemo(() => buildSearchIndex(tableData, (s) => {
+    const pi = s.product_item;
+    return [pi?.product?.name_uz, pi?.product?.name_ru, pi?.product?.name, pi?.name]
+      .filter((x): x is string => !!x);
+  }), [tableData]);
+
   const groupedData = useMemo(() => {
     const filtered = search.trim() === ""
       ? tableData
-      : tableData.filter((s) => {
-          const q = search.toLowerCase();
-          const pi = s.product_item;
-          const pname = pi?.product?.name_uz ?? pi?.product?.name ?? pi?.name ?? "";
-          return pname.toLowerCase().includes(q);
-        });
+      : filterSearchIndex(tableSearchIndex, search);
 
     const map = new Map<number, ProductGroup>();
     for (const sp of filtered) {
@@ -173,15 +357,17 @@ export default function ShopProductsTable({
           shopItems: [],
           totalCount: 0,
           totalSold: 0,
+          archived: false,
         });
       }
       const g = map.get(pid)!;
       g.shopItems.push(sp);
       g.totalCount += sp.count ?? 0;
       g.totalSold += sp.sold_count ?? 0;
+      if (isProductArchived(sp)) g.archived = true;
     }
     return [...map.values()].sort((a, b) => b.productId - a.productId);
-  }, [tableData, search]);
+  }, [tableData, tableSearchIndex, search]);
 
   const maxPage = Math.ceil(groupedData.length / +optionValue) || 1;
   const currentGroups = groupedData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
@@ -194,51 +380,133 @@ export default function ShopProductsTable({
     });
   };
 
+  // ─── Row state helpers (shared by add & edit modals) ───
+  /** Tick/untick. The first tick of a variant the shop already stocks prefills its current values. */
+  const toggleRow = (prev: Record<number, VariantRow>, id: number): Record<number, VariantRow> => {
+    const cur = prev[id];
+    if (cur?.checked) return { ...prev, [id]: { ...cur, checked: false } };
+    if (cur && (cur.orig || cur.count || cur.price || cur.bonus_price)) return { ...prev, [id]: { ...cur, checked: true } };
+    const sp = stockInList(id);
+    const vals = stockValues(sp);
+    return { ...prev, [id]: { checked: true, ...vals, orig: sp ? vals : undefined } };
+  };
+  const patchRow = (prev: Record<number, VariantRow>, id: number, field: keyof RowValues, value: string) =>
+    ({ ...prev, [id]: { ...EMPTY_ROW, ...prev[id], [field]: value } });
+
+  /** POST for new stock, PUT (changed fields only) for existing stock; null when nothing changed. */
+  const buildUpsertOp = (piId: number, label: string, row: VariantRow): SaveOp | null => {
+    const values = trimValues(row);
+    const spId = stockIdFor(piId);
+    if (spId == null) return { kind: "post", piId, label, payload: fullPayload(values), values };
+    // Stock appeared after the row was filled in (no baseline to diff against): write the full row.
+    if (!row.orig) return { kind: "put", piId, spId, label, payload: fullPayload(values), values };
+    const changed = changedPayload(values, row.orig);
+    if (!changed) return null;
+    return { kind: "put", piId, spId, label, payload: changed, values, expectCount: changed.count !== undefined ? row.orig.count : undefined };
+  };
+
+  /** Runs one request; never throws. */
+  const runOp = async (op: SaveOp): Promise<SaveResult> => {
+    try {
+      if (op.kind === "delete") {
+        await axiosClient.delete(`/shop-product/${op.spId}`);
+        savedStockIds.current.delete(op.piId);
+        if (op.spId != null) goneStockIds.current.add(op.spId);
+        return { ok: true };
+      }
+      if (op.kind === "post") {
+        // POST is idempotent per (shop, variant) on the backend, so a retry can never duplicate.
+        const res = await axiosClient.post("/shop-product", { product_item_id: op.piId, ...op.payload });
+        if (typeof res.data?.id === "number") savedStockIds.current.set(op.piId, res.data.id);
+        return { ok: true };
+      }
+      // Re-read the row right before writing: it may have been removed meanwhile, or its count
+      // lowered by a finished order (then a stale count must not be written back).
+      let current: number | null = null;
+      try {
+        const res = await axiosClient.get(`/shop-product/${op.spId}`);
+        const d = res.data;
+        current = d && !isArchivedStatus(d.work_status) && d.count != null ? Number(d.count) : null;
+      } catch (e) {
+        if ((e as { response?: { status?: number } })?.response?.status !== 404) throw e;
+      }
+      if (current === null) {
+        savedStockIds.current.delete(op.piId);
+        if (op.spId != null) goneStockIds.current.add(op.spId);
+        return { ok: false, gone: true, message: withLabel(op.label, "bu variant do'kondan o'chirilgan — qayta saqlasangiz yangidan qo'shiladi") };
+      }
+      if (op.expectCount !== undefined && current !== Number(op.expectCount)) {
+        return { ok: false, currentCount: current, message: withLabel(op.label, `soni boshqa joyda o'zgargan (hozir ${current} ta) — tekshirib, qayta saqlang`) };
+      }
+      await axiosClient.put(`/shop-product/${op.spId}`, op.payload);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: op.label ? `${op.label}: ${apiError(e)}` : apiError(e) };
+    }
+  };
+
+  /** After a failed op: move the row's baseline to what the server has now, so a retry behaves correctly. */
+  const rebaseRow = (prev: Record<number, VariantRow>, piId: number, res: SaveResult): Record<number, VariantRow> => {
+    const row = prev[piId];
+    if (res.ok || !row) return prev;
+    if (res.gone) return { ...prev, [piId]: { ...row, orig: undefined } };
+    if (res.currentCount !== undefined && row.orig) return { ...prev, [piId]: { ...row, orig: { ...row.orig, count: String(res.currentCount) } } };
+    return prev;
+  };
+
+  const reportSave = (done: string[], failures: string[]) => {
+    if (failures.length === 0) { toast.success(done.join(", ") || "Saqlandi"); return; }
+    const head = done.length ? `${done.join(", ")}. ` : "";
+    if (failures.length === 1) { toast.error(`${head}${failures[0]}`); return; }
+    toast.error(`${head}${failures.length} ta xatolik:`);
+    // One toast per failed variant (the toast stack keeps the last five).
+    failures.slice(0, 4).forEach((f) => toast.error(f));
+  };
+
+  const untickRows = (prev: Record<number, VariantRow>, ids: number[]) => {
+    const next = { ...prev };
+    for (const id of ids) next[id] = { ...EMPTY_ROW };
+    return next;
+  };
+
+  const firstErrors = (errors: string[]) => `${errors[0]}${errors.length > 1 ? ` (yana ${errors.length - 1} ta xato)` : ""}`;
+
   // ─── Add modal ─────────────────────────────────────────
+  const catalogReady = catalogStatus === "ready";
+
   const addFilteredProducts = useMemo(() => {
     let list = allProducts.filter((p) => !addCatId || String(p.category_id) === addCatId);
     if (addProdId) list = list.filter((p) => String(p.id) === addProdId);
-    return list;
-  }, [allProducts, addCatId, addProdId]);
+    // Stockable products first; variantless ones ("Tovar turlari qo'shilmoqda") after them.
+    return [...list].sort((a, b) => Number(variantsOf(b.id).length > 0) - Number(variantsOf(a.id).length > 0));
+  }, [allProducts, addCatId, addProdId, variantsOf]);
 
-  const addProductOptions = allProducts
-    .filter((p) => !addCatId || String(p.category_id) === addCatId)
-    .map((p) => {
-      const pName = p.name_uz ?? p.name ?? p.name_ru ?? `#${p.id}`;
-      const cnt = p._count?.items ?? 0;
-      return { value: String(p.id), label: `${pName} (${cnt} ta variant)` };
-    });
+  // The product select's search also matches variant names (keywords), so "rakovina" finds
+  // "Hammom aksessuarlari" through its variant "раковина". Memoized: the Select builds its search keys per list.
+  const addProductOptions = useMemo(() => [
+    { value: "", label: "Barcha tovarlar" },
+    ...allProducts
+      .filter((p) => !addCatId || String(p.category_id) === addCatId)
+      .map((p) => ({ p, variants: variantsOf(p.id) }))
+      .sort((a, b) => Number(b.variants.length > 0) - Number(a.variants.length > 0))
+      .map(({ p, variants }) => {
+        const cnt = variants.length;
+        const pName = p.name_uz ?? p.name ?? p.name_ru ?? `#${p.id}`;
+        const suffix = !catalogReady ? "" : cnt > 0 ? ` (${cnt} ta variant)` : " (tovar turlari qo'shilmoqda)";
+        // The label shows one language; search the other product names and the variants too.
+        const keywords = [p.name_uz, p.name_ru, p.name, ...variants.map((v) => v.name)]
+          .filter((x): x is string => !!x);
+        return { value: String(p.id), label: `${pName}${suffix}`, keywords };
+      }),
+  ], [allProducts, addCatId, variantsOf, catalogReady]);
 
-  // Init variant rows for ALL visible products
-  useEffect(() => {
-    const rows: Record<number, VariantRow> = {};
-    for (const prod of addFilteredProducts) {
-      const variants = allProductItems.filter(
-        (pi) => String(pi.product?.id ?? pi.product_id ?? "") === String(prod.id)
-      );
-      for (const v of variants) {
-        if (variantRows[v.id] !== undefined) {
-          rows[v.id] = variantRows[v.id];
-        } else {
-          const existing = data.find(
-            (sp) => (sp.product_item_id ?? sp.product_item?.id) === v.id && sp.shop_id === shopId
-          );
-          rows[v.id] = {
-            checked: !!existing,
-            count: existing?.count != null ? String(existing.count) : "",
-            price: existing?.price != null ? String(existing.price) : "",
-            bonus_price: existing?.bonus_price != null ? String(existing.bonus_price) : "",
-          };
-        }
-      }
-    }
-    setVariantRows(rows);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addFilteredProducts, allProductItems]);
-
-  const toggleVariant = (id: number) => setVariantRows((prev) => ({ ...prev, [id]: { ...prev[id], checked: !prev[id]?.checked } }));
-  const updateVariantRow = (id: number, field: keyof VariantRow, value: string) => setVariantRows((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  // Rows live for the whole modal session: the category/product selects only filter the view,
+  // so variants ticked under another filter are kept and saved too.
+  const toggleVariant = (id: number) => setVariantRows((prev) => toggleRow(prev, id));
+  const updateVariantRow = (id: number, field: keyof RowValues, value: string) => setVariantRows((prev) => patchRow(prev, id, field, value));
   const checkedCount = Object.values(variantRows).filter((r) => r.checked).length;
+  const visibleVariantIds = new Set(addFilteredProducts.flatMap((p) => variantsOf(p.id).map((v) => v.id)));
+  const hiddenCheckedCount = Object.entries(variantRows).filter(([id, r]) => r.checked && !visibleVariantIds.has(Number(id))).length;
 
   const toggleAddProd = (pid: number) => setExpandedAddProds((prev) => {
     const next = new Set(prev);
@@ -246,132 +514,244 @@ export default function ShopProductsTable({
     return next;
   });
 
-  const openAdd = () => { setAddCatId(""); setAddProdId(""); setVariantRows({}); setExpandedAddProds(new Set()); openAddModal(); };
+  const openAdd = () => {
+    savedStockIds.current.clear();
+    goneStockIds.current.clear();
+    setAddCatId(""); setAddProdId(""); setVariantRows({}); setExpandedAddProds(new Set());
+    openAddModal();
+    loadCatalog();
+  };
 
   const handleAddSave = async () => {
-    const toSave = Object.entries(variantRows)
-      .filter(([, r]) => r.checked && r.price)
-      .map(([id, r]) => ({
-        product_item_id: Number(id),
-        price: Number(r.price),
-        count: r.count ? Number(r.count) : 0,
-        bonus_price: r.bonus_price && Number(r.bonus_price) > 0 ? Number(r.bonus_price) : undefined,
-      }));
-    if (toSave.length === 0) { toast.error("Kamida bitta variant tanlang va narx kiriting"); return; }
-    if (toSave.some((x) => x.price < 1000)) { toast.error("Narx kamida 1000 so'm bo'lishi kerak"); return; }
+    if (addSaving) return;
+    const ops: SaveOp[] = [];
+    const errors: string[] = [];
+    const droppedIds: number[] = [];
+    for (const [idStr, row] of Object.entries(variantRows)) {
+      if (!row.checked) continue;
+      const piId = Number(idStr);
+      const variant = variantById.get(piId);
+      // Ticked, but the variant (or its product) has since been removed from the catalog.
+      if (!variant || !productById.has(Number(variant.product?.id ?? variant.product_id))) { droppedIds.push(piId); continue; }
+      const label = variantTitle(variant);
+      const op = buildUpsertOp(piId, label, row);
+      if (!op) continue;
+      const err = validateRow(row, label);
+      if (err) { errors.push(err); continue; }
+      ops.push(op);
+    }
+    if (errors.length) { toast.error(firstErrors(errors)); return; }
+    const droppedMsg = droppedIds.length ? `${droppedIds.length} ta tanlangan variant katalogdan olib tashlangan — saqlanmadi` : "";
+    if (droppedIds.length) setVariantRows((prev) => untickRows(prev, droppedIds));
+    if (ops.length === 0) {
+      if (droppedMsg) toast.error(droppedMsg);
+      else if (checkedCount === 0) toast.error("Kamida bitta variant tanlang");
+      else { toast.info("O'zgarishlar yo'q"); closeAddModal(); }
+      return;
+    }
+
     setAddSaving(true);
+    // Keeps a pending version reload (VersionWatcher) from cutting the loop off.
+    beginBusy();
+    let created = 0, updated = 0;
+    const failures: string[] = droppedMsg ? [droppedMsg] : [];
     try {
-      let created = 0, updated = 0;
-      for (const payload of toSave) {
-        const existing = data.find((sp) => (sp.product_item_id ?? sp.product_item?.id) === payload.product_item_id && sp.shop_id === shopId);
-        if (existing) { await axiosClient.put(`/shop-product/${existing.id}`, payload); updated++; }
-        else { await axiosClient.post("/shop-product", payload); created++; }
+      for (const op of ops) {
+        const res = await runOp(op);
+        if (res.ok) {
+          if (op.kind === "post") created++; else updated++;
+          // Saved: untick it, so pressing Save again after a partial failure never re-sends it.
+          setVariantRows((prev) => ({ ...prev, [op.piId]: { ...EMPTY_ROW } }));
+        } else {
+          failures.push(res.message);
+          setVariantRows((prev) => rebaseRow(prev, op.piId, res));
+        }
       }
-      const msgs: string[] = [];
-      if (created) msgs.push(`${created} ta yangi qo'shildi`);
-      if (updated) msgs.push(`${updated} ta yangilandi`);
-      toast.success(msgs.join(", "));
-      onRefetch?.(); closeAddModal();
-    } catch (e: unknown) { toast.error((e as Record<string, Record<string, Record<string, string>>>)?.response?.data?.message ?? "Xatolik yuz berdi"); }
-    finally { setAddSaving(false); }
+    } finally {
+      endBusy();
+      setAddSaving(false);
+      // Always resync the table — after full success, partial success and failure alike.
+      onRefetch?.();
+    }
+    const done: string[] = [];
+    if (created) done.push(`${created} ta yangi qo'shildi`);
+    if (updated) done.push(`${updated} ta yangilandi`);
+    reportSave(done, failures);
+    if (failures.length === 0) closeAddModal();
   };
 
   // ─── Edit modal (product group) ───────────────────────
   const openEditGroup = (group: ProductGroup) => {
+    savedStockIds.current.clear();
+    goneStockIds.current.clear();
     setEditGroup(group);
     const rows: Record<number, VariantRow> = {};
-    const allVariants = allProductItems.filter((pi) => (pi.product?.id ?? pi.product_id) === group.productId);
-    for (const v of allVariants) {
-      const sp = group.shopItems.find((s) => (s.product_item_id ?? s.product_item?.id) === v.id);
-      rows[v.id] = {
-        checked: !!sp,
-        count: sp?.count != null ? String(sp.count) : "",
-        price: sp?.price != null ? String(sp.price) : "",
-        bonus_price: sp?.bonus_price != null ? String(sp.bonus_price) : "",
-      };
+    for (const v of variantsOf(group.productId)) {
+      const sp = stockInList(v.id);
+      const vals = stockValues(sp);
+      rows[v.id] = sp ? { checked: true, ...vals, orig: vals } : { ...EMPTY_ROW };
     }
     setEditRows(rows);
     openEditModal();
+    loadCatalog();
   };
 
-  const toggleEditVariant = (id: number) => setEditRows((prev) => ({ ...prev, [id]: { ...prev[id], checked: !prev[id]?.checked } }));
-  const updateEditRow = (id: number, field: keyof VariantRow, value: string) => setEditRows((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  // A catalog refresh while the edit modal is open may bring variants that have no row yet:
+  // add them (prefilled from stock) without touching rows the owner already edited.
+  useEffect(() => {
+    if (!editOpen || !editGroup) return;
+    setEditRows((prev) => {
+      let next = prev;
+      for (const v of variantsOf(editGroup.productId)) {
+        if (prev[v.id]) continue;
+        const sp = stockInList(v.id);
+        const vals = stockValues(sp);
+        if (next === prev) next = { ...prev };
+        next[v.id] = sp ? { checked: true, ...vals, orig: vals } : { ...EMPTY_ROW };
+      }
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variantsOf, editOpen, editGroup]);
+
+  const toggleEditVariant = (id: number) => setEditRows((prev) => toggleRow(prev, id));
+  const updateEditRow = (id: number, field: keyof RowValues, value: string) => setEditRows((prev) => patchRow(prev, id, field, value));
   const editCheckedCount = Object.values(editRows).filter((r) => r.checked).length;
 
   const handleEditSave = async () => {
-    if (!editGroup) return;
+    if (!editGroup || editSaving) return;
+    const productInCatalog = productById.has(editGroup.productId);
+    const variants = variantsOf(editGroup.productId);
+    const ops: SaveOp[] = [];
+    const errors: string[] = [];
+    const droppedIds: number[] = [];
+    for (const v of variants) {
+      const row = editRows[v.id] ?? EMPTY_ROW;
+      const label = variantTitle(v);
+      if (row.checked) {
+        const op = buildUpsertOp(v.id, label, row);
+        if (!op) continue;
+        // New stock cannot be added to a product that was deleted from the catalog.
+        if (op.kind === "post" && !productInCatalog) { droppedIds.push(v.id); continue; }
+        const err = validateRow(row, label);
+        if (err) { errors.push(err); continue; }
+        ops.push(op);
+      } else if (row.orig) {
+        // Was stocked when the modal opened and the owner unticked it → remove it.
+        const spId = stockIdFor(v.id);
+        if (spId != null) ops.push({ kind: "delete", piId: v.id, spId, label });
+      }
+    }
+    const variantIds = new Set(variants.map((v) => v.id));
+    for (const [id, r] of Object.entries(editRows)) {
+      if (r.checked && !r.orig && !variantIds.has(Number(id))) droppedIds.push(Number(id));
+    }
+    if (errors.length) { toast.error(firstErrors(errors)); return; }
+    const droppedMsg = droppedIds.length ? `${droppedIds.length} ta variant katalogdan olib tashlangan — saqlanmadi` : "";
+    if (droppedIds.length) setEditRows((prev) => untickRows(prev, droppedIds));
+    if (ops.length === 0) {
+      if (droppedMsg) toast.error(droppedMsg);
+      else { toast.info("O'zgarishlar yo'q"); closeEditModal(); }
+      return;
+    }
+
     setEditSaving(true);
+    beginBusy();
+    let created = 0, updated = 0, deleted = 0;
+    const failures: string[] = droppedMsg ? [droppedMsg] : [];
     try {
-      let created = 0, updated = 0, deleted = 0;
-      for (const [idStr, row] of Object.entries(editRows)) {
-        const piId = Number(idStr);
-        const existingSp = editGroup.shopItems.find((s) => (s.product_item_id ?? s.product_item?.id) === piId);
-        if (row.checked && row.price) {
-          const payload = {
-            product_item_id: piId, price: Number(row.price),
-            count: row.count ? Number(row.count) : 0,
-            bonus_price: row.bonus_price && Number(row.bonus_price) > 0 ? Number(row.bonus_price) : undefined,
-          };
-          if (existingSp) { await axiosClient.put(`/shop-product/${existingSp.id}`, payload); updated++; }
-          else { await axiosClient.post("/shop-product", payload); created++; }
-        } else if (!row.checked && existingSp) {
-          await axiosClient.delete(`/shop-product/${existingSp.id}`); deleted++;
+      for (const op of ops) {
+        const res = await runOp(op);
+        if (res.ok) {
+          if (op.kind === "post") created++; else if (op.kind === "put") updated++; else deleted++;
+          // Saved values become the row's new baseline, so a retry after a partial failure skips it.
+          setEditRows((prev) => ({
+            ...prev,
+            [op.piId]: op.kind === "delete" || !op.values ? { ...EMPTY_ROW } : { ...(prev[op.piId] ?? EMPTY_ROW), orig: op.values },
+          }));
+        } else {
+          failures.push(res.message);
+          setEditRows((prev) => rebaseRow(prev, op.piId, res));
         }
       }
-      const msgs: string[] = [];
-      if (created) msgs.push(`${created} ta qo'shildi`);
-      if (updated) msgs.push(`${updated} ta yangilandi`);
-      if (deleted) msgs.push(`${deleted} ta o'chirildi`);
-      toast.success(msgs.join(", ") || "Saqlandi");
-      onRefetch?.(); closeEditModal();
-    } catch (e: unknown) { toast.error((e as Record<string, Record<string, Record<string, string>>>)?.response?.data?.message ?? "Xatolik yuz berdi"); }
-    finally { setEditSaving(false); }
+    } finally {
+      endBusy();
+      setEditSaving(false);
+      onRefetch?.();
+    }
+    const done: string[] = [];
+    if (created) done.push(`${created} ta qo'shildi`);
+    if (updated) done.push(`${updated} ta yangilandi`);
+    if (deleted) done.push(`${deleted} ta o'chirildi`);
+    reportSave(done, failures);
+    if (failures.length === 0) closeEditModal();
   };
 
   // ─── Delete ────────────────────────────────────────────
   const handleDeleteGroup = async (group: ProductGroup) => {
+    let deleted = 0;
+    const failures: string[] = [];
+    beginBusy();
     try {
-      for (const sp of group.shopItems) await axiosClient.delete(`/shop-product/${sp.id}`);
-      toast.success(`${group.productName} o'chirildi`);
+      for (const sp of group.shopItems) {
+        try { await axiosClient.delete(`/shop-product/${sp.id}`); deleted++; }
+        catch (e) { failures.push(apiError(e)); }
+      }
+    } finally {
+      endBusy();
       onRefetch?.();
-    } catch { toast.error("Xatolik yuz berdi"); }
+    }
+    if (failures.length === 0) toast.success(`${group.productName} o'chirildi`);
+    else toast.error(`${deleted} ta o'chirildi, ${failures.length} ta xatolik: ${failures[0]}`);
   };
 
   const handleDeleteSingle = async (id: number) => {
-    try { await axiosClient.delete(`/shop-product/${id}`); toast.success("Variant o'chirildi"); onRefetch?.(); }
-    catch { toast.error("Xatolik yuz berdi"); }
+    try { await axiosClient.delete(`/shop-product/${id}`); toast.success("Variant o'chirildi"); }
+    catch (e) { toast.error(apiError(e)); }
+    finally { onRefetch?.(); }
   };
 
   // ─── Inline edit single variant ────────────────────────
   const [inlineEditId, setInlineEditId] = useState<number | null>(null);
-  const [inlineForm, setInlineForm] = useState({ count: "", price: "", bonus_price: "" });
+  const [inlineForm, setInlineForm] = useState<RowValues>({ count: "", price: "", bonus_price: "" });
+  const [inlineOrig, setInlineOrig] = useState<RowValues>({ count: "", price: "", bonus_price: "" });
   const [inlineSaving, setInlineSaving] = useState(false);
 
   const startInlineEdit = (sp: ShopProductItemProps) => {
+    const vals = stockValues(sp);
     setInlineEditId(sp.id);
-    setInlineForm({
-      count: sp.count != null ? String(sp.count) : "",
-      price: sp.price != null ? String(sp.price) : "",
-      bonus_price: sp.bonus_price != null ? String(sp.bonus_price) : "",
-    });
+    setInlineForm(vals);
+    setInlineOrig(vals);
   };
 
   const cancelInlineEdit = () => { setInlineEditId(null); };
 
-  const saveInlineEdit = async (id: number) => {
-    if (!inlineForm.price) { toast.error("Narx kiritish shart"); return; }
+  const saveInlineEdit = async (sp: ShopProductItemProps) => {
+    if (inlineSaving) return;
+    const values = trimValues(inlineForm);
+    const changed = changedPayload(values, inlineOrig);
+    if (!changed) { setInlineEditId(null); return; }
+    const err = validateRow(values, "");
+    if (err) { toast.error(err); return; }
     setInlineSaving(true);
+    beginBusy();
     try {
-      await axiosClient.put(`/shop-product/${id}`, {
-        price: Number(inlineForm.price),
-        count: inlineForm.count ? Number(inlineForm.count) : 0,
-        bonus_price: inlineForm.bonus_price && Number(inlineForm.bonus_price) > 0 ? Number(inlineForm.bonus_price) : undefined,
+      const res = await runOp({
+        kind: "put", piId: stockVariantId(sp) ?? 0, spId: sp.id, label: "", payload: changed, values,
+        expectCount: changed.count !== undefined ? inlineOrig.count : undefined,
       });
-      toast.success("Yangilandi");
-      setInlineEditId(null);
+      if (res.ok) {
+        toast.success("Yangilandi");
+        setInlineEditId(null);
+      } else {
+        toast.error(res.message);
+        if (res.currentCount !== undefined) setInlineOrig((o) => ({ ...o, count: String(res.currentCount) }));
+      }
+    } finally {
+      endBusy();
+      setInlineSaving(false);
       onRefetch?.();
-    } catch { toast.error("Xatolik yuz berdi"); }
-    finally { setInlineSaving(false); }
+    }
   };
 
   // ─── Helpers ───────────────────────────────────────────
@@ -383,30 +763,6 @@ export default function ShopProductsTable({
       if (sp.product_item?.image) return `${staticUrl}/static/product-items/${sp.product_item.image}`;
     }
     return null;
-  };
-
-  const getVariantInfo = (sp: ShopProductItemProps) => {
-    const pi = sp.product_item;
-    if (!pi) return { label: "", color: "" };
-    const unitSymbol = pi.product?.unit_type?.symbol ?? pi.unit_type?.symbol;
-    const isDona = unitSymbol === "dona";
-    const parts = [
-      pi.name ?? "",
-      !isDona && pi.value != null && unitSymbol ? `${pi.value} ${unitSymbol}` : "",
-      !isDona && pi.size ? pi.size : "",
-    ].filter(Boolean).join(" · ");
-    return { label: parts || (pi.color ?? ""), color: pi.color ?? "" };
-  };
-
-  const getVariantInfoRaw = (pi: ProductItemRaw, unitType?: { symbol?: string }) => {
-    const unitSymbol = unitType?.symbol ?? pi.unit_type?.symbol;
-    const isDona = unitSymbol === "dona";
-    const parts = [
-      pi.name ?? "",
-      !isDona && pi.value != null && unitSymbol ? `${pi.value} ${unitSymbol}` : "",
-      !isDona && pi.size ? pi.size : "",
-    ].filter(Boolean).join(" · ");
-    return { label: parts || (pi.color ?? `ID:${pi.id}`), color: pi.color ?? "" };
   };
 
   const discountPct = (price?: number, bonus?: number) =>
@@ -457,8 +813,8 @@ export default function ShopProductsTable({
             ) : currentGroups.map((group, idx) => {
               const isExpanded = expandedProducts.has(group.productId);
               const variantCount = group.shopItems.length;
-              const allVariantsForProduct = allProductItems.filter((pi) => (pi.product?.id ?? pi.product_id) === group.productId);
-              const unassigned = allVariantsForProduct.filter((pi) => !group.shopItems.some((sp) => (sp.product_item_id ?? sp.product_item?.id) === pi.id));
+              // A product deleted from the catalog cannot get new stock, so offer no "+ Qo'shish" rows for it.
+              const unassigned = group.archived ? [] : variantsOf(group.productId).filter((pi) => !group.shopItems.some((sp) => stockVariantId(sp) === pi.id));
 
               return [
                 /* Product row */
@@ -480,7 +836,12 @@ export default function ShopProductsTable({
                     })()}
                   </TableCell>
                   <TableCell className="px-4 py-4 font-medium text-gray-800 dark:text-white text-sm">
-                    <div>{group.productName}</div>
+                    <div>
+                      {group.productName}
+                      {group.archived && (
+                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-medium align-middle">Katalogdan o&apos;chirilgan</span>
+                      )}
+                    </div>
                     {group.categoryName && <span className="text-xs text-gray-400">{group.categoryName}</span>}
                   </TableCell>
                   <TableCell className="px-4 py-4 text-sm">
@@ -520,27 +881,32 @@ export default function ShopProductsTable({
                       <TableCell className="px-4 py-3">
                         {color?.startsWith('#') && <span className="w-7 h-7 rounded-lg inline-block ring-1 ring-black/10 shadow-sm" style={{ background: color }} />}
                       </TableCell>
-                      <TableCell colSpan={2} className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{label || "—"}</TableCell>
+                      <TableCell colSpan={2} className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                        {label || "—"}
+                        {!group.archived && isCatalogArchived(sp) && (
+                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-medium">Katalogdan o&apos;chirilgan</span>
+                        )}
+                      </TableCell>
                       {isEditing ? (
                         <>
                           <TableCell className="px-4 py-2">
-                            <input type="number" placeholder="Soni" value={inlineForm.count}
+                            <input type="number" min="0" placeholder="Soni" value={inlineForm.count}
                               onChange={(e) => setInlineForm({ ...inlineForm, count: e.target.value })}
                               className="w-20 px-2 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none" />
                           </TableCell>
                           <TableCell className="px-4 py-2">
                             <div className="flex items-center gap-2">
-                              <input type="number" placeholder="Narx" value={inlineForm.price}
+                              <input type="number" min="0" placeholder="Narx" value={inlineForm.price}
                                 onChange={(e) => setInlineForm({ ...inlineForm, price: e.target.value })}
                                 className="w-28 px-2 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none" />
-                              <input type="number" placeholder="Skidka" value={inlineForm.bonus_price}
+                              <input type="number" min="0" placeholder="Skidka" value={inlineForm.bonus_price}
                                 onChange={(e) => setInlineForm({ ...inlineForm, bonus_price: e.target.value })}
                                 className="w-28 px-2 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                             </div>
                           </TableCell>
                           <TableCell className="px-4 py-2">
                             <div className="flex items-center gap-1.5">
-                              <button onClick={() => saveInlineEdit(sp.id)} disabled={inlineSaving}
+                              <button onClick={() => saveInlineEdit(sp)} disabled={inlineSaving}
                                 className="p-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors disabled:opacity-50" title="Saqlash">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
                               </button>
@@ -555,10 +921,10 @@ export default function ShopProductsTable({
                         <>
                           <TableCell className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{sp.count ? `${sp.count} ta` : "—"}</TableCell>
                           <TableCell className="px-4 py-3 text-sm">
-                            {sp.bonus_price != null && dp !== null && dp > 0 ? (
+                            {sp.bonus_price != null && sp.bonus_price > 0 && sp.price != null && sp.bonus_price < sp.price ? (
                               <div>
                                 <span className="font-bold text-brand-600 dark:text-brand-400">{formatMoney(sp.bonus_price)} so&apos;m</span>
-                                <span className="ml-1 px-1 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-medium">-{dp}%</span>
+                                {dp !== null && dp > 0 && <span className="ml-1 px-1 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-medium">-{dp}%</span>}
                                 <div className="text-[11px] text-gray-400 line-through">{formatMoney(sp.price)} so&apos;m</div>
                               </div>
                             ) : (
@@ -623,7 +989,7 @@ export default function ShopProductsTable({
       </div>
 
       {/* ─── ADD MODAL ──────────────────────────────────── */}
-      <Modal isOpen={addOpen} onClose={closeAddModal} className="max-w-200 m-4">
+      <Modal isOpen={addOpen} onClose={() => { if (!addSaving) closeAddModal(); }} className="max-w-200 m-4">
         <div className="relative w-full overflow-hidden bg-white no-scrollbar rounded-3xl dark:bg-gray-900 shadow-2xl max-h-[90vh] min-h-[340px] flex flex-col">
           <div className="bg-linear-to-r from-emerald-500 to-emerald-600 px-6 py-4 shrink-0">
             <div className="flex items-center gap-3">
@@ -644,21 +1010,48 @@ export default function ShopProductsTable({
               </div>
               <div>
                 <Label>Tovar</Label>
-                <Select options={[{ value: "", label: "Barcha tovarlar" }, ...addProductOptions]} defaultValue={addProdId} onChange={(v) => setAddProdId(v)} />
+                <Select options={addProductOptions} defaultValue={addProdId} onChange={(v) => setAddProdId(v)} />
               </div>
             </div>
           </div>
           <div className="p-4 overflow-y-auto flex-1">
-            {addFilteredProducts.length === 0 ? (
+            {!catalogReady ? (
+              <div className="py-12 text-center">
+                {catalogStatus === "error" ? (
+                  <>
+                    <p className="text-sm text-gray-400">Katalogni yuklab bo&apos;lmadi</p>
+                    <button type="button" onClick={() => loadCatalog()} className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium">Qayta urinish</button>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400">Yuklanmoqda...</p>
+                )}
+              </div>
+            ) : addFilteredProducts.length === 0 ? (
               <div className="py-12 text-center"><p className="text-sm text-gray-400">Tovar topilmadi</p></div>
             ) : (
               <div className="space-y-2">
                 {addFilteredProducts.map((prod) => {
                   const pName = prod.name_uz ?? prod.name ?? prod.name_ru ?? `#${prod.id}`;
-                  const prodItems = allProductItems.filter((pi) => String(pi.product?.id ?? pi.product_id ?? "") === String(prod.id));
+                  const prodItems = variantsOf(prod.id);
+                  if (prodItems.length === 0) {
+                    // No variants yet: nothing can be priced/stocked — shown disabled with the agreed wording.
+                    return (
+                      <div key={prod.id} className="rounded-xl border border-gray-200 dark:border-white/6 bg-gray-50/60 dark:bg-white/1" aria-disabled="true">
+                        <div className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-not-allowed">
+                          <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                          <div className="flex-1 min-w-0">
+                            <span className="font-semibold text-sm text-gray-400 dark:text-gray-500">{pName}</span>
+                            <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">Tovar turlari qo&apos;shilmoqda — administrator variant qo&apos;shgach narx kiritish mumkin bo&apos;ladi</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
                   const isExp = expandedAddProds.has(prod.id);
                   const checkedInProd = prodItems.filter((v) => variantRows[v.id]?.checked).length;
-                  const existingInShop = prodItems.filter((v) => data.some((sp) => (sp.product_item_id ?? sp.product_item?.id) === v.id && sp.shop_id === shopId)).length;
+                  const existingInShop = prodItems.filter((v) => data.some((sp) => stockVariantId(sp) === v.id && sp.shop_id === shopId)).length;
 
                   return (
                     <div key={prod.id} className={`rounded-xl border transition-all ${
@@ -693,7 +1086,7 @@ export default function ShopProductsTable({
                           )}
                         </div>
                       </button>
-                      {isExp && prodItems.length > 0 && (
+                      {isExp && (
                         <div className="px-4 pb-3 border-t border-gray-100 dark:border-white/5">
                           <VariantCheckboxList
                             variants={prodItems}
@@ -707,9 +1100,6 @@ export default function ShopProductsTable({
                           />
                         </div>
                       )}
-                      {isExp && prodItems.length === 0 && (
-                        <div className="px-4 pb-3 pt-1 text-xs text-gray-400 italic">Variantlar yo&apos;q</div>
-                      )}
                     </div>
                   );
                 })}
@@ -717,9 +1107,12 @@ export default function ShopProductsTable({
             )}
           </div>
           <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 dark:border-white/5 shrink-0 justify-between">
-            <span className="text-xs text-gray-400">{addFilteredProducts.length} ta tovar</span>
+            <span className="text-xs text-gray-400">
+              {addFilteredProducts.length} ta tovar
+              {hiddenCheckedCount > 0 && ` · yana ${hiddenCheckedCount} ta tanlov boshqa filtrda`}
+            </span>
             <div className="flex items-center gap-3">
-              <Button size="sm" variant="outline" onClick={closeAddModal}>Bekor qilish</Button>
+              <Button size="sm" variant="outline" onClick={closeAddModal} disabled={addSaving}>Bekor qilish</Button>
               <Button size="sm" onClick={handleAddSave} disabled={addSaving || checkedCount === 0}>{addSaving ? "Saqlanmoqda..." : `Saqlash (${checkedCount} ta)`}</Button>
             </div>
           </div>
@@ -727,7 +1120,7 @@ export default function ShopProductsTable({
       </Modal>
 
       {/* ─── EDIT MODAL ─────────────────────────────────── */}
-      <Modal isOpen={editOpen} onClose={closeEditModal} className="max-w-180 m-4">
+      <Modal isOpen={editOpen} onClose={() => { if (!editSaving) closeEditModal(); }} className="max-w-180 m-4">
         <div className="relative w-full overflow-hidden bg-white no-scrollbar rounded-3xl dark:bg-gray-900 shadow-2xl max-h-[90vh] flex flex-col">
           <div className="bg-linear-to-r from-blue-500 to-blue-600 px-6 py-4 shrink-0">
             <div className="flex items-center gap-3">
@@ -744,15 +1137,26 @@ export default function ShopProductsTable({
             </div>
           </div>
           <div className="p-6 overflow-y-auto flex-1">
-            {editGroup && (() => {
-              const allVariants = allProductItems.filter((pi) => (pi.product?.id ?? pi.product_id) === editGroup.productId);
+            {!catalogReady ? (
+              <div className="py-12 text-center">
+                {catalogStatus === "error" ? (
+                  <>
+                    <p className="text-sm text-gray-400">Katalogni yuklab bo&apos;lmadi</p>
+                    <button type="button" onClick={() => loadCatalog()} className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium">Qayta urinish</button>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400">Yuklanmoqda...</p>
+                )}
+              </div>
+            ) : editGroup && (() => {
+              const allVariants = variantsOf(editGroup.productId);
               return <VariantCheckboxList variants={allVariants} rows={editRows} toggle={toggleEditVariant} update={updateEditRow}
                 checkedCount={editCheckedCount} data={data} shopId={shopId} allProducts={allProducts} />;
             })()}
           </div>
           <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 dark:border-white/5 shrink-0 justify-end">
-            <Button size="sm" variant="outline" onClick={closeEditModal}>Bekor qilish</Button>
-            <Button size="sm" onClick={handleEditSave} disabled={editSaving}>{editSaving ? "Saqlanmoqda..." : `Saqlash (${editCheckedCount} ta)`}</Button>
+            <Button size="sm" variant="outline" onClick={closeEditModal} disabled={editSaving}>Bekor qilish</Button>
+            <Button size="sm" onClick={handleEditSave} disabled={editSaving || !catalogReady}>{editSaving ? "Saqlanmoqda..." : `Saqlash (${editCheckedCount} ta)`}</Button>
           </div>
         </div>
       </Modal>
@@ -761,8 +1165,8 @@ export default function ShopProductsTable({
       <Modal isOpen={infoOpen} onClose={closeInfoModal} className="max-w-200 m-4">
         <div className="relative w-full overflow-hidden bg-white no-scrollbar rounded-3xl dark:bg-gray-900 shadow-2xl max-h-[90vh] flex flex-col">
           {infoGroup && (() => {
-            const prod = allProducts.find((p) => p.id === infoGroup.productId);
-            const variants = allProductItems.filter((pi) => (pi.product?.id ?? pi.product_id) === infoGroup.productId);
+            const prod = productById.get(infoGroup.productId);
+            const variants = variantsOf(infoGroup.productId);
             const imgUrl = getProductImage(infoGroup);
             const totalCount = infoGroup.totalCount;
             const totalSold = infoGroup.totalSold;
@@ -863,7 +1267,7 @@ export default function ShopProductsTable({
                       {variants.length === 0 ? (
                         <p className="text-sm text-gray-400 text-center py-4">Variant yo&apos;q</p>
                       ) : variants.map((v) => {
-                        const sp = infoGroup.shopItems.find((s) => (s.product_item_id ?? s.product_item?.id) === v.id);
+                        const sp = infoGroup.shopItems.find((s) => stockVariantId(s) === v.id);
                         const inShop = !!sp;
                         const vImg = v.image
                           ? `${staticUrl}/static/product-items/${v.image}`
@@ -902,7 +1306,7 @@ export default function ShopProductsTable({
                                   Sklad: <span className="font-semibold text-gray-700 dark:text-gray-200">{sp!.count ?? 0}</span>
                                   {" · "}
                                   Narx: <span className="font-semibold text-gray-700 dark:text-gray-200">{sp!.price ? formatMoney(sp!.price) : "—"}</span>
-                                  {sp!.bonus_price ? (
+                                  {sp!.bonus_price && sp!.bonus_price > 0 && sp!.bonus_price < (sp!.price ?? 0) ? (
                                     <> {" · "}<span className="text-rose-500 font-semibold">skidka {formatMoney(sp!.bonus_price)}</span></>
                                   ) : null}
                                   {sp!.sold_count ? <> {" · "}sotilgan: <span className="font-semibold">{sp!.sold_count}</span></> : null}
@@ -942,7 +1346,7 @@ function VariantCheckboxList({
   // eslint-disable-next-line no-unused-vars
   toggle: (_id: number) => void;
   // eslint-disable-next-line no-unused-vars
-  update: (_id: number, _field: keyof VariantRow, _value: string) => void;
+  update: (_id: number, _field: keyof RowValues, _value: string) => void;
   checkedCount: number;
   data: ShopProductItemProps[];
   shopId: number;
@@ -963,8 +1367,8 @@ function VariantCheckboxList({
       </div>
       <div className="space-y-2">
         {variants.map((v) => {
-          const row = rows[v.id] ?? { checked: false, count: "", price: "", bonus_price: "" };
-          const existing = data.find((sp) => (sp.product_item_id ?? sp.product_item?.id) === v.id && sp.shop_id === shopId);
+          const row = rows[v.id] ?? EMPTY_ROW;
+          const existing = data.find((sp) => stockVariantId(sp) === v.id && sp.shop_id === shopId);
           const prod = allProducts.find((p) => String(p.id) === String(v.product?.id ?? v.product_id ?? ""));
           const unitSymbol = prod?.unit_type?.symbol ?? v.unit_type?.symbol;
           const isDona = unitSymbol === "dona";
@@ -1002,22 +1406,22 @@ function VariantCheckboxList({
                       <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">Sizda bor &mdash; o&apos;zgartirmoqchimisiz?</p>
                       <p className="text-xs text-blue-600 dark:text-blue-400">
                         Hozirgi: {existing.count ?? 0} ta &middot; {existing.price ? `${formatMoney(existing.price)} so'm` : "narx yo'q"}
-                        {existing.bonus_price ? ` · skidka: ${formatMoney(existing.bonus_price)} so'm` : ""}
+                        {existing.bonus_price != null && existing.bonus_price > 0 && existing.bonus_price < (existing.price ?? 0) ? ` · skidka: ${formatMoney(existing.bonus_price)} so'm` : ""}
                       </p>
                     </div>
                   )}
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Soni</label>
-                      <Input type="number" placeholder="0" value={row.count} onChange={(e) => update(v.id, "count", e.target.value)} />
+                      <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Soni <span className="text-error-500">*</span></label>
+                      <Input type="number" min="0" placeholder="0" value={row.count} onChange={(e) => update(v.id, "count", e.target.value)} />
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Narx <span className="text-error-500">*</span></label>
-                      <Input type="number" placeholder="so'm" value={row.price} onChange={(e) => update(v.id, "price", e.target.value)} />
+                      <Input type="number" min="0" placeholder="so'm" value={row.price} onChange={(e) => update(v.id, "price", e.target.value)} />
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Skidka narxi</label>
-                      <Input type="number" placeholder="ixtiyoriy" value={row.bonus_price} onChange={(e) => update(v.id, "bonus_price", e.target.value)} />
+                      <Input type="number" min="0" placeholder="ixtiyoriy" value={row.bonus_price} onChange={(e) => update(v.id, "bonus_price", e.target.value)} />
                     </div>
                   </div>
                 </div>

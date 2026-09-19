@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import '../export_files.dart';
+import '../services/auth/session_service.dart';
 import '../services/storage/storage_service.dart';
 
 // ignore_for_file: use_build_context_synchronously
@@ -150,6 +151,12 @@ class _SplashScreenState extends State<SplashScreen>
     _exitCtrl.forward();
     final token = await StorageService().read(StorageService.token);
     if (!mounted) return;
+    if (token is String && SessionService.isExpired(token)) {
+      // An expired JWT would only fail on the home screen; go to login now
+      // and say why.
+      SessionService.endSession();
+      return;
+    }
     Navigator.pushNamedAndRemoveUntil(
       context,
       token == null ? RouteNames.loginScreen : RouteNames.homeScreen,

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:get_storage/get_storage.dart';
 
+import '../../services/auth/session_service.dart';
 import 'app_logger.dart';
 
 /// Dio interceptor that pretty-prints every request / response / error.
@@ -48,6 +49,11 @@ class AppDioInterceptor extends Interceptor {
       ms:      ms,
       message: message,
     );
+    // An expired/invalid JWT ends the session (clear token -> login screen)
+    // instead of leaving screens silently empty.
+    if (status == 401) {
+      SessionService.handleUnauthorized(err.requestOptions, body);
+    }
     handler.next(err);
   }
 

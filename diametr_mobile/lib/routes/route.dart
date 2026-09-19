@@ -6,6 +6,7 @@ import 'package:stroymarket/screens/services/serviceAll_screen.dart';
 import 'package:stroymarket/screens/services/workers_screen.dart';
 import 'package:stroymarket/screens/sms_confirm/sms_screen.dart';
 
+import '../bloc/shopProduct/shopProduct_bloc.dart';
 import '../export_files.dart';
 import '../screens/cart/cart_screen.dart';
 import '../screens/products/product_screen.dart';
@@ -28,6 +29,7 @@ class FullRoutes {
       case RouteNames.smsScreen:
         return customPageRoute(SmsScreen(
           id: args != null ? args["id"]?.toString() : null,
+          phone: args != null ? args["phone"]?.toString() : null,
         ));
 
       case RouteNames.homeScreen:
@@ -75,12 +77,18 @@ class FullRoutes {
           data: args != null ? args["data"] : null,
         ));
       case RouteNames.shopProductScreen:
-        return customPageRoute(ShopProductScreen(
-          name: args != null ? args["name"] : null,
-          product_id: args != null ? args["product_id"]?.toString() : null,
-          shop_id: args != null ? args["shop_id"]?.toString() : null,
-          desc: args != null ? args["desc"] : null,
-          image: args != null ? args["image"] : null,
+        // One ShopProductBloc per screen: this route pushes itself (the
+        // recommendations row), and a shared bloc made the screen underneath
+        // show — and add to cart — the other product's variants after "back".
+        return customPageRoute(BlocProvider<ShopProductBloc>(
+          create: (_) => ShopProductBloc(),
+          child: ShopProductScreen(
+            name: args != null ? args["name"] : null,
+            product_id: args != null ? args["product_id"]?.toString() : null,
+            shop_id: args != null ? args["shop_id"]?.toString() : null,
+            desc: args != null ? args["desc"] : null,
+            image: args != null ? args["image"] : null,
+          ),
         ));
       case RouteNames.productScreen:
         return customPageRoute(ProductScreen(

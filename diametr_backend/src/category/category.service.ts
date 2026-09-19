@@ -122,6 +122,18 @@ export class CategoryService {
       throw new NotFoundException('category not found');
     }
 
+    // Archiving a category never touched its products, which then dropped out
+    // of category browsing while still being sold. Refuse until they are
+    // moved or archived.
+    const workingProducts = await this.prisma.product.count({
+      where: { category_id: id, work_status: 'WORKING' },
+    });
+    if (workingProducts > 0) {
+      throw new BadRequestException(
+        `Bu kategoriyada ${workingProducts} ta faol mahsulot bor. Avval ularni boshqa kategoriyaga o'tkazing yoki o'chiring`,
+      );
+    }
+
     return await this.prisma.category.update({
       where: { id },
       data: { work_status: 'DELETED' },

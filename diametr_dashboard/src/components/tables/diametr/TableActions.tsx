@@ -23,16 +23,28 @@ export function ConfirmDeleteModal({
   desc,
   onConfirm,
   onCancel,
+  confirmLabel = "O'chirish",
+  tone = "danger",
 }: {
   title: string;
   desc: string;
   onConfirm: () => void;
   onCancel: () => void;
+  confirmLabel?: string;
+  /** "primary" = non-destructive confirmation (brand colours, no trash icon). */
+  tone?: "danger" | "primary";
 }) {
+  const primary = tone === "primary";
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onCancel();
-    document.addEventListener("keydown", esc);
-    return () => document.removeEventListener("keydown", esc);
+    // Capture on window + stopPropagation: Escape closes only this confirm, never a form
+    // modal underneath it (e.g. the product add/edit modal behind the duplicate-name confirm).
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onCancel();
+    };
+    window.addEventListener("keydown", esc, true);
+    return () => window.removeEventListener("keydown", esc, true);
   }, [onCancel]);
 
   return createPortal(
@@ -54,14 +66,14 @@ export function ConfirmDeleteModal({
         style={{ animation: "dmslideup 0.2s ease both" }}
       >
         {/* Icon */}
-        <div className="mx-auto mb-4 flex items-center justify-center w-16 h-16 rounded-full bg-red-50 dark:bg-red-500/10">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 dark:bg-red-500/20">
+        <div className={`mx-auto mb-4 flex items-center justify-center w-16 h-16 rounded-full ${primary ? "bg-brand-50 dark:bg-brand-500/10" : "bg-red-50 dark:bg-red-500/10"}`}>
+          <div className={`flex items-center justify-center w-10 h-10 rounded-full ${primary ? "bg-brand-100 dark:bg-brand-500/20" : "bg-red-100 dark:bg-red-500/20"}`}>
             <svg
               width="22" height="22" viewBox="0 0 24 24" fill="none"
-              className="text-red-500"
+              className={primary ? "text-brand-500" : "text-red-500"}
             >
               <path
-                d="M9 3h6l1 1h4v2H4V4h4L9 3ZM5 8h14l-1 13H6L5 8Zm5 3v7m4-7v7"
+                d={primary ? "M12 8v5m0 3.5h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" : "M9 3h6l1 1h4v2H4V4h4L9 3ZM5 8h14l-1 13H6L5 8Zm5 3v7m4-7v7"}
                 stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
               />
             </svg>
@@ -90,13 +102,14 @@ export function ConfirmDeleteModal({
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 px-4 py-2.5 rounded-xl
+            className={`flex-1 px-4 py-2.5 rounded-xl
                        text-sm font-semibold text-white
-                       bg-red-500 hover:bg-red-600 active:bg-red-700
-                       shadow-sm shadow-red-500/30
-                       transition-colors"
+                       ${primary
+                         ? "bg-brand-500 hover:bg-brand-600 active:bg-brand-700 shadow-sm shadow-brand-500/30"
+                         : "bg-red-500 hover:bg-red-600 active:bg-red-700 shadow-sm shadow-red-500/30"}
+                       transition-colors`}
           >
-            O'chirish
+            {confirmLabel}
           </button>
         </div>
       </div>

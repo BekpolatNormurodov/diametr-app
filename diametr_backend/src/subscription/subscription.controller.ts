@@ -9,6 +9,8 @@ import {
   UseGuards,
   Req,
   Query,
+  Headers,
+  HttpCode,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -150,16 +152,24 @@ export class SubscriptionController {
   }
 
   // ── Payment webhooks (PUBLIC) ─────────────────────────────────────────────
+  // Called only by Click's / Payme's servers. Both fail closed: without
+  // CLICK_SECRET_KEY + CLICK_SERVICE_ID (signature) or PAYME_KEY (Basic auth)
+  // in the env every request is refused and nothing is credited.
 
   @Post('webhook/click')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Click webhook' })
   handleClick(@Body() body: any) {
     return this.service.handleClickWebhook(body);
   }
 
   @Post('webhook/payme')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Payme webhook (JSON-RPC)' })
-  handlePayme(@Body() body: any) {
-    return this.service.handlePaymeWebhook(body);
+  handlePayme(
+    @Body() body: any,
+    @Headers('authorization') authorization?: string,
+  ) {
+    return this.service.handlePaymeWebhook(body, authorization);
   }
 }

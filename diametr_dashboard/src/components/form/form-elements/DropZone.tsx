@@ -14,7 +14,6 @@ const DropzoneComponent: React.FC = () => {
       "image/png": [],
       "image/jpeg": [],
       "image/webp": [],
-      "image/svg+xml": [],
     },
   });
   return (
@@ -60,7 +59,7 @@ const DropzoneComponent: React.FC = () => {
             </h4>
 
             <span className=" text-center mb-5 block w-full max-w-[290px] text-sm text-gray-700 dark:text-gray-400">
-              Drag and drop your PNG, JPG, WebP, SVG images here or browse
+              Drag and drop your PNG, JPG, WebP images here or browse
             </span>
 
             <span className="font-medium underline text-theme-sm text-brand-500">

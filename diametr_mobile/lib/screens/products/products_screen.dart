@@ -3,6 +3,7 @@ import '../../bloc/productbyCategory/productbyCategory_bloc.dart';
 import '../../bloc/productbyCategory/productbyCategory_state.dart';
 import '../../export_files.dart';
 import '../../manager/5_product_manager.dart';
+import '../../widgets/common/pull_to_refresh_fill.dart';
 
 // ignore: must_be_immutable
 class ProductsScreen extends StatefulWidget {
@@ -69,33 +70,41 @@ class _ProductsScreenState extends State<ProductsScreen> {
         scaffoldKey, categoryName, () {
         Navigator.of(context).pop();
       }, 'assets/icons/chevron-left.png',  savatcha: true),
-      body: BlocBuilder<ProductByCategoryBloc, ProductByCategoryState>(
-          builder: (context, state) {
-        if (state is ProductByCategorySuccessState) {
-          // Skip catalogue placeholders with no variants — they have no shop or
-          // price and only lead to a dead "Do'kon topilmadi" page.
-          final list = (state.data ?? [])
-              .where((p) => (p["items"] as List?)?.isNotEmpty ?? false)
-              .toList();
-          if (list.isEmpty) {
-            return EmptyState(
-              icon: Iconsax.box,
-              title: 'products_empty'.tr(),
-              subtitle: "Bu bo'limda hozircha mahsulotlar yo'q.",
+      body: RefreshIndicator(
+        color: AppConstant.primaryColor,
+        backgroundColor: context.tCard,
+        onRefresh: () => ProductManager.getbyCategoryId(context,
+            categoryId: "${widget.data["id"]}"),
+        child: BlocBuilder<ProductByCategoryBloc, ProductByCategoryState>(
+            builder: (context, state) {
+          if (state is ProductByCategorySuccessState) {
+            // Show every product in the category; variantless ones are marked
+            // "Turlari qo'shilmoqda" on the card instead of being hidden.
+            final list = (state.data ?? []).toList();
+            if (list.isEmpty) {
+              return PullToRefreshFill(
+                child: EmptyState(
+                  icon: Iconsax.box,
+                  title: 'products_empty'.tr(),
+                  subtitle: "Bu bo'limda hozircha mahsulotlar yo'q.",
+                ),
+              );
+            }
+            // Backend orders by id desc → keep that order (newest first).
+            return productsScreenBody(list);
+          } else if (state is ProductByCategoryWaitingState) {
+            return _buildShimmer();
+          } else {
+            return PullToRefreshFill(
+              child: EmptyState(
+                icon: Iconsax.box,
+                title: 'products_empty'.tr(),
+                subtitle: "Bu bo'limda hozircha mahsulotlar yo'q.",
+              ),
             );
           }
-          // Backend orders by id desc → keep that order (newest first).
-          return productsScreenBody(list);
-        } else if (state is ProductByCategoryWaitingState) {
-          return _buildShimmer();
-        } else {
-          return EmptyState(
-            icon: Iconsax.box,
-            title: 'products_empty'.tr(),
-            subtitle: "Bu bo'limda hozircha mahsulotlar yo'q.",
-          );
-        }
-      }),
+        }),
+      ),
     );
   }
 
@@ -191,6 +200,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
         final item = data[index] as Map;
         final name = _loc(item);
         final sold = int.tryParse(item['count']?.toString() ?? '') ?? 0;
+        final hasVariant = (item["items"] as List?)?.isNotEmpty ?? false;
         final primary = AppConstant.primaryColor;
         final dark = context.isDark;
         final hasImage = item["image"] != null &&
@@ -280,9 +290,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           Positioned(
                             top: 8.h,
                             right: 8.w,
-                            child: sold > 0
-                                ? _SoldBadge(sold: sold, primary: primary)
-                                : const _NewBadge(),
+                            child: !hasVariant
+                                ? const _ComingSoonBadge()
+                                : sold > 0
+                                    ? _SoldBadge(sold: sold, primary: primary)
+                                    : const _NewBadge(),
                           ),
                         ],
                       ),
@@ -313,16 +325,23 @@ class _ProductsScreenState extends State<ProductsScreen> {
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Icon(Iconsax.shop,
-                                    size: 12.sp, color: context.tSub),
+                                Icon(hasVariant ? Iconsax.shop : Iconsax.clock,
+                                    size: 12.sp,
+                                    color: hasVariant
+                                        ? context.tSub
+                                        : const Color(0xFF8A94A6)),
                                 SizedBox(width: 4.w),
                                 Expanded(
                                   child: Text(
-                                    'tap_to_view'.tr(),
+                                    hasVariant
+                                        ? 'tap_to_view'.tr()
+                                        : 'coming_soon'.tr(),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      color: context.tSub,
+                                      color: hasVariant
+                                          ? context.tSub
+                                          : const Color(0xFF8A94A6),
                                       fontSize: 10.5.sp,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -444,6 +463,46 @@ class _NewBadge extends StatelessWidget {
               fontSize: 10.sp,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Top-right "Qo'shilmoqda" (types being added) badge for variantless products —
+/// neutral slate so it reads as "not yet on sale", not a promo.
+class _ComingSoonBadge extends StatelessWidget {
+  const _ComingSoonBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 9.w, vertical: 5.h),
+      decoration: BoxDecoration(
+        color: const Color(0xFF334155).withValues(alpha: 0.90),
+        borderRadius: BorderRadius.circular(20.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Iconsax.clock, size: 10.sp, color: Colors.white),
+          SizedBox(width: 3.w),
+          Text(
+            'coming_soon_short'.tr(),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10.sp,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
             ),
           ),
         ],

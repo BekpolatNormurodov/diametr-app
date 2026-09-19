@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDownIcon } from "../../icons";
+import { matchesSearchKey, searchKey } from "../../utils/searchKey";
 
 interface Option {
   value: string;
@@ -49,8 +50,9 @@ const Select: React.FC<SelectProps> = ({
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
-  const filtered = search.trim()
-    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+  const searchQueryKey = searchKey(search);
+  const filtered = searchQueryKey
+    ? options.filter((o) => matchesSearchKey(searchQueryKey, [o.label]))
     : options;
 
   const selectedLabel = options.find((o) => o.value === displayValue)?.label;

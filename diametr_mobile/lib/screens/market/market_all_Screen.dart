@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:geolocator/geolocator.dart';
+import 'package:stroymarket/core/utils/search_key.dart';
 import 'package:stroymarket/manager/6_region_manager.dart';
 import 'package:stroymarket/manager/8_shop_manager.dart';
 import 'package:stroymarket/screens/home/components/region_filter.dart';
@@ -9,6 +10,11 @@ import 'package:stroymarket/services/location/location_service.dart';
 import '../../bloc/shopAll/shopAll_bloc.dart';
 import '../../bloc/shopAll/shopAll_state.dart';
 import '../../export_files.dart';
+import '../../widgets/common/pull_to_refresh_fill.dart';
+
+// Search key (see searchKey) of each shop's name, computed once per shop
+// instead of on every keystroke.
+final SearchKeyIndex _nameKeys = SearchKeyIndex((s) => [s["name"]]);
 
 double _distKmAll(double lat1, double lon1, double lat2, double lon2) {
   const r = 6371.0;
@@ -37,7 +43,8 @@ class MarketAllScreen extends StatefulWidget {
 class _MarketAllScreenState extends State<MarketAllScreen> {
   final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey();
   final TextEditingController _searchCtrl = TextEditingController();
-  String _query = '';
+  String _query = ''; // typed text — drives the clear button / empty state
+  String _queryKey = ''; // searchKey of it — drives the matching
   int _visibleCount = 14;
   Position? _pos;
 
@@ -47,7 +54,8 @@ class _MarketAllScreenState extends State<MarketAllScreen> {
     ShopManager.getAll(context);
     RegionManager.getAll(context);
     _searchCtrl.addListener(() => setState(() {
-      _query = _searchCtrl.text.trim().toLowerCase();
+      _query = _searchCtrl.text.trim();
+      _queryKey = searchKey(_searchCtrl.text);
       _visibleCount = 14;
     }));
     LocationService.getCurrentPoint().then((p) {
@@ -62,9 +70,10 @@ class _MarketAllScreenState extends State<MarketAllScreen> {
   }
 
   List _filtered(List data) {
-    var list = _query.isEmpty
+    // Latin and Cyrillic spellings of a shop name match each other (searchKey).
+    var list = _queryKey.isEmpty
         ? List.from(data)
-        : data.where((s) => (s["name"] ?? "").toString().toLowerCase().contains(_query)).toList();
+        : data.where((s) => _nameKeys.matches(s, _queryKey)).toList();
     if (_pos != null) {
       list.sort((a, b) {
         final aLat = (a["lat"] as num?)?.toDouble() ?? 0.0;
@@ -152,25 +161,31 @@ class _MarketAllScreenState extends State<MarketAllScreen> {
                 ],
             ),
           ),
-          // ── List ──
+          // ── List ── (pull down to reload the shops)
           Expanded(
-            child: BlocBuilder<ShopAllBloc, ShopAllState>(
+            child: RefreshIndicator(
+              color: AppConstant.primaryColor,
+              backgroundColor: context.tCard,
+              onRefresh: () => ShopManager.getAll(context),
+              child: BlocBuilder<ShopAllBloc, ShopAllState>(
               builder: (context, state) {
                 if (state is ShopAllSuccessState) {
                   // Newest first.
                   final items = _filtered(state.data.reversed.toList());
                   final visibleItems = items.take(_visibleCount).toList();
                   if (items.isEmpty) {
-                    return EmptyState(
-                      icon: _query.isEmpty
-                          ? Iconsax.shop
-                          : Iconsax.search_normal_1,
-                      title: _query.isEmpty
-                          ? 'market_all_title'.tr()
-                          : 'search_empty'.tr(),
-                      subtitle: _query.isEmpty
-                          ? "Hozircha do'konlar topilmadi."
-                          : null,
+                    return PullToRefreshFill(
+                      child: EmptyState(
+                        icon: _query.isEmpty
+                            ? Iconsax.shop
+                            : Iconsax.search_normal_1,
+                        title: _query.isEmpty
+                            ? 'market_all_title'.tr()
+                            : 'search_empty'.tr(),
+                        subtitle: _query.isEmpty
+                            ? "Hozircha do'konlar topilmadi."
+                            : null,
+                      ),
                     );
                   }
                   return Column(
@@ -382,8 +397,9 @@ class _MarketAllScreenState extends State<MarketAllScreen> {
                     ),
                   );
                 }
-                return const SizedBox();
+                return const PullToRefreshFill(child: SizedBox());
               },
+              ),
             ),
           ),
         ],

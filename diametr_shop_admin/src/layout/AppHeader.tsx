@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { useSidebar } from "../context/SidebarContext";
 import { ThemeToggleButton } from "../components/common/ThemeToggleButton";
 import Moment from "moment";
+import { useShopSession, type SessionUser } from "../context/ShopSessionContext";
 
 function getSubBadge(expired?: string | null) {
   if (!expired) return null;
@@ -22,7 +23,9 @@ const AppHeader: React.FC = () => {
     }
   };
 
-  const user = JSON.parse(localStorage.getItem("user") ?? "null");
+  // Stored login snapshot is only the placeholder; the session provider keeps
+  // shop name / expiry live (mount, every 60s, on focus, after payments).
+  const { user } = useShopSession();
   const shopName = user?.shop?.name ?? user?.shopName ?? "Do'kon Admin";
   const subBadge = getSubBadge(user?.shop?.expired);
 
@@ -67,7 +70,7 @@ const AppHeader: React.FC = () => {
   );
 };
 
-function ShopUserDropdown({ user }: { user: any }) {
+function ShopUserDropdown({ user }: { user: SessionUser | null }) {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");

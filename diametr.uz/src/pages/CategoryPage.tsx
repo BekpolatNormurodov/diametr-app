@@ -1,17 +1,39 @@
-import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import { useLang } from '../context/AppContext'
-import { useCart } from '../context/CartContext'
+import { useCart, variantLabelOf } from '../context/CartContext'
 import Navbar from '../components/home/sections/navbar'
 import AuthModal from '../components/auth/AuthModal'
 import CartDrawer from '../components/cart/CartDrawer'
-import { authService, AuthUser } from '../service/authService'
+import { authService } from '../service/authService'
 import { useScrollReveal } from '../hooks/useScrollReveal'
+import { useAuthUser } from '../hooks/useAuthUser'
+import { searchKey, buildSearchKeys, matchesSearch } from '../utils/searchKey'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
+
+interface ProductItem {
+  id: number
+  name?: string
+  name_uz?: string
+  name_ru?: string
+  value?: number | string | null
+  size?: string | null
+  color?: string | null
+  unit_type?: { symbol?: string | null } | null
+  // /product/all: how many WORKING stock rows the variant has
+  _count?: { shop_products?: number }
+  shop_products?: Array<{
+    id: number
+    price?: number
+    bonus_price?: number | null
+    count?: number
+    shop?: { id: number; name?: string; address?: string; lat?: number; lon?: number; image?: string; delivery_amount?: number }
+  }>
+}
 
 interface Product {
   id: number
@@ -21,19 +43,23 @@ interface Product {
   image?: string
   desc?: string
   category?: { id: number; name_uz?: string; name_ru?: string; name?: string }
-  items?: Array<{
-    id: number
-    name?: string
-    name_uz?: string
-    name_ru?: string
-    shop_products?: Array<{
-      id: number
-      price?: number
-      bonus_price?: number | null
-      count?: number
-      shop?: { id: number; name?: string; address?: string; lat?: number; lon?: number; image?: string; delivery_amount?: number }
-    }>
-  }>
+  items?: ProductItem[]
+}
+
+// Lowest effective price over the rows a customer can actually buy
+// (a real shop, in stock). Infinity when there is none.
+const minPriceOf = (data: any) => {
+  let minP = Infinity
+  ;(data?.items ?? []).forEach((item: any) => {
+    ;(item.shop_products ?? []).forEach((sp: any) => {
+      if (!sp?.shop?.id || sp.count == null || sp.count <= 0) return
+      const eff = (sp.price != null && sp.bonus_price != null && sp.bonus_price > 0 && sp.bonus_price < sp.price)
+        ? sp.bonus_price
+        : sp.price
+      if (eff != null && eff < minP) minP = eff
+    })
+  })
+  return minP
 }
 
 interface Category {
@@ -58,7 +84,11 @@ export default function CategoryPage() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Product | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [user, setUser] = useState<AuthUser | null>(() => authService.getUser())
+  // The product modal could not be loaded (network/server error, or 404 = archived)
+  const [detailError, setDetailError] = useState<{ product: Product; notFound: boolean } | null>(null)
+  // Only the latest openDetail() request may fill the modal
+  const detailReqRef = useRef(0)
+  const [user, setUser] = useAuthUser()
   const [authOpen, setAuthOpen] = useState(false)
   const revealRef = useScrollReveal()
   const [cartOpen, setCartOpen] = useState(false)
@@ -125,11 +155,12 @@ export default function CategoryPage() {
     const handler = (e: MouseEvent) => {
       if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
         setSelected(null)
+        setDetailError(null)
       }
     }
-    if (selected) document.addEventListener('mousedown', handler)
+    if (selected || detailError) document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [selected])
+  }, [selected, detailError])
 
   // Fetch products & category info
   useEffect(() => {
@@ -158,14 +189,13 @@ export default function CategoryPage() {
 
         // Newest first by id
         allProds.sort((a, b) => (b.id ?? 0) - (a.id ?? 0))
-        // Build the category chips from the categories that stocked products are
-        // ACTUALLY linked to — /category/all lists a newer set most products
-        // aren't attached to yet, so using it would show chips that open to an
-        // empty page while hiding the real, navigable categories.
+        // Build the category chips from every category a product is linked to.
+        // (Variantless "coming soon" products are shown too now, so any category
+        // that has ANY product should get a navigable chip — not only stocked ones.)
         const catMap = new Map<number, Category>()
         allProds.forEach(p => {
           const c = p.category
-          if ((p.items?.length ?? 0) > 0 && c?.id != null && !catMap.has(c.id)) {
+          if (c?.id != null && !catMap.has(c.id)) {
             catMap.set(c.id, c as Category)
           }
         })
@@ -182,15 +212,48 @@ export default function CategoryPage() {
   }, [id])
 
   const openDetail = (p: Product) => {
+    const req = ++detailReqRef.current
     setSelected(null)
+    setDetailError(null)
     setDetailLoading(true)
-    axios.get(`${API_URL}/product/${p.id}`)
+    // The modal is where customers add to cart: read live prices/stock
+    // (no-store skips the browser and the short (2s) API proxy cache).
+    fetch(`${API_URL}/product/${p.id}`, { cache: 'no-store' })
       .then(res => {
-        const data = res.data?.data ?? res.data
-        setSelected(data || p)
+        if (!res.ok) {
+          const failure: any = new Error(`Error ${res.status}`)
+          failure.status = res.status
+          throw failure
+        }
+        return res.json()
       })
-      .catch(() => setSelected(p))
-      .finally(() => setDetailLoading(false))
+      .then(body => {
+        if (req !== detailReqRef.current) return
+        const data = body?.data ?? body
+        // Never fall back to the list copy `p`: it has no shop rows, so the modal
+        // would wrongly say "Hozircha do'konlarda mavjud emas".
+        if (!data || typeof data !== 'object' || Number(data.id) !== Number(p.id)) {
+          throw new Error('Unexpected product response')
+        }
+        setSelected(data)
+        // keep the card's "... so'm dan" in step with the prices shown in the modal
+        const minP = minPriceOf(data)
+        setPricesMap(prev => {
+          if (minP === Infinity && prev[p.id] == null) return prev
+          if (prev[p.id] === minP) return prev
+          const next = { ...prev }
+          if (minP === Infinity) delete next[p.id]
+          else next[p.id] = minP
+          return next
+        })
+      })
+      .catch(e => {
+        if (req !== detailReqRef.current) return
+        setDetailError({ product: p, notFound: (e as any)?.status === 404 })
+      })
+      .finally(() => {
+        if (req === detailReqRef.current) setDetailLoading(false)
+      })
   }
 
   // Batch-fetch product prices in background — delayed + throttled so the
@@ -199,19 +262,6 @@ export default function CategoryPage() {
     if (products.length === 0) return
     let cancelled = false
     const controller = new AbortController()
-
-    const minPriceOf = (data: any) => {
-      let minP = Infinity
-      ;(data?.items ?? []).forEach((item: any) => {
-        ;(item.shop_products ?? []).forEach((sp: any) => {
-          const eff = (sp.bonus_price != null && sp.bonus_price > 0 && (sp.price == null || sp.bonus_price < sp.price))
-            ? sp.bonus_price
-            : sp.price
-          if (eff != null && eff < minP) minP = eff
-        })
-      })
-      return minP
-    }
 
     const timer = setTimeout(async () => {
       // Only prefetch prices for buyable products — the empty placeholders are
@@ -261,20 +311,24 @@ export default function CategoryPage() {
   const handleAddToCart = useCallback((sp: {
     id: number; price?: number; bonus_price?: number | null; count?: number
     shop?: { id: number; name?: string; address?: string; lat?: number; lon?: number; image?: string; delivery_amount?: number }
-  }) => {
-    if (!selected || sp.price == null) return
+  }, item?: ProductItem) => {
+    // A stock row without a real shop, or sold out, can't be ordered
+    const shop = sp.shop
+    if (!selected || sp.price == null || !shop || !shop.id || (sp.count != null && sp.count <= 0)) return
     const productName = getName(selected)
-    const shopName = sp.shop?.name ?? (lang === 'uz' ? "Do'kon" : 'Магазин')
+    const shopName = shop.name ?? (lang === 'uz' ? "Do'kon" : 'Магазин')
     const finalPrice = sp.bonus_price != null && sp.bonus_price > 0 && sp.bonus_price < sp.price ? sp.bonus_price : sp.price
+    const variantLabel = variantLabelOf(item)
     addItem({
       shopProductId: sp.id,
       productId: selected.id,
-      productName,
+      productName: selected.name_uz || selected.name || selected.name_ru || productName,
       productNameRu: selected.name_ru,
       productImage: selected.image,
-      shopId: sp.shop?.id ?? 0,
+      variantLabel,
+      shopId: shop.id,
       shopName,
-      deliveryAmount: sp.shop?.delivery_amount,
+      deliveryAmount: shop.delivery_amount,
       price: finalPrice,
       maxQty: sp.count,
     })
@@ -301,8 +355,8 @@ export default function CategoryPage() {
               {lang === 'uz' ? 'Savatga qo\'shildi!' : 'Добавлено в корзину!'}
             </p>
           </div>
-          <p className="text-[11px] text-slate-500 truncate">{productName}</p>
-          <p className="text-[11px] text-[#00C48C] font-semibold truncate">{shopName} · {sp.price!.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}</p>
+          <p className="text-[11px] text-slate-500 truncate">{productName}{variantLabel ? ` · ${variantLabel}` : ''}</p>
+          <p className="text-[11px] text-[#00C48C] font-semibold truncate">{shopName} · {finalPrice.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}</p>
         </div>
       </div>,
       { icon: false, autoClose: 2500, pauseOnHover: false }
@@ -312,26 +366,29 @@ export default function CategoryPage() {
   const catName = id === 'all'
     ? (lang === 'uz' ? 'Barcha mahsulotlar' : 'Все товары')
     : (category ? getName(category) : '...')
+  // Match the product's OWN names and its variant names only. Category names
+  // are intentionally NOT in the haystack — folding them in made a search
+  // term dump every product of that category into the results (bug 6: a
+  // "category + product" mix). Category navigation lives in the chip strip.
+  // Keys are Latin/Cyrillic-normalized (searchKey) and built once per product
+  // list, so "rakovina" finds "раковина" and typing stays fast.
+  const productKeys = useMemo(() => buildSearchKeys(products, p => [
+    p.name_uz, p.name_ru, p.name, p.desc,
+    // variant names too — a shopper may search by a variant (e.g. "seyf")
+    ...(p.items ?? []).flatMap((it: any) => [it?.name, it?.name_uz, it?.name_ru, it?.desc]),
+  ]), [products])
+  const q = searchKey(search)
   const filtered = products.filter(p => {
-    // Hide catalogue placeholders that have no variants — they have no price and
-    // nothing to buy, so a card like an empty "Seyflar" only clutters the list.
-    if (!(p.items ?? []).length) return false
-    const q = search.trim().toLowerCase()
-    if (q) {
-      const cat = p.category
-      const haystack = [
-        p.name_uz, p.name_ru, p.name, p.desc,
-        cat?.name_uz, cat?.name_ru, cat?.name,
-        // variant names too — a shopper may search by a variant (e.g. "seyf")
-        ...(p.items ?? []).flatMap((it: any) => [it?.name, it?.name_uz, it?.name_ru, it?.desc]),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      if (!haystack.includes(q)) return false
-    }
-    const price = pricesMap[p.id]
-    if (price != null) {
+    // Variantless products are shown too, marked "Tovar turlari qo'shilmoqda" (types being added) — they
+    // just aren't buyable. So no empty-placeholder skip here.
+    if (q && !matchesSearch(productKeys.get(p), q)) return false
+    if (minPrice || maxPrice) {
+      // Prices are fetched lazily (see the prefetch effect). Until a product's
+      // price is known we can't confirm it's in range, so keep it OUT of a
+      // filtered view rather than showing an unverified, possibly out-of-range
+      // card. The grid fills in as prices arrive.
+      const price = pricesMap[p.id]
+      if (price == null) return false
       if (minPrice && price < Number(parseInput(minPrice))) return false
       if (maxPrice && price > Number(parseInput(maxPrice))) return false
     }
@@ -448,7 +505,7 @@ export default function CategoryPage() {
               ref={searchInputRef}
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder={lang === 'uz' ? 'Mahsulot yoki kategoriya...' : 'Товар или категория...'}
+              placeholder={lang === 'uz' ? 'Mahsulot qidirish...' : 'Поиск товара...'}
               className="w-full pl-9 pr-3 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             />
           </div>
@@ -516,7 +573,11 @@ export default function CategoryPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
-            {filtered.map((p, i) => (
+            {filtered.map((p, i) => {
+              const comingSoon = !(p.items ?? []).length
+              // Has variants, but no shop stocks any of them yet (count known from /product/all)
+              const notInShops = !comingSoon && (p.items ?? []).every(it => it._count != null && (it._count.shop_products ?? 0) === 0)
+              return (
               <div
                 key={p.id}
                 onClick={() => openDetail(p)}
@@ -544,6 +605,11 @@ export default function CategoryPage() {
                       </svg>
                     </div>
                   )}
+                  {comingSoon && (
+                    <span className="absolute top-2 left-2 bg-slate-800/80 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-sm">
+                      {lang === 'uz' ? "Qo'shilmoqda" : 'Добавляется'}
+                    </span>
+                  )}
                 </div>
 
                 {/* Info */}
@@ -555,37 +621,89 @@ export default function CategoryPage() {
                     <p className="text-slate-400 dark:text-slate-500 text-xs mt-1 line-clamp-1">{p.desc}</p>
                   )}
                   <div className="mt-3">
-                    {pricesMap[p.id] != null && (
-                      <p className="text-primary font-bold text-sm mb-2">
-                        {lang === 'uz' ? `${pricesMap[p.id].toLocaleString()} so'm dan` : `от ${pricesMap[p.id].toLocaleString()} сум`}
-                      </p>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-primary font-semibold">
-                        {lang === 'uz' ? 'Batafsil →' : 'Подробнее →'}
-                      </span>
-                      <div className="w-7 h-7 rounded-full bg-primary/10 group-hover:bg-primary flex items-center justify-center transition-colors duration-200">
-                        <svg className="w-3.5 h-3.5 text-primary group-hover:text-white transition-colors" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                    {comingSoon ? (
+                      <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+                        <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                         </svg>
+                        <span className="text-xs font-semibold">{lang === 'uz' ? "Turlari qo'shilmoqda" : 'Виды добавляются'}</span>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        {pricesMap[p.id] != null ? (
+                          <p className="text-primary font-bold text-sm mb-2">
+                            {lang === 'uz' ? `${pricesMap[p.id].toLocaleString()} so'm dan` : `от ${pricesMap[p.id].toLocaleString()} сум`}
+                          </p>
+                        ) : notInShops ? (
+                          <p className="text-slate-400 dark:text-slate-500 font-semibold text-sm mb-2">
+                            {lang === 'uz' ? "Hozircha do'konlarda yo'q" : 'Пока нет в магазинах'}
+                          </p>
+                        ) : null}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-primary font-semibold">
+                            {lang === 'uz' ? 'Batafsil →' : 'Подробнее →'}
+                          </span>
+                          <div className="w-7 h-7 rounded-full bg-primary/10 group-hover:bg-primary flex items-center justify-center transition-colors duration-200">
+                            <svg className="w-3.5 h-3.5 text-primary group-hover:text-white transition-colors" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                            </svg>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
         </div>
       </main>
 
       {/* Product detail modal */}
-      {(detailLoading || selected) && (
+      {(detailLoading || selected || detailError) && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           {detailLoading ? (
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 flex flex-col items-center gap-4 shadow-2xl">
               <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
               <p className="text-slate-500 dark:text-slate-400 text-sm">{lang === 'uz' ? 'Yuklanmoqda...' : 'Загружается...'}</p>
+            </div>
+          ) : detailError && !selected ? (
+            // Loading the product failed — say so (with a retry), never "not in shops"
+            <div
+              ref={modalRef}
+              className="bg-white dark:bg-slate-800 rounded-3xl p-8 w-full max-w-sm flex flex-col items-center gap-3 shadow-2xl text-center"
+            >
+              <svg className="w-10 h-10 text-slate-300 dark:text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                {detailError.notFound
+                  ? (lang === 'uz' ? 'Mahsulot topilmadi' : 'Товар не найден')
+                  : (lang === 'uz' ? "Yuklab bo'lmadi" : 'Не удалось загрузить')}
+              </p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                {detailError.notFound
+                  ? (lang === 'uz' ? 'Bu mahsulot endi mavjud emas' : 'Этот товар больше недоступен')
+                  : (lang === 'uz' ? "Internet aloqasini tekshirib, qayta urinib ko'ring" : 'Проверьте интернет и попробуйте снова')}
+              </p>
+              <div className="flex gap-2 mt-2">
+                {!detailError.notFound && (
+                  <button
+                    onClick={() => openDetail(detailError.product)}
+                    className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-all"
+                  >
+                    {lang === 'uz' ? 'Qayta urinish' : 'Повторить'}
+                  </button>
+                )}
+                <button
+                  onClick={() => setDetailError(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
+                >
+                  {lang === 'uz' ? 'Yopish' : 'Закрыть'}
+                </button>
+              </div>
             </div>
           ) : selected ? (
             <div
@@ -644,20 +762,23 @@ export default function CategoryPage() {
                 </div>
 
                 {/* Items + prices */}
-                {selected.items && selected.items.length > 0 ? (
+                {selected.items && selected.items.length > 0 && selected.items.some(item => (item.shop_products ?? []).some(sp => !!sp.shop?.id)) ? (
                   <div className="space-y-4">
                     <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">
                       {lang === 'uz' ? "Do'konlardagi narxlar" : 'Цены в магазинах'}
                     </h4>
-                    {selected.items.map(item => (
-                      item.shop_products && item.shop_products.length > 0 ? (
+                    {selected.items.map(item => {
+                      // Stock rows without a real shop can't be ordered — never list them
+                      const shopRows = (item.shop_products ?? []).filter(sp => !!sp.shop?.id)
+                      const itemLabel = getName(item) || variantLabelOf(item)
+                      return shopRows.length > 0 ? (
                         <div key={item.id} className="space-y-2">
-                          {item.name_uz || item.name_ru || item.name ? (
+                          {itemLabel ? (
                             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                              {getName(item)}
+                              {itemLabel}
                             </p>
                           ) : null}
-                          {item.shop_products.map(sp => (
+                          {shopRows.map(sp => (
                             <div key={sp.id} className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-primary/10 dark:border-slate-600 hover:border-primary/30 transition-colors">
                               <div className="flex items-center gap-3 min-w-0">
                                 {sp.shop?.image ? (
@@ -741,11 +862,11 @@ export default function CategoryPage() {
                                   </button>
                                 )}
                                 {/* Add to cart button */}
-                                {sp.price != null && sp.count !== 0 && (() => {
+                                {sp.price != null && (sp.count == null || sp.count > 0) && (() => {
                                   const added = addedIds.has(sp.id)
                                   return (
                                     <button
-                                      onClick={e => { e.stopPropagation(); handleAddToCart(sp) }}
+                                      onClick={e => { e.stopPropagation(); handleAddToCart(sp, item) }}
                                       className={`relative overflow-hidden inline-flex items-center justify-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-all duration-300 whitespace-nowrap select-none ${
                                         added
                                           ? 'bg-emerald-500 text-white scale-95 shadow-lg shadow-emerald-500/30'
@@ -777,12 +898,31 @@ export default function CategoryPage() {
                           ))}
                         </div>
                       ) : null
-                    ))}
+                    })}
+                  </div>
+                ) : selected.items && selected.items.length > 0 ? (
+                  // Variants exist, but no shop stocks them yet — say so instead of an empty list
+                  <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
+                    <svg className="w-10 h-10 mx-auto mb-3 text-slate-300 dark:text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+                    </svg>
+                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                      {lang === 'uz' ? "Hozircha do'konlarda mavjud emas" : 'Пока нет в магазинах'}
+                    </p>
+                    <p className="text-xs mt-1">
+                      {lang === 'uz' ? "Do'konlar bu mahsulotni qo'shgach, shu yerda narxlar ko'rinadi" : 'Когда магазины добавят этот товар, здесь появятся цены'}
+                    </p>
                   </div>
                 ) : (
-                  <div className="text-center py-6 text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
-                    <p className="text-sm">
-                      {lang === 'uz' ? "Do'konlarda narx topilmadi" : 'Цены в магазинах не найдены'}
+                  <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
+                    <svg className="w-10 h-10 mx-auto mb-3 text-slate-300 dark:text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                      {lang === 'uz' ? "Tovar turlari qo'shilmoqda" : 'Виды товара добавляются'}
+                    </p>
+                    <p className="text-xs mt-1">
+                      {lang === 'uz' ? "Turlari qo'shilgach, shu yerda do'konlar va narxlar ko'rinadi" : 'Когда виды будут добавлены, здесь появятся магазины и цены'}
                     </p>
                   </div>
                 )}

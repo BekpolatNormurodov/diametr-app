@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDownIcon } from "../../icons";
+import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
 
 interface Option {
   value: string;
   label: string;
+  /** Extra texts the search also matches (not shown), e.g. a product's variant names. */
+  keywords?: string[];
 }
 
 interface SelectProps {
@@ -46,8 +49,10 @@ const Select: React.FC<SelectProps> = ({
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
+  // Keys are built once per options list, not on every keystroke.
+  const searchIndex = useMemo(() => buildSearchIndex(options, (o) => [o.label, ...(o.keywords ?? [])]), [options]);
   const filtered = search.trim()
-    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+    ? filterSearchIndex(searchIndex, search)
     : options;
 
   const selectedLabel = options.find((o) => o.value === selectedValue)?.label;

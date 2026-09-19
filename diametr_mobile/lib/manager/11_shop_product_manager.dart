@@ -20,8 +20,12 @@ class ShopProductManager {
         shopId: shopId
       );
     } catch (e) {
+      // The screen (and its route-scoped bloc) may already be gone.
+      if (!context.mounted) return;
+      final bloc = BlocProvider.of<ShopProductBloc>(context);
+      if (bloc.isClosed) return;
       final msg = e is DioExceptions ? e.message : e.toString();
-      BlocProvider.of<ShopProductBloc>(context).emit(ShopProductErrorState(message: msg, title: msg));
+      bloc.emit(ShopProductErrorState(message: msg, title: msg));
     }
   }
    static Future<void> refresh(
@@ -37,8 +41,12 @@ class ShopProductManager {
         shopId: shopId
       );
     } catch (e) {
+      // The screen (and its route-scoped bloc) may already be gone.
+      if (!context.mounted) return;
+      final bloc = BlocProvider.of<ShopProductBloc>(context);
+      if (bloc.isClosed) return;
       final msg = e is DioExceptions ? e.message : e.toString();
-      BlocProvider.of<ShopProductBloc>(context).emit(ShopProductErrorState(message: msg, title: msg));
+      bloc.emit(ShopProductErrorState(message: msg, title: msg));
     }
   }
 }

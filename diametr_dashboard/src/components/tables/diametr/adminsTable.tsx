@@ -12,6 +12,7 @@ import { toast } from "../../ui/toast";
 import { useEffect, useState } from "react";
 import { useModal } from "../../../hooks/useModal";
 import * as XLSX from "xlsx";
+import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 
 export interface AdminItemProps {
   id: number;
@@ -95,12 +96,14 @@ export default function AdminsTable({
   const [saving, setSaving] = useState(false);
   const [shopOptions, setShopOptions] = useState<{ value: string; label: string }[]>([]);
 
-  useEffect(() => {
+  // Shops can be created on another page — loaded on mount and refreshed whenever the modal opens.
+  const loadShops = () => {
     axiosClient.get("/shop/all").then((res) => {
       const list = res.data?.data ?? res.data ?? [];
-      setShopOptions(list.map((s: any) => ({ value: String(s.id), label: s.name ?? String(s.id) })));
+      if (Array.isArray(list)) setShopOptions(list.map((s: any) => ({ value: String(s.id), label: s.name ?? String(s.id) })));
     }).catch(() => {});
-  }, []);
+  };
+  useEffect(() => { loadShops(); }, []);
 
   const sorted = [...data].sort((a, b) => {
     const ta = new Date(a.createdt ?? a.createdAt ?? 0).getTime();
@@ -109,12 +112,9 @@ export default function AdminsTable({
     return (b.id ?? 0) - (a.id ?? 0);
   });
 
-  const filtered = search.trim()
-    ? sorted.filter((a) =>
-        [a.fullname, a.phone, a.shop?.name].some((v) =>
-          v?.toLowerCase().includes(search.toLowerCase())
-        )
-      )
+  const searchQueryKey = searchKey(search);
+  const filtered = searchQueryKey
+    ? sorted.filter((a) => matchesSearchKey(searchQueryKey, [a.fullname, a.phone, a.shop?.name]))
     : sorted;
 
   const pageSize = parseInt(showValue);
@@ -127,6 +127,7 @@ export default function AdminsTable({
   const openCreate = () => {
     setEditItem(null);
     setForm({ ...emptyForm });
+    loadShops();
     openModal();
   };
 
@@ -138,6 +139,7 @@ export default function AdminsTable({
       shop_id:  item.shop?.id ? String(item.shop.id) : item.shop_id ? String(item.shop_id) : "",
       chatid:   item.chatid ?? item.chat_id ?? "",
     });
+    loadShops();
     openModal();
   };
 

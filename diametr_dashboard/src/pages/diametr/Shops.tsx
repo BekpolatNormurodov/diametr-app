@@ -50,7 +50,8 @@ export default function ShopsPage() {
   const [trialMonths, setTrialMonths] = useState(2);
   const [regionOptions, setRegionOptions] = useState<{ value: string; label: string }[]>([]);
 
-  useEffect(() => {
+  // Loaded on mount and refreshed whenever the create modal opens (a failed refresh keeps the old list).
+  const loadRegions = () => {
     axiosClient
       .get("/region/all")
       .then((res) => {
@@ -59,8 +60,9 @@ export default function ShopsPage() {
           list.map((r: any) => ({ value: String(r.id), label: r.name ?? r.name_uz ?? `#${r.id}` }))
         );
       })
-      .catch(() => setRegionOptions([]));
-  }, []);
+      .catch(() => {});
+  };
+  useEffect(() => { loadRegions(); }, []);
 
   const fetchShops = useCallback(
     () => axiosClient.get("/shop/all-admin").then((res) => res.data),
@@ -133,7 +135,7 @@ export default function ShopsPage() {
               size="sm"
               variant="primary"
               startIcon={<PlusIcon className="size-5 fill-white" />}
-              onClick={() => { setShopForm(emptyShop); imageResultRef.current = null; setTrialMonths(2); openModal(); }}
+              onClick={() => { setShopForm(emptyShop); imageResultRef.current = null; setTrialMonths(2); loadRegions(); openModal(); }}
             >
               Do'kon qo'shish
             </Button>

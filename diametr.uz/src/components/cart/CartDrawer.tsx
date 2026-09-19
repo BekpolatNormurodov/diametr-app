@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react'
-import { useCart } from '../../context/CartContext'
+import { toast } from 'react-toastify'
+import { useCart, CartItem } from '../../context/CartContext'
 import { useLang } from '../../context/AppContext'
 import { authService, BASE_URL } from '../../service/authService'
 
@@ -14,12 +15,23 @@ type Step = 'cart' | 'checkout' | 'done'
 type PayMode = 'cash' | 'online'
 type OnlineMethod = 'payme' | 'click' | 'uzum'
 interface Coords { lat: number; lng: number }
+/** A validated promo code; it goes with ONE shop's order — the shop it was validated for */
+interface Promo { type: 'PERCENT' | 'FIXED'; value: number; minOrder: number | null; shopId: number }
+
+/** The API's "this code belongs to another shop" rejection (promo-code validate) */
+const isOtherShopPromoError = (msg: string) => /do\S{0,2}kon uchun emas|boshqa do\S{0,2}kon/i.test(msg)
 
 const staticMap = (c: Coords) =>
   `https://static-maps.yandex.ru/1.x/?ll=${c.lng},${c.lat}&z=16&size=340,130&l=map&pt=${c.lng},${c.lat},pmrdm2&lang=uz_UZ`
 
+/** Nest returns `message` as a string, or as a string[] for validation errors */
+const errorText = (m: unknown): string =>
+  Array.isArray(m) ? m.filter(Boolean).join(', ') : typeof m === 'string' ? m : ''
+
+const sumLines = (lines: CartItem[]) => lines.reduce((s, i) => s + i.price * i.qty, 0)
+
 export default function CartDrawer({ open, onClose, onAuthRequired, user }: Props) {
-  const { items, removeItem, updateQty, clearCart, total, count } = useCart()
+  const { items, removeItem, updateQty, revalidateCart, total, count } = useCart()
   const { lang } = useLang()
   const [step, setStep] = useState<Step>('cart')
   const [address, setAddress] = useState('')
@@ -30,11 +42,13 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [orderIds, setOrderIds] = useState<number[]>([])
+  // Fresh prices/stock are being loaded (drawer just opened)
+  const [revalidating, setRevalidating] = useState(false)
 
   // Promo code
   const [promoInput, setPromoInput] = useState('')
   const [promoCode, setPromoCode] = useState('')
-  const [promoDiscount, setPromoDiscount] = useState(0)
+  const [promo, setPromo] = useState<Promo | null>(null)
   const [promoLoading, setPromoLoading] = useState(false)
   const [promoError, setPromoError] = useState('')
   const [promoSuccess, setPromoSuccess] = useState('')
@@ -44,8 +58,12 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
   const [modalCoords, setModalCoords] = useState<Coords | null>(null)
   const [modalAddress, setModalAddress] = useState('')
   const [modalLocLoading, setModalLocLoading] = useState(false)
+
+  // Lines that can still be ordered (unavailable ones stay visible but are left out)
+  const orderItems = items.filter(i => !i.unavailable)
+
   // Delivery: har bir do'kon uchun bitta yetkazib berish narxi
-  const totalDelivery = items.reduce((acc, item) => {
+  const totalDelivery = orderItems.reduce((acc, item) => {
     if (!acc.seen.has(item.shopId)) {
       acc.seen.add(item.shopId)
       acc.sum += item.deliveryAmount ?? 0
@@ -53,14 +71,84 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
     return acc
   }, { seen: new Set<number>(), sum: 0 }).sum
 
-  const discountedTotal = promoDiscount > 0
-    ? Math.round(total - (total * promoDiscount) / 100)
-    : total
-
-  const grandTotal = discountedTotal + totalDelivery
-
   const fmtPrice = (n: number) =>
     n.toLocaleString('uz-UZ') + (lang === 'uz' ? " so'm" : ' sum')
+
+  // A promo code goes with ONE shop order — the shop of the cart it was validated
+  // for (the server rejects another shop's code) — and is applied to that shop's
+  // items (not delivery).
+  const promoDiscountOf = (base: number, p: Promo | null) => {
+    if (!p || base <= 0) return 0
+    if (p.minOrder != null && base < p.minOrder) return 0
+    const d = p.type === 'PERCENT' ? Math.round((base * p.value) / 100) : Math.round(p.value)
+    return Math.max(0, Math.min(d, base))
+  }
+  const activePromo = promoCode ? promo : null
+  const promoShopId = activePromo ? activePromo.shopId : null
+  const promoBase = promoShopId == null ? 0 : sumLines(orderItems.filter(i => i.shopId === promoShopId))
+  const promoBelowMin = !!activePromo && activePromo.minOrder != null && promoBase < activePromo.minOrder
+  const promoDiscount = promoDiscountOf(promoBase, activePromo)
+  const discountedTotal = total - promoDiscount
+  const grandTotal = discountedTotal + totalDelivery
+  const promoMinText = activePromo && activePromo.minOrder != null
+    ? (lang === 'uz'
+        ? `Promokod ${fmtPrice(activePromo.minOrder)} dan boshlab amal qiladi`
+        : `Промокод действует от ${fmtPrice(activePromo.minOrder)}`)
+    : ''
+
+  const notifyCartChanged = () => {
+    toast(
+      <div className="flex items-center gap-3 px-4 py-3.5 w-full">
+        <span className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-amber-500">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-bold text-slate-800">
+            {lang === 'uz' ? 'Savatcha yangilandi' : 'Корзина обновлена'}
+          </p>
+          <p className="text-[11px] text-slate-500">
+            {lang === 'uz' ? "Narx yoki qoldiq o'zgardi" : 'Изменились цены или остатки'}
+          </p>
+        </div>
+      </div>,
+      { toastId: 'cart-updated', icon: false, autoClose: 4000 }
+    )
+  }
+
+  // Every time the drawer opens: re-read prices, stock and delivery of each line
+  useEffect(() => {
+    if (!open || items.length === 0) return
+    let active = true
+    setRevalidating(true)
+    revalidateCart()
+      .then(r => { if (active && r.changed) notifyCartChanged() })
+      .finally(() => { if (active) setRevalidating(false) })
+    return () => {
+      active = false
+      setRevalidating(false)
+    }
+  }, [open]) // eslint-disable-line
+
+  // Nothing orderable left (e.g. emptied from another tab) — leave the checkout step
+  useEffect(() => {
+    if (step === 'checkout' && !loading && orderItems.length === 0) setStep('cart')
+  }, [step, loading, orderItems.length])
+
+  // The promo's shop has nothing orderable left (removed, sold out): the code
+  // can't go with any other shop's order, so take it off and say why.
+  const promoShopInCart = promoShopId != null && orderItems.some(i => i.shopId === promoShopId)
+  useEffect(() => {
+    if (!promoCode || promoShopId == null || loading || promoShopInCart) return
+    setPromoInput(promoCode)
+    setPromoCode('')
+    setPromo(null)
+    setPromoSuccess('')
+    setPromoError(lang === 'uz'
+      ? "Promokod olib tashlandi: u qo'llangan do'kon mahsulotlari savatchada qolmadi"
+      : 'Промокод снят: в корзине не осталось товаров магазина, к которому он применён')
+  }, [promoCode, promoShopId, loading, promoShopInCart]) // eslint-disable-line
 
   // GPS
   const getLocation = useCallback(() => {
@@ -113,23 +201,77 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
     setMapModalOpen(false)
   }
 
-  // Apply promo
+  const clearPromo = () => {
+    setPromoInput('')
+    setPromoCode('')
+    setPromo(null)
+    setPromoError('')
+    setPromoSuccess('')
+  }
+
+  // Apply promo — validated for a shop of the cart (?shop_id=), so a code of a
+  // shop that isn't in the cart is refused here with the server's message
+  // instead of showing a discount that fails at checkout.
   const applyPromo = async () => {
-    if (!promoInput.trim()) return
+    const code = promoInput.trim().toUpperCase()
+    if (!code) return
+    // The cart's shops, in cart order: the code goes with the first one it is valid for
+    const shopIds: number[] = []
+    orderItems.forEach(i => { if (i.shopId > 0 && shopIds.indexOf(i.shopId) < 0) shopIds.push(i.shopId) })
+    if (shopIds.length === 0) return
     setPromoLoading(true)
     setPromoError('')
     setPromoSuccess('')
     try {
-      const res = await authService.apiFetch(
-        `${BASE_URL}/api/v1/promo-code/validate/${promoInput.trim().toUpperCase()}`
-      )
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || 'Xato')
-      setPromoCode(promoInput.trim().toUpperCase())
-      setPromoDiscount(data.discount)
-      setPromoSuccess(lang === 'uz'
-        ? `${data.discount}% chegirma qo'llandi!`
-        : `Skidka ${data.discount}% qo'llandi!`)
+      let rejection = ''
+      for (const shopId of shopIds) {
+        const res = await authService.apiFetch(
+          `${BASE_URL}/api/v1/promo-code/validate/${encodeURIComponent(code)}?shop_id=${shopId}`
+        )
+        if (res.status === 401) {
+          setPromoCode('')
+          setPromo(null)
+          onAuthRequired()
+          return
+        }
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          const msg = res.status >= 500
+            ? (lang === 'uz' ? "Server xatosi. Biroz kutib, qayta urinib ko'ring." : 'Ошибка сервера. Попробуйте позже.')
+            : errorText(data.message) || (lang === 'uz' ? "Promo kod noto'g'ri" : 'Неверный промокод')
+          if (!rejection) rejection = msg
+          // Another shop's code — it may belong to a later shop of this cart
+          if (isOtherShopPromoError(msg)) continue
+          throw new Error(msg)
+        }
+        // validate returns { discount_type: 'PERCENT' | 'FIXED', discount_value, min_order_amount }
+        const value = Number(data.discount_value)
+        if (!isFinite(value) || value <= 0) throw new Error(lang === 'uz' ? "Promo kod noto'g'ri" : 'Неверный промокод')
+        // If the API names the code's shop, the promo goes with that shop's order
+        const codeShopId = data.shop_id != null ? Number(data.shop_id) : NaN
+        let promoShop = shopId
+        if (isFinite(codeShopId) && codeShopId > 0 && codeShopId !== shopId) {
+          if (shopIds.indexOf(codeShopId) < 0) {
+            throw new Error(lang === 'uz' ? "Bu promokod boshqa do'kon uchun" : 'Этот промокод для другого магазина')
+          }
+          promoShop = codeShopId
+        }
+        const type: Promo['type'] = data.discount_type === 'FIXED' ? 'FIXED' : 'PERCENT'
+        const min = data.min_order_amount != null ? Number(data.min_order_amount) : NaN
+        const discountText = type === 'PERCENT'
+          ? (lang === 'uz' ? `${value}% chegirma qo'llandi!` : `Скидка ${value}% применена!`)
+          : (lang === 'uz' ? `${fmtPrice(value)} chegirma qo'llandi!` : `Скидка ${fmtPrice(value)} применена!`)
+        // Several shops in the cart: say whose items get the discount
+        const shopLine = shopIds.length > 1 ? orderItems.find(i => i.shopId === promoShop) : undefined
+        setPromoCode(code)
+        setPromo({ type, value, minOrder: isFinite(min) && min > 0 ? min : null, shopId: promoShop })
+        setPromoSuccess(shopLine && shopLine.shopName
+          ? (lang === 'uz' ? `"${shopLine.shopName}" mahsulotlariga ${discountText}` : `«${shopLine.shopName}»: ${discountText}`)
+          : discountText)
+        return
+      }
+      // Every shop of the cart refused it (another shop's code)
+      throw new Error(rejection || (lang === 'uz' ? "Promo kod noto'g'ri" : 'Неверный промокод'))
     } catch (e) {
       const raw: string = (e as any).message || ''
       setPromoError(
@@ -138,22 +280,31 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
           : raw || (lang === 'uz' ? 'Promo kod noto\'g\'ri' : 'Неверный промокод')
       )
       setPromoCode('')
-      setPromoDiscount(0)
+      setPromo(null)
     } finally {
       setPromoLoading(false)
     }
   }
 
-  const removePromo = () => {
-    setPromoInput('')
-    setPromoCode('')
-    setPromoDiscount(0)
-    setPromoError('')
-    setPromoSuccess('')
+  const removePromo = () => clearPromo()
+
+  // English backend texts the customer should never see raw
+  const localizeServerMessage = (raw: string) => {
+    const uz = lang === 'uz'
+    if (/is\s*not enough|not enough/i.test(raw))
+      return uz ? "Omborda yetarli mahsulot yo'q. Savatchani tekshirib, qayta urinib ko'ring." : 'Недостаточно товара на складе. Проверьте корзину и попробуйте снова.'
+    if (/shopProduct not found/i.test(raw))
+      return uz ? "Savatchadagi mahsulot topilmadi (o'chirilgan bo'lishi mumkin)" : 'Товар из корзины не найден (возможно, удалён)'
+    if (/^shop not found$/i.test(raw))
+      return uz ? "Do'kon topilmadi" : 'Магазин не найден'
+    if (/^(unauthorized|invalid or expired token)$/i.test(raw))
+      return uz ? 'Sessiya tugadi. Iltimos, qayta kiring.' : 'Сессия истекла. Войдите снова.'
+    return raw
   }
 
   // Submit order — one order per shop when cart has multiple shops
   const handleCheckout = async () => {
+    if (loading) return
     if (!user) { onAuthRequired(); return }
     if (!address.trim()) {
       setError(lang === 'uz' ? 'Manzilni kiriting' : 'Manzilni kiriting')
@@ -162,37 +313,80 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
     setError('')
     setLoading(true)
 
-    // group cart items by shopId
-    const byShop = items.reduce<Record<number, typeof items>>((acc, item) => {
-      if (!acc[item.shopId]) acc[item.shopId] = []
-      acc[item.shopId].push(item)
-      return acc
-    }, {})
-
-    const paymentType = payMode === 'cash' ? 'cash' : onlineMethod
-    const collectedIds: number[] = []
-    let firstPayUrl: string | null = null
+    const uz = lang === 'uz'
+    const createdIds: number[] = []
+    let createdCount = 0
+    let currentShop = ''
 
     try {
-      for (const [shopIdStr, shopItems] of Object.entries(byShop)) {
-        const shopId = Number(shopIdStr)
-        const shopTotal = shopItems.reduce((s, i) => s + i.price * i.qty, 0)
-        const shopDelivery = (shopItems[0]?.deliveryAmount ?? 0)
-        const shopDiscount = promoDiscount > 0
-          ? Math.round(shopTotal - (shopTotal * promoDiscount) / 100)
-          : shopTotal
-        const shopGrand = shopDiscount + shopDelivery
+      // 1) Re-read every line right before ordering — never order from a stale copy
+      const check = await revalidateCart()
+      if (!check.ok) {
+        setError(uz ? "Narxlarni tekshirib bo'lmadi. Internetni tekshirib, qayta urinib ko'ring." : 'Не удалось проверить цены. Проверьте интернет и попробуйте снова.')
+        return
+      }
+      if (check.changed) {
+        // Show the refreshed totals first; the next click orders them
+        notifyCartChanged()
+        setError(uz
+          ? "Narx yoki qoldiq o'zgardi. Yangilangan summani tekshirib, qayta bosing."
+          : 'Цены или остатки изменились. Проверьте новую сумму и нажмите ещё раз.')
+        return
+      }
+      const orderable = check.items.filter(i => !i.unavailable && i.shopId > 0 && i.qty > 0)
+      if (orderable.length === 0) {
+        setError(uz ? "Buyurtma berish mumkin bo'lgan mahsulot qolmadi" : 'Нет товаров, доступных для заказа')
+        return
+      }
 
+      // 2) Group by shop in cart order (the promo code goes with the shop it was validated for)
+      const groups: Array<{ shopId: number; shopName: string; lines: CartItem[] }> = []
+      orderable.forEach(i => {
+        let group = groups.find(g => g.shopId === i.shopId)
+        if (!group) {
+          group = { shopId: i.shopId, shopName: i.shopName, lines: [] }
+          groups.push(group)
+        }
+        group.lines.push(i)
+      })
+
+      const promoGroup = activePromo ? groups.find(g => g.shopId === activePromo.shopId) : undefined
+      if (activePromo && !promoGroup) {
+        // Never order without the discount the customer was shown
+        setError(uz
+          ? "Promokod qo'llangan do'kon mahsulotlari savatchada qolmadi. Promokodni olib tashlab, qayta urinib ko'ring."
+          : 'В корзине нет товаров магазина, к которому применён промокод. Уберите промокод и попробуйте снова.')
+        return
+      }
+      const promoForShop = promoGroup ? promoGroup.shopId : null
+      if (activePromo && promoGroup && activePromo.minOrder != null && sumLines(promoGroup.lines) < activePromo.minOrder) {
+        setError(promoMinText)
+        return
+      }
+      // The promo shop's order is sent first: if the server refuses the code at
+      // checkout (used up or switched off meanwhile), nothing has been ordered yet.
+      if (promoGroup && groups[0] !== promoGroup) {
+        groups.splice(groups.indexOf(promoGroup), 1)
+        groups.unshift(promoGroup)
+      }
+
+      const paymentType = payMode === 'cash' ? 'cash' : onlineMethod
+      let firstPayUrl: string | null = null
+
+      for (const group of groups) {
+        currentShop = group.shopName
+        const withPromo = activePromo != null && group.shopId === promoForShop
         const body = {
-          shop_id: shopId,
-          amount: shopGrand,
-          products: shopItems.map(i => ({ shop_product_id: i.shopProductId, count: i.qty })),
+          shop_id: group.shopId,
+          // Undiscounted items + delivery — the server applies the promo code itself
+          amount: sumLines(group.lines) + (group.lines[0].deliveryAmount ?? 0),
+          products: group.lines.map(i => ({ shop_product_id: i.shopProductId, count: i.qty })),
           payment_type: paymentType,
           address: address.trim(),
           delivery_type: 'FIXED',
           source: (window as any).Telegram?.WebApp?.initData ? 'STORE_BOT' : 'SITE',
           ...(coords ? { lat: coords.lat, lon: coords.lng } : {}),
-          ...(promoCode ? { promo_code: promoCode } : {}),
+          ...(withPromo ? { promo_code: promoCode } : {}),
         }
         const res = await authService.apiFetch(`${BASE_URL}/api/v1/order`, {
           method: 'POST',
@@ -201,29 +395,55 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
         })
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
-          throw new Error(err.message || `Error ${res.status}`)
+          const failure: any = new Error(errorText(err.message) || `Error ${res.status}`)
+          failure.status = res.status
+          throw failure
         }
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         const id = data.id ?? data.orderId ?? data.order_id ?? null
-        if (id) collectedIds.push(Number(id))
+        createdCount += 1
+        if (id != null) {
+          createdIds.push(Number(id))
+          setOrderIds(prev => [...prev, Number(id)])
+        }
+        // This shop's order exists now: take its lines out of the cart right away,
+        // so retrying after a later shop fails can never order them twice.
+        group.lines.forEach(i => removeItem(i.shopProductId))
+        // The promo code is used up by this order
+        if (withPromo) clearPromo()
         if (!firstPayUrl && data.paymentUrl) firstPayUrl = data.paymentUrl
       }
 
-      setOrderIds(collectedIds)
-      clearCart()
       setStep('done')
       if (firstPayUrl) window.open(firstPayUrl, '_blank', 'noopener,noreferrer')
     } catch (e) {
-      const raw: string = (e as any).message || ''
+      const status: number | undefined = (e as any)?.status
+      const raw: string = (e as any)?.message || ''
       let msg = raw
-      if (!raw || raw === 'Failed to fetch' || raw.toLowerCase().includes('network') || raw.toLowerCase().includes('failed to fetch')) {
-        msg = lang === 'uz'
+      if (status === 401) {
+        msg = uz ? 'Sessiya tugadi. Iltimos, qayta kiring.' : 'Сессия истекла. Войдите снова.'
+      } else if (!raw || raw === 'Failed to fetch' || raw.toLowerCase().includes('network') || raw.toLowerCase().includes('failed to fetch')) {
+        msg = uz
           ? "Internet bilan muammo. Iltimos aloqani tekshirib, qayta urinib ko'ring."
           : 'Ошибка соединения. Проверьте интернет и попробуйте снова.'
       } else if (/^(error\s*\d+|\d{3})/i.test(raw)) {
-        msg = lang === 'uz' ? "Server xatosi. Biroz kutib, qayta urinib ko'ring." : 'Ошибка сервера. Попробуйте позже.'
+        msg = uz ? "Server xatosi. Biroz kutib, qayta urinib ko'ring." : 'Ошибка сервера. Попробуйте позже.'
+      } else {
+        msg = localizeServerMessage(raw)
+      }
+      if (createdCount > 0) {
+        const ids = createdIds.length > 0 ? ` (${createdIds.map(id => `#${id}`).join(', ')})` : ''
+        msg = uz
+          ? `${createdCount} ta buyurtma qabul qilindi${ids}. "${currentShop}" do'koni uchun xato: ${msg}`
+          : `Принято заказов: ${createdCount}${ids}. Ошибка для магазина «${currentShop}»: ${msg}`
       }
       setError(msg || (lang === 'uz' ? 'Xatolik yuz berdi' : 'Xatolik yuz berdi'))
+      if (status === 401) {
+        onAuthRequired()
+      } else if (status != null && status >= 400 && status < 500) {
+        // A line may have gone stale (deleted, sold out) — mark it before the retry
+        revalidateCart().then(r => { if (r.changed) notifyCartChanged() })
+      }
     } finally {
       setLoading(false)
     }
@@ -236,11 +456,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
     setPayMode('cash')
     setError('')
     setOrderIds([])
-    setPromoInput('')
-    setPromoCode('')
-    setPromoDiscount(0)
-    setPromoError('')
-    setPromoSuccess('')
+    clearPromo()
     setMapModalOpen(false)
     setModalCoords(null)
     setModalAddress('')
@@ -248,7 +464,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
   }
 
   const checkoutLabel = () => {
-    const price = ` -> ${fmtPrice(discountedTotal)}`
+    const price = ` -> ${fmtPrice(grandTotal)}`
     if (payMode === 'cash')
       return (lang === 'uz' ? 'Buyurtma berish' : 'Buyurtma berish') + price
     const names = { payme: 'Payme', click: 'Click', uzum: 'Uzum' } as const
@@ -332,9 +548,9 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
                   {lang === 'uz' ? 'Buyurtma' : 'Buyurtma'}
                 </p>
-                {items.map(i => (
+                {orderItems.map(i => (
                   <div key={i.shopProductId} className="flex justify-between text-sm py-1 text-slate-700 dark:text-slate-300">
-                    <span className="truncate mr-2">{lang === 'uz' ? i.productName : (i.productNameRu || i.productName)} x {i.qty}</span>
+                    <span className="truncate mr-2">{lang === 'uz' ? i.productName : (i.productNameRu || i.productName)}{i.variantLabel ? ` (${i.variantLabel})` : ''} x {i.qty}</span>
                     <span className="font-semibold whitespace-nowrap text-primary">{fmtPrice(i.price * i.qty)}</span>
                   </div>
                 ))}
@@ -343,10 +559,12 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                     <span>{lang === 'uz' ? 'Jami' : 'Jami'}</span>
                     <span>{fmtPrice(total)}</span>
                   </div>
-                  {promoDiscount > 0 && (
+                  {promoDiscount > 0 && activePromo && (
                     <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
-                      <span>{`Chegirma (${promoDiscount}%)`}</span>
-                      <span>-{fmtPrice(total - discountedTotal)}</span>
+                      <span>
+                        {(lang === 'uz' ? 'Chegirma' : 'Скидка') + (activePromo.type === 'PERCENT' ? ` (${activePromo.value}%)` : '')}
+                      </span>
+                      <span>-{fmtPrice(promoDiscount)}</span>
                     </div>
                   )}
                   {totalDelivery > 0 && (
@@ -404,6 +622,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                   </div>
                 )}
                 {promoError && <p className="text-red-500 text-xs mt-1.5 px-1">{promoError}</p>}
+                {!promoError && promoBelowMin && <p className="text-red-500 text-xs mt-1.5 px-1">{promoMinText}</p>}
               </div>
 
               {/* Address */}
@@ -566,6 +785,10 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
           {/* Cart items */}
           {step === 'cart' && (
             <div className="p-4 space-y-3">
+              {/* e.g. a multi-shop checkout that created some orders, then every remaining line became unavailable */}
+              {error && (
+                <p className="text-red-500 text-xs bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2">{error}</p>
+              )}
               {items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-24 text-slate-400 gap-4">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 opacity-30">
@@ -598,20 +821,25 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                         </div>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className={`flex-1 min-w-0 ${item.unavailable ? 'opacity-60' : ''}`}>
                       <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-snug line-clamp-1">
                         {lang === 'uz' ? item.productName : (item.productNameRu || item.productName)}
                       </p>
-                      <p className="text-xs text-slate-400 mt-0.5 truncate">{item.shopName}</p>
-                      <p className="text-primary font-bold text-sm mt-1">{fmtPrice(item.price * item.qty)}</p>
+                      <p className="text-xs text-slate-400 mt-0.5 truncate">{item.variantLabel ? `${item.variantLabel} · ` : ''}{item.shopName}</p>
+                      {item.unavailable ? (
+                        <p className="text-red-500 font-bold text-sm mt-1">{lang === 'uz' ? 'Mavjud emas' : 'Нет в наличии'}</p>
+                      ) : (
+                        <p className="text-primary font-bold text-sm mt-1">{fmtPrice(item.price * item.qty)}</p>
+                      )}
                       <div className="flex items-center gap-2 mt-2">
                         <button onClick={() => updateQty(item.shopProductId, item.qty - 1)}
-                          className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center hover:bg-primary/20 transition-colors text-slate-700 dark:text-slate-200 font-bold text-sm">-</button>
+                          disabled={!!item.unavailable}
+                          className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center hover:bg-primary/20 transition-colors text-slate-700 dark:text-slate-200 font-bold text-sm disabled:opacity-40">-</button>
                         <span className="min-w-[20px] text-center text-sm font-bold text-slate-800 dark:text-slate-200">{item.qty}</span>
                         <button onClick={() => updateQty(item.shopProductId, item.qty + 1)}
-                          disabled={item.maxQty != null && item.qty >= item.maxQty}
+                          disabled={!!item.unavailable || (item.maxQty != null && item.qty >= item.maxQty)}
                           className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center hover:bg-primary/20 transition-colors text-slate-700 dark:text-slate-200 font-bold text-sm disabled:opacity-40">+</button>
-                        {item.maxQty != null && <span className="text-xs text-slate-400 ml-1">/ {item.maxQty}</span>}
+                        {!item.unavailable && item.maxQty != null && <span className="text-xs text-slate-400 ml-1">/ {item.maxQty}</span>}
                       </div>
                     </div>
                     <button onClick={() => removeItem(item.shopProductId)}
@@ -653,9 +881,15 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                 {lang === 'uz' ? 'Buyurtma uchun kirish kerak' : 'Kirish kerak'}
               </button>
             ) : (
-              <button onClick={() => setStep('checkout')}
-                className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold text-sm hover:bg-primary/90 transition-all">
-                {lang === 'uz' ? 'Buyurtma berish' : 'Buyurtma berish'}
+              <button onClick={() => { setError(''); setStep('checkout') }}
+                disabled={revalidating || orderItems.length === 0}
+                className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold text-sm hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                {revalidating ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    {lang === 'uz' ? 'Tekshirilmoqda...' : 'Проверка...'}
+                  </>
+                ) : (lang === 'uz' ? 'Buyurtma berish' : 'Buyurtma berish')}
               </button>
             )}
           </div>
