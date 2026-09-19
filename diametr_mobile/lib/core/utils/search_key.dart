@@ -1,6 +1,9 @@
 /// One search normalization ("searchKey") shared by every Diametr app — the
 /// website, the shop admin, the dashboard and the backend implement the exact
-/// same steps, so a query finds the same records everywhere.
+/// same steps, so a query finds the same records everywhere. On the customer
+/// apps (this one and the website) the final match is also fuzzy — a query that
+/// is ~80%+ similar still matches (see [keyMatches]), so a typo like "rakovena"
+/// still finds "rakovina".
 ///
 /// Uzbek shoppers type in both alphabets and drop or vary the oʻ/gʻ
 /// apostrophe, so a plain lowercase `contains` never found the variant
@@ -98,12 +101,63 @@ String searchKey(Object? value) {
       .trim();
 }
 
-/// The matching rule: true when [queryKey] (already a [searchKey]) is empty or
-/// is contained in any of [fieldKeys].
+/// Fuzzy (typo-tolerant) matching budget for a query of [len] characters: about
+/// 20% of its length may differ, so a word that is ~80%+ similar still matches
+/// (e.g. "rakovena" finds "rakovina"). Queries shorter than 4 chars stay exact —
+/// one edit on a 2–3 letter word would match almost anything.
+int fuzzyBudget(int len) => len < 4 ? 0 : (len * 0.2).round();
+
+/// Best edit distance of [pattern] aligned to ANY substring of [text]
+/// (approximate substring match / "fuzzy contains"): insert, delete and
+/// substitute each cost 1, and the match may begin and end anywhere in [text].
+/// Row 0 is all zeros, which lets an alignment start at any position for free.
+int fuzzyContainsDistance(String pattern, String text) {
+  final int m = pattern.length;
+  final int n = text.length;
+  if (m == 0) return 0;
+  if (n == 0) return m;
+  List<int> prev = List<int>.filled(n + 1, 0);
+  List<int> curr = List<int>.filled(n + 1, 0);
+  for (int i = 1; i <= m; i++) {
+    curr[0] = i; // pattern[0..i) vs an empty text prefix = i deletions
+    final int pc = pattern.codeUnitAt(i - 1);
+    for (int j = 1; j <= n; j++) {
+      final int cost = pc == text.codeUnitAt(j - 1) ? 0 : 1;
+      int v = prev[j - 1] + cost; // substitute / match
+      final int del = prev[j] + 1; // drop a pattern char
+      final int ins = curr[j - 1] + 1; // drop a text char
+      if (del < v) v = del;
+      if (ins < v) v = ins;
+      curr[j] = v;
+    }
+    final List<int> tmp = prev;
+    prev = curr;
+    curr = tmp;
+  }
+  int best = prev[0];
+  for (int j = 1; j <= n; j++) {
+    if (prev[j] < best) best = prev[j];
+  }
+  return best;
+}
+
+/// True when [queryKey] is an exact substring of [fieldKey] (fast path) or a
+/// fuzzy match within [fuzzyBudget].
+bool keyMatches(String fieldKey, String queryKey) {
+  if (fieldKey.contains(queryKey)) return true;
+  final int budget = fuzzyBudget(queryKey.length);
+  if (budget == 0) return false;
+  // A query far longer than the field can never fit within budget.
+  if (queryKey.length - fieldKey.length > budget) return false;
+  return fuzzyContainsDistance(queryKey, fieldKey) <= budget;
+}
+
+/// The matching rule: true when [queryKey] (already a [searchKey]) is empty, or
+/// matches (exactly or fuzzily) any of [fieldKeys].
 bool searchKeysContain(Iterable<String> fieldKeys, String queryKey) {
   if (queryKey.isEmpty) return true;
   for (final String k in fieldKeys) {
-    if (k.contains(queryKey)) return true;
+    if (keyMatches(k, queryKey)) return true;
   }
   return false;
 }

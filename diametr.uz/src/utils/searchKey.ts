@@ -72,9 +72,66 @@ export function buildSearchKeys<T>(
 }
 
 /**
- * True when the record key contains the query key. `queryKey` must already be
- * a searchKey(...) result; an empty one matches everything.
+ * Fuzzy (typo-tolerant) budget for a query of `len` characters: ~20% of it may
+ * differ, so a word that is ~80%+ similar still matches. Queries shorter than 4
+ * chars stay exact — one edit on a 2–3 letter word would match almost anything.
+ */
+export function fuzzyBudget(len: number): number {
+  return len < 4 ? 0 : Math.round(len * 0.2)
+}
+
+/**
+ * Best edit distance of `pattern` aligned to ANY substring of `text`
+ * (approximate substring match / "fuzzy contains"): insert, delete and
+ * substitute each cost 1, and the match may begin and end anywhere in `text`.
+ * Row 0 is all zeros, which lets an alignment start at any position for free.
+ */
+export function fuzzyContainsDistance(pattern: string, text: string): number {
+  const m = pattern.length
+  const n = text.length
+  if (m === 0) return 0
+  if (n === 0) return m
+  let prev = new Array<number>(n + 1).fill(0)
+  let curr = new Array<number>(n + 1).fill(0)
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i // pattern[0..i) vs an empty text prefix = i deletions
+    const pc = pattern.charCodeAt(i - 1)
+    for (let j = 1; j <= n; j++) {
+      const cost = pc === text.charCodeAt(j - 1) ? 0 : 1
+      let v = prev[j - 1] + cost // substitute / match
+      const del = prev[j] + 1 // drop a pattern char
+      const ins = curr[j - 1] + 1 // drop a text char
+      if (del < v) v = del
+      if (ins < v) v = ins
+      curr[j] = v
+    }
+    const tmp = prev
+    prev = curr
+    curr = tmp
+  }
+  let best = prev[0]
+  for (let j = 1; j <= n; j++) if (prev[j] < best) best = prev[j]
+  return best
+}
+
+/**
+ * True when the record key matches the query key exactly (substring) or within
+ * the fuzzy budget. `queryKey` must already be a searchKey(...) result; an empty
+ * one matches everything. Fields are joined with '\n' in the record key, so the
+ * fuzzy pass checks each field separately — a fuzzy match can never span the
+ * '\n' boundary the way an inserted edit otherwise could.
  */
 export function matchesSearch(recordKey: string | undefined, queryKey: string): boolean {
-  return queryKey === '' || (recordKey || '').indexOf(queryKey) !== -1
+  if (queryKey === '') return true
+  const rk = recordKey || ''
+  if (rk.indexOf(queryKey) !== -1) return true
+  const budget = fuzzyBudget(queryKey.length)
+  if (budget === 0) return false
+  const fields = rk.split('\n')
+  for (let i = 0; i < fields.length; i++) {
+    const f = fields[i]
+    if (queryKey.length - f.length > budget) continue
+    if (fuzzyContainsDistance(queryKey, f) <= budget) return true
+  }
+  return false
 }
