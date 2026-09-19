@@ -160,11 +160,15 @@
   "about_faq_a3": "Ha! Bog'lanish tugmasi orqali yoki Telegram sahifamiz orqali biz bilan murojaat qiling.",
   "no_internet_title": "Internet yo'q",
   "no_internet_subtitle": "Internet aloqasini tekshiring.\nUlanish tiklangach, ilova davom etadi.",
+  "no_internet_retry": "Qayta urinish",
   "update_title": "Yangilanish mavjud",
   "update_body": "Diametr ilovasining yangi versiyasi mavjud. Iltimos, hozir yangilang.",
   "update_prompt": "Hoziroq yangilashni xohlaysizmi?",
   "update_release_notes": "Yangiliklar",
   "update_now": "YANGILASH",
   "update_later": "KEYINROQ",
-  "update_ignore": "E'TIBORSIZ QOLDIRISH"
+  "update_ignore": "E'TIBORSIZ QOLDIRISH",
+  "network_timeout": "Server javob bermadi. Internet aloqangizni tekshiring.",
+  "network_no_internet": "Internet aloqasi yo'q. Ulanishni tekshiring.",
+  "network_error": "Serverga ulanib bo'lmadi. Qayta urinib ko'ring."
 }

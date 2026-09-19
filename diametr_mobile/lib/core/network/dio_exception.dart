@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class DioExceptions implements Exception {
   late String message;
@@ -10,13 +11,12 @@ class DioExceptions implements Exception {
 
     switch (dioError.type) {
       case DioErrorType.cancel:
-        message = "Request to API server was cancelled";
+        message = 'network_error'.tr();
         break;
       case DioErrorType.connectTimeout:
-        message = "Connection timeout with API server";
-        break;
       case DioErrorType.receiveTimeout:
-        message = "Receive timeout in connection with API server";
+      case DioErrorType.sendTimeout:
+        message = 'network_timeout'.tr();
         break;
       case DioErrorType.response:
         message = _handleError(
@@ -24,18 +24,12 @@ class DioExceptions implements Exception {
           dioError.response?.data,
         );
         break;
-      case DioErrorType.sendTimeout:
-        message = "Send timeout in connection with API server";
-        break;
       case DioErrorType.other:
         if (dioError.message.contains("SocketException")) {
-          message = 'No Internet';
+          message = 'network_no_internet'.tr();
           break;
         }
-        message = "Unexpected error occurred";
-        break;
-      default:
-        message = "Something went wrong";
+        message = 'network_error'.tr();
         break;
     }
   }

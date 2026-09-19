@@ -1317,7 +1317,11 @@ class _CartScreenState extends State<CartScreen> {
     // Last check right before ordering, so the order never goes out with a
     // price, quantity or item the shop no longer has.
     final _CartCheck check = await _checkCart();
-    if (!mounted) return;
+    if (!mounted) {
+      loadingService.closeLoading();
+      _submitting = false;
+      return;
+    }
     if (check.unverified || check.changed || !_canConfirm) {
       loadingService.closeLoading(context); // before any toast (toasts are routes)
       _submitting = false;
@@ -1400,8 +1404,14 @@ class _CartScreenState extends State<CartScreen> {
         hasError = true;
       }
       // An expired session (401) already cleared the token and is taking the
-      // user to the login screen; touching the navigator here could pop it.
-      if (StorageService().read(StorageService.token) == null) return;
+      // user to the login screen; close our dialog (safe: it only pops the
+      // dialog, never the login route) and stop, so the spinner is never left
+      // running.
+      if (StorageService().read(StorageService.token) == null) {
+        loadingService.closeLoading();
+        _submitting = false;
+        return;
+      }
     }
 
     if (!mounted) return;

@@ -26,6 +26,14 @@ class _LoginScreenState extends State<LoginScreen> {
   bool get _ready => phonecontroller.text.length == 14;
   bool _isSubmitting = false;
 
+  /// True only while a send that THIS screen started is in flight. The SMS
+  /// screen re-sends through the same shared [SendSmsBloc]; without this the
+  /// login screen would also react to that resend and push a duplicate SMS
+  /// screen. It must NOT be `ModalRoute.of(context).isCurrent`: while our own
+  /// loading dialog is on top this route is not "current", so the success
+  /// branch was skipped and the spinner span forever (page never advanced).
+  bool _awaitingSend = false;
+
   Widget _buildLangChip(
       BuildContext context, String label, String lang, String country) {
     final isActive = context.locale.languageCode == lang;
@@ -321,6 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         GestureDetector(
                           onTap: () async {
                             if (_ready && !_isSubmitting) {
+                              _awaitingSend = true;
                               setState(() => _isSubmitting = true);
                               await PhoneManager.sendSms(
                                 context,
@@ -385,13 +394,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 BlocListener<SendSmsBloc, SendSmsState>(
                   child: const SizedBox.shrink(),
                   listener: (context, state) async {
-                    // The SMS screen re-sends through the same bloc; only the
-                    // visible screen may react (else a resend would push a
-                    // second SMS screen from here).
-                    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
+                    // React only to a send this screen started (see
+                    // [_awaitingSend]); a resend from the SMS screen must be
+                    // ignored here so it does not push a duplicate SMS screen.
+                    if (!_awaitingSend) return;
                     if (state is SendSmsWaitingState) {
                       loadingService.showLoading(context);
                     } else if (state is SendSmsErrorState) {
+                      _awaitingSend = false;
                       loadingService.closeLoading(context);
                       AppToast.error(
                         context,
@@ -399,6 +409,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         title: 'send_failed'.tr(),
                       );
                     } else if (state is SendSmsSuccessState) {
+                      _awaitingSend = false;
                       loadingService.closeLoading(context);
                       Navigator.of(context).pushNamed(
                         '/smsScreen',

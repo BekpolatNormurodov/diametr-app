@@ -34,6 +34,13 @@ class _SmsScreenState extends State<SmsScreen>
 
   bool _isSubmitting = false;
 
+  /// True only while a resend that THIS screen started is in flight. The login
+  /// screen shares the same [SendSmsBloc]; this flag (never
+  /// `ModalRoute.isCurrent`, which is false while our own loading dialog is on
+  /// top) is what lets the success/error branch run so the spinner is always
+  /// closed.
+  bool _awaitingResend = false;
+
   /// Id of the code being verified. A resend creates a new code (and makes the
   /// old one invalid), so the screen must switch to the new id.
   late String? _id = widget.id;
@@ -382,6 +389,7 @@ class _SmsScreenState extends State<SmsScreen>
                                 Navigator.of(context).pop();
                                 return;
                               }
+                              _awaitingResend = true;
                               await PhoneManager.sendSms(context,
                                   phone: phone);
                             },
@@ -484,10 +492,14 @@ class _SmsScreenState extends State<SmsScreen>
                   BlocListener<SendSmsBloc, SendSmsState>(
                     child: const SizedBox.shrink(),
                     listener: (context, state) {
-                      if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
+                      // React only to a resend this screen started (see
+                      // [_awaitingResend]); the login screen's first send is
+                      // handled there.
+                      if (!_awaitingResend) return;
                       if (state is SendSmsWaitingState) {
                         loadingService.showLoading(context);
                       } else if (state is SendSmsErrorState) {
+                        _awaitingResend = false;
                         loadingService.closeLoading(context);
                         AppToast.error(
                           context,
@@ -495,6 +507,7 @@ class _SmsScreenState extends State<SmsScreen>
                           title: 'send_failed'.tr(),
                         );
                       } else if (state is SendSmsSuccessState) {
+                        _awaitingResend = false;
                         loadingService.closeLoading(context);
                         setState(() => _id = state.data["id"]?.toString());
                         _startTimer();

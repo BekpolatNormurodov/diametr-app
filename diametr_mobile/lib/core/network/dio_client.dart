@@ -15,6 +15,13 @@ class DioClient {
   /// IPv6-only network), so every screen sat on its shimmer with no explanation.
   static const int _maxRetries = 2;
 
+  /// Absolute client-side deadline for a single POST. dio 4.x's connect/receive
+  /// timeouts do not reliably fire on a half-open socket (a network that
+  /// connects and then stalls mid-response), so a blocking loading dialog could
+  /// spin forever. This guarantees the future always completes, so the UI can
+  /// always show an error instead of hanging.
+  static const Duration _postDeadline = Duration(seconds: 50);
+
   /// Blocs all branch on `statusCode == 200` and read `data["name"]` /
   /// `data["message"]` on the failure path, so hand back a well-formed error
   /// response once the retries are spent instead of hanging (or force-unwrapping
@@ -101,16 +108,33 @@ class DioClient {
     dio.ProgressCallback? onSendProgress,
     dio.ProgressCallback? onReceiveProgress,
   }) async {
+    // A caller may pass its own token; otherwise we make one so the hard
+    // deadline can actually abort the underlying request (not just abandon it).
+    final token = cancelToken ?? dio.CancelToken();
     try {
-      final dio.Response response = await _dio.post(
-        url,
-        data: data,
-        queryParameters: queryParameters,
-        options: options,
-        cancelToken: cancelToken,
-        onSendProgress: onSendProgress,
-        onReceiveProgress: onReceiveProgress,
-        
+      final dio.Response response = await _dio
+          .post(
+            url,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            cancelToken: token,
+            onSendProgress: onSendProgress,
+            onReceiveProgress: onReceiveProgress,
+          )
+          .timeout(
+        _postDeadline,
+        onTimeout: () {
+          token.cancel('post-deadline');
+          throw dio.DioError(
+            requestOptions: dio.RequestOptions(
+              path: url,
+              baseUrl: Endpoints.baseUrl,
+            ),
+            type: dio.DioErrorType.receiveTimeout,
+            error: 'post-deadline',
+          );
+        },
       );
 
       return response;
