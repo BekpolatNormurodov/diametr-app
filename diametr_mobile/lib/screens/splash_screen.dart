@@ -140,6 +140,16 @@ class _SplashScreenState extends State<SplashScreen>
         _waitingForNav = true;
       }
     });
+
+    // Safety net: the splash must NEVER hang. The connectivity gate above waits
+    // for a live connection before leaving, so with no internet the splash
+    // would spin forever and the user could not even reach the login screen.
+    // Force navigation by this deadline no matter what — offline simply lands
+    // on login/home, where the app-wide no-internet overlay takes over and the
+    // 5s poll still reconnects screens once the network returns.
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      if (mounted && !_navigated) _doNavigate();
+    });
   }
 
   Future<void> _doNavigate() async {
