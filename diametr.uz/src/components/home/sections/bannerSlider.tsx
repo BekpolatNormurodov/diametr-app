@@ -28,15 +28,19 @@ const BG_PALETTE = [
 // (logo, tagline, feature icons, "Найти ближайший магазин" CTA) is BAKED INTO
 // the image, so this slide never renders an overlay panel — `hero: true` tells
 // the renderer to show the image alone. Clicking it navigates to /shops
-// (which is what the baked-in CTA promises). Kept as the first slide even when
-// real ads exist, so the site's own identity is always the entry point.
+// (which is what the baked-in CTA promises).
+//
+// SINGLE SOURCE OF TRUTH: the image is served from the backend's static folder
+// (also read by the mobile app via the /ad/all row it belongs to). Replacing
+// hero.webp on the server therefore updates BOTH the website and every
+// installed mobile app at once — no rebuild, no store update.
 const HERO_BANNER = {
   bg: 'from-emerald-700 via-emerald-800 to-emerald-900',
   badge: { uz: '', ru: '' },
   title: { uz: '', ru: '' },
   desc: { uz: '', ru: '' },
   cta: { uz: '', ru: '' },
-  image: '/banners/hero.webp',
+  image: 'https://api.diametr.uz/static/ads/hero.webp',
   hero: true as const,
   href: '/shops',
 }

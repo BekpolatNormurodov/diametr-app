@@ -292,7 +292,31 @@ export default function ShopProductsTable({
         setAllCategories(toList(catRes.value.data).map((c: any) => ({ value: String(c.id), label: c.name_uz ?? c.name ?? c.name_ru ?? `#${c.id}` })));
       } else failed = true;
       if (prodRes.status === "fulfilled") {
-        setAllProducts(toList(prodRes.value.data));
+        const products = toList(prodRes.value.data);
+        setAllProducts(products);
+        // Some categories are soft-deleted by the SUPER admin (work_status=
+        // DELETED) but still hold products the shop already stocks (or new
+        // stock a shop owner may want to add). `/category/all` filters DELETED
+        // out, so those categories would vanish from the Qo'shish dropdown and
+        // the shop owner could not add stock to their own existing products.
+        // Merge every category we see referenced by an actual product back in
+        // — deduped by id, ordered same as `/category/all` first, extras after.
+        setAllCategories((prev) => {
+          const seen = new Set(prev.map((c) => c.value));
+          const merged = [...prev];
+          for (const p of products) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cat = (p as any).category;
+            const cid = p.category_id ?? cat?.id;
+            if (cid == null) continue;
+            const key = String(cid);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const label = cat?.name_uz ?? cat?.name ?? cat?.name_ru ?? `#${cid}`;
+            merged.push({ value: key, label });
+          }
+          return merged;
+        });
         catalogLoaded.current.products = true;
       } else failed = true;
       if (itemRes.status === "fulfilled") {
@@ -819,13 +843,13 @@ export default function ShopProductsTable({
           <TableHeader>
             <TableRow>
               <TableCell isHeader className="px-3 py-3 w-8"></TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Rasm</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">#</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">Rasm</TableCell>
               <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Tovar</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Variantlar</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Soni</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Sotilgan</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Amallar</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">Variantlar</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-right">Soni</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-right">Sotilgan</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">Amallar</TableCell>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -843,7 +867,7 @@ export default function ShopProductsTable({
                   <TableCell className="px-3 py-4 text-center">
                     <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                   </TableCell>
-                  <TableCell className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
+                  <TableCell className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400 text-center">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
                   <TableCell className="px-4 py-4">
                     {(() => {
                       const imgUrl = getProductImage(group);
@@ -865,16 +889,16 @@ export default function ShopProductsTable({
                     </div>
                     {group.categoryName && <span className="text-xs text-gray-400">{group.categoryName}</span>}
                   </TableCell>
-                  <TableCell className="px-4 py-4 text-sm">
+                  <TableCell className="px-4 py-4 text-sm text-center">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-semibold">{variantCount} ta</span>
                     {unassigned.length > 0 && (
                       <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 text-[10px] font-medium">+{unassigned.length}</span>
                     )}
                   </TableCell>
-                  <TableCell className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300 font-semibold">{group.totalCount > 0 ? `${group.totalCount.toLocaleString()} ta` : "—"}</TableCell>
-                  <TableCell className="px-4 py-4 text-sm font-semibold text-gray-800 dark:text-white">{group.totalSold} ta</TableCell>
+                  <TableCell className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300 font-semibold text-right">{group.totalCount > 0 ? `${group.totalCount.toLocaleString()} ta` : "—"}</TableCell>
+                  <TableCell className="px-4 py-4 text-sm font-semibold text-gray-800 dark:text-white text-right">{group.totalSold} ta</TableCell>
                   <TableCell className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-center gap-1">
                       <button
                         type="button"
                         onClick={() => { setInfoGroup(group); openInfoModal(); }}
