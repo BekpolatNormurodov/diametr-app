@@ -157,8 +157,8 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
             {tableData.length} ta ichidan {Math.min((safePage - 1) * +optionValue + 1, tableData.length)}–{Math.min(safePage * +optionValue, tableData.length)} ko'rsatilmoqda
           </span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={currentPage >= maxPage} onClick={() => setCurrentPage(p => p + 1)}>Keyingi</Button>
+            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={() => setCurrentPage(p => p - 1)}>Oldingi</Button>
+            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={() => setCurrentPage(p => p + 1)}>Keyingi</Button>
           </div>
         </div>
       </div>

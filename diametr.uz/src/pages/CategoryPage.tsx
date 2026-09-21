@@ -585,9 +585,15 @@ export default function CategoryPage() {
                 style={{ transitionDelay: `${Math.min(i * 0.06, 0.3)}s` }}
                 className="reveal group bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 hover:-translate-y-1 border border-transparent dark:border-slate-700 hover:border-primary/20 cursor-pointer"
               >
-                {/* Image — variant-first fallback so generic product photos
-                    don't drown out cards whose variants have real pictures. */}
+                {/* Image — placeholder always in the background so a 404 on
+                    a set image reveals it (variant-first fallback so generic
+                    product photos don't drown out cards with variant art). */}
                   <div className="relative w-full h-44 bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <svg className="w-12 h-12 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                    </svg>
+                  </div>
                   {(() => {
                     const src = productImageUrl(p)
                     return src ? (
@@ -599,18 +605,11 @@ export default function CategoryPage() {
                       loading={i < 4 ? 'eager' : 'lazy'}
                       fetchPriority={i < 4 ? 'high' : undefined}
                       decoding="async"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                      className="relative w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
                     />
                     ) : null
                   })()}
-                  {!productImageUrl(p) && (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <svg className="w-12 h-12 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-                      </svg>
-                    </div>
-                  )}
                   {comingSoon && (
                     <span className="absolute top-2 left-2 bg-slate-800/80 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-sm">
                       {lang === 'uz' ? "Qo'shilmoqda" : 'Добавляется'}
@@ -734,7 +733,13 @@ export default function CategoryPage() {
               <div className="p-6 space-y-6">
                 {/* Product image + info */}
                 <div className="flex gap-5">
-                  <div className="w-28 h-28 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 flex-shrink-0">
+                  <div className="relative w-28 h-28 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 flex-shrink-0">
+                    {/* Placeholder always in background so a 404 reveals it. */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <svg className="w-10 h-10 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                      </svg>
+                    </div>
                     {(() => {
                       const heroSrc = productImageUrl(selected)
                       return heroSrc ? (
@@ -745,18 +750,11 @@ export default function CategoryPage() {
                         height={112}
                         decoding="async"
                         fetchPriority="high"
-                        className="w-full h-full object-cover"
-                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                        className="relative w-full h-full object-cover"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
                       />
                       ) : null
                     })()}
-                    {!productImageUrl(selected) && (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <svg className="w-10 h-10 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-                        </svg>
-                      </div>
-                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-slate-800 dark:text-white text-lg leading-snug mb-1">{getName(selected)}</h3>

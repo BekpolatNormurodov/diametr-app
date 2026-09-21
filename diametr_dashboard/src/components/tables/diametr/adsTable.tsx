@@ -276,7 +276,7 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
           currentPage={currentPage}
           maxPage={maxPage}
           totalItems={tableData.length}
-          totalLabel="ta ichidan {Math.min((safePage - 1) * +optionValue + 1, tableData.length)}–{Math.min(safePage * +optionValue, tableData.length)} ko'rsatilmoqda"
+          totalLabel="ta reklama"
           onChange={setCurrentPage}
           scrollTargetRef={tableTopRef}
         />

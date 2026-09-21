@@ -122,10 +122,10 @@ export default function ServicesTable({ data, onRefetch }: { data: ServiceItemPr
           </TableBody>
         </Table>
         <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
-          <span className="text-sm text-gray-500 dark:text-gray-400">{tableData.length} ta ichidan {Math.min((currentPage-1)*+optionValue+1,tableData.length)}–{Math.min(currentPage*+optionValue,tableData.length)} ko'rsatilmoqda</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{tableData.length} ta ichidan {Math.min((safePage - 1) * +optionValue+1,tableData.length)}–{Math.min(safePage * +optionValue,tableData.length)} ko'rsatilmoqda</span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={currentPage<=1} onClick={()=>setCurrentPage(p=>p-1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={currentPage>=maxPage} onClick={()=>setCurrentPage(p=>p+1)}>Keyingi</Button>
+            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>Oldingi</Button>
+            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>Keyingi</Button>
           </div>
         </div>
       </div>

@@ -1045,13 +1045,13 @@ export default function ProductsTable({
           </span>
           <div className="flex items-center gap-1">
             <button
-              disabled={currentPage <= 1}
+              disabled={safePage <= 1}
               onClick={() => setCurrentPage(1)}
               className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/[0.05] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
               title="Birinchi"
             >«</button>
             <button
-              disabled={currentPage <= 1}
+              disabled={safePage <= 1}
               onClick={() => setCurrentPage((p) => p - 1)}
               className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/[0.05] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
               title="Oldingi"
@@ -1064,7 +1064,7 @@ export default function ProductsTable({
                   key={p}
                   onClick={() => setCurrentPage(p as number)}
                   className={`inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-lg text-xs font-bold transition-all ${
-                    currentPage === p
+                    safePage === p
                       ? "bg-brand-500 text-white shadow-sm shadow-brand-500/25"
                       : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.05]"
                   }`}
@@ -1074,13 +1074,13 @@ export default function ProductsTable({
               )
             )}
             <button
-              disabled={currentPage >= maxPage}
+              disabled={safePage >= maxPage}
               onClick={() => setCurrentPage((p) => p + 1)}
               className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/[0.05] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
               title="Keyingi"
             >›</button>
             <button
-              disabled={currentPage >= maxPage}
+              disabled={safePage >= maxPage}
               onClick={() => setCurrentPage(maxPage)}
               className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/[0.05] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
               title="Oxirgi"

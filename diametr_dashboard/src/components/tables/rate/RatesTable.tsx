@@ -331,7 +331,7 @@ export default function RatesTable() {
             size="sm"
             variant="outline"
             className="w-10 h-10"
-            disabled={currentPage === 1}
+            disabled={safePage === 1}
             onClick={goToPreviousPage}
           >
             <ArrowRightIcon className="rotate-180 fill-gray-500  dark:fill-gray-400 scale-200" />
@@ -340,12 +340,12 @@ export default function RatesTable() {
           {[...Array(maxPage)].map((_, i) => (
             <Button
               size="sm"
-              variant={currentPage === i + 1 ? "primary" : "outline"}
+              variant={safePage === i + 1 ? "primary" : "outline"}
               className="w-10 h-10"
               disabled={false}
               key={i}
               onClick={() => {
-                currentPage !== i + 1 && setCurrentPage(i + 1);
+                safePage !== i + 1 && setCurrentPage(i + 1);
               }}
             >
               {i + 1}
@@ -356,7 +356,7 @@ export default function RatesTable() {
             size="sm"
             variant="outline"
             className="w-10 h-10"
-            disabled={currentPage === maxPage}
+            disabled={safePage === maxPage}
             onClick={goToNextPage}
           >
             <ArrowRightIcon className=" fill-gray-500  dark:fill-gray-400 scale-200" />
