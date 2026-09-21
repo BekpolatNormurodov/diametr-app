@@ -122,25 +122,32 @@ class _ProductScreenState extends State<ProductScreen> {
                     "Bu mahsulot olib tashlangan yoki vaqtincha sotuvda yo'q.",
               );
             }
-            // ── Resolve image: product.image OR first item.image ──
-            final String? productImg = state.data["image"]?.toString();
+            // Image priority (ideal): variant with own image → product image →
+            // category image → nothing (placeholder). A variant image is more
+            // specific than a generic product photo (e.g. "Xavfsizlik tizimlari"
+            // has a store-interior shot while "Seyf" would want a safe).
+            String? _pick(String kind, dynamic v) {
+              if (v == null) return null;
+              final s = v.toString();
+              if (s.isEmpty || s == 'null') return null;
+              return Endpoints.img(kind, s);
+            }
             final List itemsList = (state.data["items"] is List)
                 ? state.data["items"] as List
                 : const [];
-            String? itemImg;
+            // 1. any variant that has an image
+            String? resolvedImageUrl;
             for (final it in itemsList) {
-              final v = it is Map ? it["image"]?.toString() : null;
-              if (v != null && v.isNotEmpty) {
-                itemImg = v;
-                break;
-              }
+              final u = _pick('product-items', it is Map ? it["image"] : null);
+              if (u != null) { resolvedImageUrl = u; break; }
             }
-            final String? resolvedImageUrl =
-                (productImg != null && productImg.isNotEmpty)
-                    ? Endpoints.img('products', productImg)
-                    : (itemImg != null
-                        ? Endpoints.img('product-items', itemImg)
-                        : null);
+            // 2. product's own image
+            resolvedImageUrl ??= _pick('products', state.data["image"]);
+            // 3. category image
+            final catImg = (state.data["category"] is Map)
+                ? (state.data["category"] as Map)["image"]
+                : null;
+            resolvedImageUrl ??= _pick('categories', catImg);
             final String? desc = state.data["desc"]?.toString();
             final bool hasDesc =
                 desc != null && desc.isNotEmpty && desc != 'null';

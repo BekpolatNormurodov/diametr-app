@@ -385,14 +385,52 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
     final num? payPrice = rowEffectivePrice(selectedRow);
     final bool discounted =
         payPrice != null && regularPrice != null && payPrice < regularPrice;
-    // Use variant image if available, fallback to product image.
-    // Variants live in /static/product-items/, products in /static/products/.
-    final dynamic variantImg = data[selectTypeIndex]["image"];
-    final String mainImageUrl = variantImg != null
-        ? Endpoints.img('product-items', variantImg)
-        : (widget.image != null
-            ? Endpoints.img('products', widget.image)
-            : AppConstant.defaultImage);
+    // Image priority (ideal):
+    //   1. selected variant's own image  → the exact thing the customer is buying
+    //   2. any other variant that has one → still more specific than the product
+    //      photo (which is often a generic display, e.g. "Xavfsizlik tizimlari"
+    //      is a store-interior shot while the "Seyf" variant would want a safe)
+    //   3. product's image                → the shop card image
+    //   4. category's image               → the section header art
+    //   5. default placeholder
+    // Variants live in /static/product-items/, products in /static/products/,
+    // categories in /static/categories/.
+    String? _pick(String kind, dynamic v) {
+      if (v == null) return null;
+      final s = v.toString();
+      if (s.isEmpty || s == 'null') return null;
+      return Endpoints.img(kind, s);
+    }
+
+    // 1. selected variant
+    String? mainImageUrl = _pick('product-items', data[selectTypeIndex]['image']);
+    // 2. any other variant that has an image
+    if (mainImageUrl == null) {
+      for (final row in data) {
+        final u = _pick('product-items', row is Map ? row['image'] : null);
+        if (u != null) { mainImageUrl = u; break; }
+      }
+    }
+    // 3. product image (owned by the product row this screen was opened for)
+    mainImageUrl ??= _pick('products', widget.image);
+    // 4. category image (from any of the rows — the selected shop_product
+    //    payload includes the category row via product_item.product.category)
+    if (mainImageUrl == null) {
+      for (final row in data) {
+        if (row is! Map) continue;
+        final catImg =
+            ((row['product_item'] is Map
+                    ? (row['product_item'] as Map)['product']
+                    : null) is Map)
+                ? ((row['product_item'] as Map)['product'] as Map)['category']
+                : null;
+        final v = catImg is Map ? catImg['image'] : null;
+        final u = _pick('categories', v);
+        if (u != null) { mainImageUrl = u; break; }
+      }
+    }
+    // 5. placeholder — never leaves an empty slot
+    mainImageUrl ??= AppConstant.defaultImage;
 
     return ListView(
       shrinkWrap: true,
