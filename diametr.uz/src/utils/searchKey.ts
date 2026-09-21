@@ -73,11 +73,12 @@ export function buildSearchKeys<T>(
 
 /**
  * Fuzzy (typo-tolerant) budget for a query of `len` characters: ~20% of it may
- * differ, so a word that is ~80%+ similar still matches. Queries shorter than 4
- * chars stay exact — one edit on a 2–3 letter word would match almost anything.
+ * differ, so a word that is ~80%+ similar still matches. Queries shorter than 6
+ * chars stay exact — one edit on a 4-char query ("seyf") let it match unrelated
+ * words like "basseyni" through the "seyn" substring, which is not the intent.
  */
 export function fuzzyBudget(len: number): number {
-  return len < 4 ? 0 : Math.round(len * 0.2)
+  return len < 6 ? 0 : Math.round(len * 0.2)
 }
 
 /**

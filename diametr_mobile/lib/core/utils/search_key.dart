@@ -103,9 +103,10 @@ String searchKey(Object? value) {
 
 /// Fuzzy (typo-tolerant) matching budget for a query of [len] characters: about
 /// 20% of its length may differ, so a word that is ~80%+ similar still matches
-/// (e.g. "rakovena" finds "rakovina"). Queries shorter than 4 chars stay exact —
-/// one edit on a 2–3 letter word would match almost anything.
-int fuzzyBudget(int len) => len < 4 ? 0 : (len * 0.2).round();
+/// (e.g. "rakovena" finds "rakovina"). Queries shorter than 6 chars stay exact —
+/// one edit on a 4-char word like "seyf" matched "basseyni" (through the
+/// "seyn" substring), which is not what shoppers meant.
+int fuzzyBudget(int len) => len < 6 ? 0 : (len * 0.2).round();
 
 /// Best edit distance of [pattern] aligned to ANY substring of [text]
 /// (approximate substring match / "fuzzy contains"): insert, delete and

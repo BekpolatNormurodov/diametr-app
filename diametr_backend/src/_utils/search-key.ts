@@ -77,12 +77,13 @@ export function searchKey(value: unknown): string {
 
 /**
  * Fuzzy (typo-tolerant) budget for a query of `len` characters: ~20% of it may
- * differ, so a word ~80%+ similar still matches. Queries under 4 chars stay
- * exact — one edit on a 2–3 letter word would match almost anything. Kept in
- * sync with the mobile app and the website (their customer search is fuzzy too).
+ * differ, so a word ~80%+ similar still matches. Queries under 6 chars stay
+ * exact — one edit on a 4-char query ("seyf") let it match unrelated words
+ * like "basseyni" through the "seyn" substring. Kept in sync with the mobile
+ * app and the website.
  */
 export function fuzzyBudget(len: number): number {
-  return len < 4 ? 0 : Math.round(len * 0.2);
+  return len < 6 ? 0 : Math.round(len * 0.2);
 }
 
 /**
