@@ -970,8 +970,26 @@ class _ProductCardState extends State<_ProductCard> {
 
   @override
   Widget build(BuildContext context) {
-    final String? img = widget.item["image"]?.toString();
-    final imageUrl = img != null ? Endpoints.img('products', img) : null;
+    // Card thumbnail priority: variant with own image → product image. A
+    // variant photo (e.g. an actual seyf) is more specific than the product's
+    // generic display shot.
+    String? imageUrl;
+    final items = widget.item['items'];
+    if (items is List) {
+      for (final it in items) {
+        final v = it is Map ? it['image'] : null;
+        if (v != null && v.toString().isNotEmpty && v.toString() != 'null') {
+          imageUrl = Endpoints.img('product-items', v);
+          break;
+        }
+      }
+    }
+    if (imageUrl == null) {
+      final String? img = widget.item["image"]?.toString();
+      if (img != null && img.isNotEmpty && img != 'null') {
+        imageUrl = Endpoints.img('products', img);
+      }
+    }
     // Product display name lives in name_uz/name_ru; plain `name` is usually
     // null, which left the card blank.
     final lang = context.locale.languageCode;

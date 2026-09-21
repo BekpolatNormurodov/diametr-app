@@ -314,7 +314,98 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
       );
     }
 
-    // Chip style for non-color variants (size, weight, etc.)
+    // If ANY variant has its own image, use image-thumb cards so the customer
+    // can pick visually (Amazon-style). Otherwise fall back to plain text
+    // chips (size/weight variants don't need pictures).
+    final bool anyImg = data.any((e) {
+      final v = e is Map ? e['image'] : null;
+      return v != null && v.toString().isNotEmpty && v.toString() != 'null';
+    });
+
+    if (anyImg) {
+      return Wrap(
+        spacing: 10.w,
+        runSpacing: 10.h,
+        children: List.generate(data.length, (index) {
+          final item = data[index];
+          final isSelected = selectTypeIndex == index;
+          final name = item["name"]?.toString() ?? "";
+          final dynamic vImg = item["image"];
+          final String? thumbUrl =
+              (vImg != null && vImg.toString().isNotEmpty && vImg.toString() != 'null')
+                  ? Endpoints.img('product-items', vImg)
+                  : null;
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                selectTypeIndex = index;
+                _selectedId = item["id"];
+                itemCount = 1;
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 92.w,
+              padding: EdgeInsets.all(6.w),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppConstant.primaryColor.withOpacity(0.10)
+                    : context.tCard,
+                borderRadius: BorderRadius.circular(14.r),
+                border: Border.all(
+                  color: isSelected ? AppConstant.primaryColor : context.tDivider,
+                  width: isSelected ? 2 : 1,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10.r),
+                    child: SizedBox(
+                      width: 80.w,
+                      height: 80.w,
+                      child: thumbUrl != null
+                          ? CachedNetworkImage(
+                              fit: BoxFit.cover,
+                              imageUrl: thumbUrl,
+                              placeholder: (ctx, url) => Container(color: ctx.tInput),
+                              errorWidget: (ctx, url, e) => Container(
+                                color: ctx.tInput,
+                                child: Icon(Iconsax.gallery_slash,
+                                    color: ctx.tSub, size: 20.sp),
+                              ),
+                            )
+                          // Variant without its own image: neutral placeholder
+                          // so the row of cards stays visually uniform.
+                          : Container(
+                              color: context.tInput,
+                              child: Icon(Iconsax.image,
+                                  color: context.tSub, size: 22.sp),
+                            ),
+                    ),
+                  ),
+                  SizedBox(height: 6.h),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: isSelected ? AppConstant.primaryColor : context.tText,
+                      fontSize: 12.sp,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      );
+    }
+
+    // Chip style for non-color variants (size, weight, etc.) — no images.
     return Wrap(
       spacing: 8.w,
       runSpacing: 8.h,

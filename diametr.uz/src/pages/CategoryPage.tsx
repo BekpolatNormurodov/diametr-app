@@ -11,6 +11,7 @@ import { authService } from '../service/authService'
 import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useAuthUser } from '../hooks/useAuthUser'
 import { searchKey, buildSearchKeys, matchesSearch } from '../utils/searchKey'
+import { productImageUrl, variantImageUrl } from '../utils/productImage'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
@@ -584,11 +585,14 @@ export default function CategoryPage() {
                 style={{ transitionDelay: `${Math.min(i * 0.06, 0.3)}s` }}
                 className="reveal group bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 hover:-translate-y-1 border border-transparent dark:border-slate-700 hover:border-primary/20 cursor-pointer"
               >
-                {/* Image */}
+                {/* Image — variant-first fallback so generic product photos
+                    don't drown out cards whose variants have real pictures. */}
                   <div className="relative w-full h-44 bg-slate-100 dark:bg-slate-700 overflow-hidden">
-                  {p.image ? (
+                  {(() => {
+                    const src = productImageUrl(p)
+                    return src ? (
                     <img
-                      src={`${BASE_URL}/static/products/${p.image}`}
+                      src={src}
                       alt={getName(p)}
                       width={288}
                       height={176}
@@ -598,7 +602,9 @@ export default function CategoryPage() {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                     />
-                  ) : (
+                    ) : null
+                  })()}
+                  {!productImageUrl(p) && (
                     <div className="w-full h-full flex items-center justify-center">
                       <svg className="w-12 h-12 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
@@ -729,9 +735,11 @@ export default function CategoryPage() {
                 {/* Product image + info */}
                 <div className="flex gap-5">
                   <div className="w-28 h-28 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 flex-shrink-0">
-                    {selected.image ? (
+                    {(() => {
+                      const heroSrc = productImageUrl(selected)
+                      return heroSrc ? (
                       <img
-                        src={`${BASE_URL}/static/products/${selected.image}`}
+                        src={heroSrc}
                         alt={getName(selected)}
                         width={112}
                         height={112}
@@ -740,7 +748,9 @@ export default function CategoryPage() {
                         className="w-full h-full object-cover"
                         onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                       />
-                    ) : (
+                      ) : null
+                    })()}
+                    {!productImageUrl(selected) && (
                       <div className="w-full h-full flex items-center justify-center">
                         <svg className="w-10 h-10 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
@@ -771,12 +781,30 @@ export default function CategoryPage() {
                       // Stock rows without a real shop can't be ordered — never list them
                       const shopRows = (item.shop_products ?? []).filter(sp => !!sp.shop?.id)
                       const itemLabel = getName(item) || variantLabelOf(item)
+                      const vImg = variantImageUrl(item)
                       return shopRows.length > 0 ? (
                         <div key={item.id} className="space-y-2">
                           {itemLabel ? (
-                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                              {itemLabel}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              {/* Variant own image (when uploaded by SUPER admin) —
+                                  gives the price row a visual anchor so a product
+                                  with several variants reads as a proper picker. */}
+                              {vImg && (
+                                <img
+                                  src={vImg}
+                                  alt={itemLabel}
+                                  width={28}
+                                  height={28}
+                                  loading="lazy"
+                                  decoding="async"
+                                  className="w-7 h-7 rounded-lg object-cover border border-slate-200 dark:border-slate-600"
+                                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                                />
+                              )}
+                              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                                {itemLabel}
+                              </p>
+                            </div>
                           ) : null}
                           {shopRows.map(sp => (
                             <div key={sp.id} className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-primary/10 dark:border-slate-600 hover:border-primary/30 transition-colors">
