@@ -196,9 +196,13 @@ class _Card extends StatelessWidget {
         break;
       }
     }
-    final String? imageUrl = (productImg != null && productImg.isNotEmpty)
-        ? Endpoints.img('products', productImg)
-        : (itemImg != null ? Endpoints.img('product-items', itemImg) : null);
+    // Prefer any variant image over the product image — a variant photo is
+    // more specific than the generic product/store shot the product often has.
+    final String? imageUrl = (itemImg != null)
+        ? Endpoints.img('product-items', itemImg)
+        : ((productImg != null && productImg.isNotEmpty)
+            ? Endpoints.img('products', productImg)
+            : null);
     final String locCode = context.locale.languageCode;
     final String localized = locCode == 'ru'
         ? (item['name_ru']?.toString() ?? '')
