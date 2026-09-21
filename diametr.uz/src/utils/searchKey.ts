@@ -117,22 +117,57 @@ export function fuzzyContainsDistance(pattern: string, text: string): number {
 
 /**
  * True when the record key matches the query key exactly (substring) or within
- * the fuzzy budget. `queryKey` must already be a searchKey(...) result; an empty
- * one matches everything. Fields are joined with '\n' in the record key, so the
- * fuzzy pass checks each field separately — a fuzzy match can never span the
- * '\n' boundary the way an inserted edit otherwise could.
+ * the fuzzy budget.
  */
 export function matchesSearch(recordKey: string | undefined, queryKey: string): boolean {
-  if (queryKey === '') return true
+  return scoreSearch(recordKey, queryKey) >= 0
+}
+
+/**
+ * Best (lowest) match score of a record key against a query key: 0 = exact
+ * substring hit, positive = smallest fuzzy edit distance across all fields
+ * (lower = closer), -1 = no match. Empty query scores 0 for everyone (stable
+ * order). Fields are joined with '\n' in the record key, so each is scored
+ * separately — a fuzzy match can never span the '\n' the way an inserted edit
+ * otherwise could. Use this to sort results so exact matches sit above fuzzy.
+ */
+export function scoreSearch(recordKey: string | undefined, queryKey: string): number {
+  if (queryKey === '') return 0
   const rk = recordKey || ''
-  if (rk.indexOf(queryKey) !== -1) return true
+  if (rk.indexOf(queryKey) !== -1) return 0
   const budget = fuzzyBudget(queryKey.length)
-  if (budget === 0) return false
+  if (budget === 0) return -1
+  let best = -1
   const fields = rk.split('\n')
   for (let i = 0; i < fields.length; i++) {
     const f = fields[i]
     if (queryKey.length - f.length > budget) continue
-    if (fuzzyContainsDistance(queryKey, f) <= budget) return true
+    const d = fuzzyContainsDistance(queryKey, f)
+    if (d <= budget && (best === -1 || d < best)) {
+      best = d
+      if (best === 1) break // 1 is the smallest possible non-zero distance
+    }
   }
-  return false
+  return best
+}
+
+/**
+ * Sort `items` by best match score (0 first = exact substring, then fuzzy
+ * matches ordered by edit distance). Unmatched items are dropped. Stable
+ * within a tie (original order preserved). `keyOf` returns the item's cached
+ * searchKey (usually looked up in a Map from buildSearchKeys).
+ */
+export function rankByMatch<T>(
+  items: ReadonlyArray<T>,
+  keyOf: (item: T) => string | undefined,
+  queryKey: string,
+): T[] {
+  if (queryKey === '') return items.slice()
+  const scored: Array<[number, number, T]> = []
+  for (let i = 0; i < items.length; i++) {
+    const s = scoreSearch(keyOf(items[i]), queryKey)
+    if (s >= 0) scored.push([s, i, items[i]])
+  }
+  scored.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  return scored.map((r) => r[2])
 }

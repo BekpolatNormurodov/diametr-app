@@ -153,6 +153,19 @@ bool keyMatches(String fieldKey, String queryKey) {
   return fuzzyContainsDistance(queryKey, fieldKey) <= budget;
 }
 
+/// Match score for one field: 0 = exact substring (best), a positive integer =
+/// fuzzy edit distance (lower is closer), -1 = no match. An empty query
+/// returns 0 for any field so an empty search sorts stably.
+int keyMatchScore(String fieldKey, String queryKey) {
+  if (queryKey.isEmpty) return 0;
+  if (fieldKey.contains(queryKey)) return 0;
+  final int budget = fuzzyBudget(queryKey.length);
+  if (budget == 0) return -1;
+  if (queryKey.length - fieldKey.length > budget) return -1;
+  final int d = fuzzyContainsDistance(queryKey, fieldKey);
+  return d <= budget ? d : -1;
+}
+
 /// The matching rule: true when [queryKey] (already a [searchKey]) is empty, or
 /// matches (exactly or fuzzily) any of [fieldKeys].
 bool searchKeysContain(Iterable<String> fieldKeys, String queryKey) {
@@ -161,6 +174,19 @@ bool searchKeysContain(Iterable<String> fieldKeys, String queryKey) {
     if (keyMatches(k, queryKey)) return true;
   }
   return false;
+}
+
+/// Best (lowest) score across all fields: 0 = exact substring hit, positive =
+/// closest fuzzy distance, -1 = no match. Empty query = 0 for everyone.
+int searchKeysScore(Iterable<String> fieldKeys, String queryKey) {
+  if (queryKey.isEmpty) return 0;
+  int best = -1;
+  for (final String k in fieldKeys) {
+    final int s = keyMatchScore(k, queryKey);
+    if (s == 0) return 0; // can't beat exact
+    if (s > 0 && (best == -1 || s < best)) best = s;
+  }
+  return best;
 }
 
 /// Caches the [searchKey]s of each record's searchable fields, so a list that
@@ -196,4 +222,41 @@ class SearchKeyIndex {
   /// the key of any of [record]'s fields.
   bool matches(dynamic record, String queryKey) =>
       queryKey.isEmpty || searchKeysContain(keysOf(record), queryKey);
+
+  /// Score of [record] against [queryKey]: 0 = exact substring hit, positive =
+  /// fuzzy distance, -1 = no match. Empty query scores 0 (stable order).
+  int score(dynamic record, String queryKey) =>
+      searchKeysScore(keysOf(record), queryKey);
+}
+
+/// Sort [items] by [SearchKeyIndex.score] ascending — exact matches first,
+/// closest fuzzy matches next, unrelated items dropped. When two items tie on
+/// score, [tieBreak] resolves the order (default: keep original order).
+List<T> rankByMatch<T>(
+  Iterable<T> items,
+  SearchKeyIndex index,
+  String queryKey, {
+  int Function(T a, T b)? tieBreak,
+}) {
+  if (queryKey.isEmpty) return items.toList(growable: false);
+  final scored = <_Ranked<T>>[];
+  var i = 0;
+  for (final it in items) {
+    final s = index.score(it, queryKey);
+    if (s < 0) { i++; continue; }
+    scored.add(_Ranked<T>(it, s, i++));
+  }
+  scored.sort((a, b) {
+    if (a.score != b.score) return a.score - b.score;
+    if (tieBreak != null) return tieBreak(a.item, b.item);
+    return a.order - b.order;
+  });
+  return [for (final r in scored) r.item];
+}
+
+class _Ranked<T> {
+  final T item;
+  final int score;
+  final int order;
+  _Ranked(this.item, this.score, this.order);
 }

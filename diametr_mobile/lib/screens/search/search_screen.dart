@@ -301,24 +301,39 @@ class _ProductsTabState extends State<_ProductsTab> {
         if (state is ProductAllWaitingState) return _shimmerGrid(context);
         if (state is ProductAllSuccessState) {
           final q = widget.query; // already a searchKey (computed by the parent)
-          bool matches(dynamic record) =>
-              _nameKeys.matches(record, q) || _descKeys.matches(record, q);
-          // Search the product's own names AND its variant names. A product's
-          // display name lives in name_uz/name_ru (plain `name` is usually null),
-          // and shoppers search by variant too — e.g. "seyf" is a variant of
-          // "Xavfsizlik tizimlari", so matching only the product name found nothing.
-          var all = (state.data ?? []).where((e) {
-            // Variantless products are shown too now (marked "Turlari qo'shilmoqda" on the
-            // card) — match them by product name/description.
-            if (matches(e)) return true;
-            final items = e["items"];
+          // Score every product against the query — exact substring hits
+          // score 0 (best), fuzzy hits score their edit distance (positive),
+          // non-matches drop out. Product name/desc AND any variant name is
+          // considered; a product's best score is the min across all of them.
+          int scoreOf(dynamic record) {
+            int best = -1;
+            void merge(int s) {
+              if (s == 0) { best = 0; return; }
+              if (s > 0 && (best == -1 || s < best)) best = s;
+            }
+            merge(_nameKeys.score(record, q));
+            if (best != 0) merge(_descKeys.score(record, q));
+            final items = record["items"];
             if (items is List) {
               for (final it in items) {
-                if (matches(it)) return true;
+                if (best == 0) break;
+                merge(_nameKeys.score(it, q));
               }
             }
-            return false;
-          }).toList();
+            return best;
+          }
+          final List scored = [];
+          for (final e in (state.data ?? [])) {
+            final s = scoreOf(e);
+            if (s >= 0) scored.add([s, scored.length, e]);
+          }
+          // Sort: exact hits (score 0) first, closer fuzzy next; stable within
+          // ties via original index. Then drop the scoring metadata.
+          scored.sort((a, b) {
+            final ds = (a[0] as int) - (b[0] as int);
+            return ds != 0 ? ds : (a[1] as int) - (b[1] as int);
+          });
+          var all = [for (final e in scored) e[2]];
 
           if (all.isEmpty) return _empty(context);
 
@@ -1178,9 +1193,9 @@ class _CategoriesTab extends StatelessWidget {
         if (state is CategoryAllWaitingState) return _shimmerList(context);
         if (state is CategoryAllSuccessState) {
           // Category display name is in name_uz/name_ru, not `name`.
-          final data = (state.data ?? [])
-              .where((e) => _nameKeys.matches(e, query))
-              .toList();
+          // Rank exact hits above fuzzy so a typo-tolerant match doesn't
+          // outrank a real substring hit.
+          final data = rankByMatch(state.data ?? [], _nameKeys, query);
           if (data.isEmpty) return _empty(context);
           return ListView.builder(
             padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 30.h),
@@ -1343,9 +1358,8 @@ class _ShopsTabState extends State<_ShopsTab> {
           builder: (context, state) {
             if (state is ShopAllWaitingState) return _shimmerList(context);
             if (state is ShopAllSuccessState) {
-              var data = (state.data ?? [])
-                  .where((e) => _shopNameKeys.matches(e, widget.query))
-                  .toList();
+              var data =
+                  rankByMatch(state.data ?? [], _shopNameKeys, widget.query);
 
               // filter by selected regions
               if (selectedRegions.isNotEmpty) {

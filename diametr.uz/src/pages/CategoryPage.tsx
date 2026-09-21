@@ -10,7 +10,7 @@ import CartDrawer from '../components/cart/CartDrawer'
 import { authService } from '../service/authService'
 import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useAuthUser } from '../hooks/useAuthUser'
-import { searchKey, buildSearchKeys, matchesSearch } from '../utils/searchKey'
+import { searchKey, buildSearchKeys, scoreSearch } from '../utils/searchKey'
 import { productImageUrl, variantImageUrl } from '../utils/productImage'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
@@ -379,22 +379,30 @@ export default function CategoryPage() {
     ...(p.items ?? []).flatMap((it: any) => [it?.name, it?.name_uz, it?.name_ru, it?.desc]),
   ]), [products])
   const q = searchKey(search)
-  const filtered = products.filter(p => {
-    // Variantless products are shown too, marked "Tovar turlari qo'shilmoqda" (types being added) — they
-    // just aren't buyable. So no empty-placeholder skip here.
-    if (q && !matchesSearch(productKeys.get(p), q)) return false
-    if (minPrice || maxPrice) {
-      // Prices are fetched lazily (see the prefetch effect). Until a product's
-      // price is known we can't confirm it's in range, so keep it OUT of a
-      // filtered view rather than showing an unverified, possibly out-of-range
-      // card. The grid fills in as prices arrive.
+  // Rank by match: exact substring hits (score 0) come first, then fuzzy ones
+  // ordered by edit distance. Variantless "Tovar turlari qo'shilmoqda" products
+  // are still shown (not buyable yet), just not stripped by the match filter.
+  const filtered = (() => {
+    const priceOk = (p: typeof products[number]) => {
+      if (!minPrice && !maxPrice) return true
       const price = pricesMap[p.id]
       if (price == null) return false
       if (minPrice && price < Number(parseInput(minPrice))) return false
       if (maxPrice && price > Number(parseInput(maxPrice))) return false
+      return true
     }
-    return true
-  })
+    if (!q) return products.filter(priceOk)
+    const scored: Array<[number, number, typeof products[number]]> = []
+    for (let i = 0; i < products.length; i++) {
+      const p = products[i]
+      const s = scoreSearch(productKeys.get(p), q)
+      if (s < 0) continue
+      if (!priceOk(p)) continue
+      scored.push([s, i, p])
+    }
+    scored.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    return scored.map(r => r[2])
+  })()
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
