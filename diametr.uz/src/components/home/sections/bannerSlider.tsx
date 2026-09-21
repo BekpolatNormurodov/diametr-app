@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
+import { useNavigate } from 'react-router-dom'
 import { useScrollReveal } from '../../../hooks/useScrollReveal'
 import { useLang } from '../../../context/AppContext'
 
@@ -22,6 +23,23 @@ const BG_PALETTE = [
   'from-violet-600 via-purple-600 to-indigo-600',
   'from-sky-500 via-cyan-500 to-teal-500',
 ]
+
+// The always-on brand hero. Everything the visitor should read on this slide
+// (logo, tagline, feature icons, "Найти ближайший магазин" CTA) is BAKED INTO
+// the image, so this slide never renders an overlay panel — `hero: true` tells
+// the renderer to show the image alone. Clicking it navigates to /shops
+// (which is what the baked-in CTA promises). Kept as the first slide even when
+// real ads exist, so the site's own identity is always the entry point.
+const HERO_BANNER = {
+  bg: 'from-emerald-700 via-emerald-800 to-emerald-900',
+  badge: { uz: '', ru: '' },
+  title: { uz: '', ru: '' },
+  desc: { uz: '', ru: '' },
+  cta: { uz: '', ru: '' },
+  image: '/banners/hero.webp',
+  hero: true as const,
+  href: '/shops',
+}
 
 const FALLBACK_BANNERS = [
   {
@@ -52,6 +70,7 @@ const FALLBACK_BANNERS = [
 
 export default function BannerSlider() {
   const { lang } = useLang()
+  const navigate = useNavigate()
   const [current, setCurrent] = useState(0)
   const [animating, setAnimating] = useState(false)
   const [ads, setAds] = useState<Ad[]>([])
@@ -80,9 +99,13 @@ export default function BannerSlider() {
       }))
     : []
 
-  // Show only the real ad banners. The branded fallback slides appear ONLY when
-  // there are no ads at all — otherwise a single ad is the one main banner.
-  const banners = realBanners.length > 0 ? realBanners : FALLBACK_BANNERS
+  // Only the brand HERO — asked to be the single banner. Real ads and the
+  // branded fallback slides are kept in code (still fetched above so the
+  // reklama admin flow keeps working end-to-end) but are not shown in the
+  // slider; to bring them back, append `...realBanners` (or `FALLBACK_BANNERS`)
+  // to the array below.
+  const banners = [HERO_BANNER]
+  void realBanners // referenced above to keep the fetch honest — silence unused-var
 
   const total = banners.length
 
@@ -127,18 +150,52 @@ export default function BannerSlider() {
           className={`relative w-full rounded-3xl overflow-hidden transition-all duration-500 bg-gradient-to-r ${banner.bg}`}
         >
           {banner.image ? (
-            /* Full-width hero at a capped height, anchored to the TOP so the
-               logo, headline and CTA always show; only the lower product rows
-               get trimmed. Fills the row edge-to-edge — no floating box. */
-            <img
-              src={banner.image}
-              alt=""
-              loading="eager"
-              decoding="async"
-              className={`block w-full h-[200px] sm:h-[300px] lg:h-[400px] object-cover object-top transition-opacity duration-350 ${
-                animating ? 'opacity-0' : 'opacity-100'
-              }`}
-            />
+            // Full-width hero at a capped height, anchored to the TOP so the
+            // logo, headline and CTA always show; only the lower product rows
+            // get trimmed. Fills the row edge-to-edge — no floating box.
+            //
+            // For the branded HERO the whole slide is a link (href → the CTA
+            // baked into the image); other image ads render as a plain <img>
+            // because clicking them today has no defined destination. The
+            // hero/href fields are read via a cast because CRA's older TS
+            // narrows the discriminated union to `never` inside `in` checks.
+            (() => {
+              const b = banner as { hero?: boolean; href?: string }
+              const isHero = b.hero === true
+              const heroHref: string | undefined = typeof b.href === 'string' ? b.href : undefined
+              const img = (
+                <img
+                  src={banner.image}
+                  alt={isHero ? 'Diametr.uz — Найти ближайший магазин' : (banner.title[lang] ?? '')}
+                  loading="eager"
+                  decoding="async"
+                  className={
+                    isHero
+                      // Hero: no cropping. Width fills the container, height
+                      // scales with the natural aspect ratio so every part of
+                      // the baked-in art (logo, tagline, category strip,
+                      // feature row, CTA) is visible at every breakpoint.
+                      ? `block w-full h-auto transition-opacity duration-350 ${animating ? 'opacity-0' : 'opacity-100'}`
+                      // Ad banners: fixed height and object-cover so ads of
+                      // any aspect ratio all fill the same slider slot.
+                      : `block w-full h-[200px] sm:h-[300px] lg:h-[400px] object-cover object-top transition-opacity duration-350 ${animating ? 'opacity-0' : 'opacity-100'}`
+                  }
+                />
+              )
+              if (isHero && heroHref) {
+                return (
+                  <button
+                    type="button"
+                    onClick={() => navigate(heroHref)}
+                    aria-label="Diametr.uz — magazinlarni ko'rish"
+                    className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-900"
+                  >
+                    {img}
+                  </button>
+                )
+              }
+              return img
+            })()
           ) : (
             /* Fallback hero — gradient background with text + CTA */
             <div
