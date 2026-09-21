@@ -5,9 +5,10 @@ import {
   TableHeader,
   TableRow,
 } from "../../ui/table";
+import { useAutoClampPage } from "../../common/Pagination";
 
 import Badge from "../../ui/badge/Badge";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Button from "../../ui/button/Button";
 import { ArrowRightIcon, DownloadIcon } from "../../../icons";
 import Select from "../../form/Select";
@@ -171,9 +172,12 @@ export default function RatesTable() {
   // Pationation
   
   const [currentPage, setCurrentPage] = useState(1);
-  const maxPage = Math.ceil(tableData.length / +optionValue);
+  const maxPage = Math.max(1, Math.ceil(tableData.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
   
-  const startIndex = (currentPage - 1) * +optionValue;
+  const startIndex = (safePage - 1) * +optionValue;
   const endIndex = startIndex + +optionValue;
   let currentItems: Order[] = tableData.slice(startIndex, endIndex);
   
@@ -187,7 +191,7 @@ export default function RatesTable() {
   console.log(">> data length :", tableData.length);
   
   useEffect(() => {
-    const startIndex = (currentPage - 1) * +optionValue;
+    const startIndex = (safePage - 1) * +optionValue;
     const endIndex = startIndex + +optionValue;
     currentItems = tableData.slice(startIndex, endIndex);
   }, [currentPage]);
@@ -204,7 +208,7 @@ export default function RatesTable() {
 
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
 
 
@@ -359,8 +363,8 @@ export default function RatesTable() {
           </Button>
         </div>
         <div>
-          Showing {(currentPage - 1) * +optionValue + 1} to{" "}
-          {Math.min(tableData.length, currentPage * +optionValue)} of{" "}
+          Showing {(safePage - 1) * +optionValue + 1} to{" "}
+          {Math.min(tableData.length, safePage * +optionValue)} of{" "}
           {tableData.length} entries
         </div>
       </div>

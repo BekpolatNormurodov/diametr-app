@@ -19,6 +19,7 @@ import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
+import Pagination, { useAutoClampPage } from "../../common/Pagination";
 
 export interface AdItemProps {
   id: number;
@@ -104,8 +105,11 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
 
   const searchQueryKey = searchKey(search);
   const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.title, s.subtitle]));
-  const maxPage = Math.ceil(filteredData.length / +optionValue);
-  const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
+  const maxPage = Math.max(1, Math.ceil(filteredData.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
+  const currentItems = filteredData.slice((safePage - 1) * +optionValue, safePage * +optionValue);
 
   const openEdit = (item: AdItemProps) => {
     setEditItem(item);
@@ -227,7 +231,7 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
   ];
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
         <TableToolbar search={search} onSearch={(v) => { setSearch(v); setCurrentPage(1); }} searchPlaceholder="Qidirish..." showValue={optionValue} onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }} onExport={handleExport} />
         <Table>
@@ -247,7 +251,7 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
               <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">Ma'lumot yo'q</TableCell></TableRow>
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
-                <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(currentPage - 1) * +optionValue + idx + 1}</TableCell>
+                <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
                 <TableCell className="px-5 py-4">
                   <span className="font-medium text-gray-800 dark:text-white">{item.title}</span>
                 </TableCell>
@@ -268,15 +272,14 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
             ))}
           </TableBody>
         </Table>
-        <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {tableData.length} ta ichidan {Math.min((currentPage - 1) * +optionValue + 1, tableData.length)}–{Math.min(currentPage * +optionValue, tableData.length)} ko'rsatilmoqda
-          </span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={currentPage >= maxPage} onClick={() => setCurrentPage((p) => p + 1)}>Keyingi</Button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          maxPage={maxPage}
+          totalItems={tableData.length}
+          totalLabel="ta ichidan {Math.min((safePage - 1) * +optionValue + 1, tableData.length)}–{Math.min(safePage * +optionValue, tableData.length)} ko'rsatilmoqda"
+          onChange={setCurrentPage}
+          scrollTargetRef={tableTopRef}
+        />
       </div>
 
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[640px] m-4">
@@ -341,10 +344,12 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
             />
           </div>
 
-          {/* Live preview — how the banner will look */}
+          {/* Live preview — how the banner will look. Capped so the preview
+              doesn't dominate the modal (was aspect-[16/6] full width ≈240px
+              tall — visually overpowered the form fields above). */}
           <div className="mt-5">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">Ko'rinishi</p>
-            <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/[0.03] aspect-[16/6]">
+            <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/[0.03] aspect-[16/6] max-w-md max-h-40">
               {imgPreview ? (
                 <img src={imgPreview} alt="Banner" className="absolute inset-0 h-full w-full object-cover" onError={() => setImgPreview(null)} />
               ) : (
@@ -353,9 +358,9 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
                 </div>
               )}
               {(form.title || form.subtitle) && (
-                <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/65 via-black/10 to-transparent p-4">
-                  {form.title && <p className="text-base font-semibold text-white drop-shadow">{form.title}</p>}
-                  {form.subtitle && <p className="text-xs text-white/85 drop-shadow">{form.subtitle}</p>}
+                <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/65 via-black/10 to-transparent p-3">
+                  {form.title && <p className="text-sm font-semibold text-white drop-shadow line-clamp-1">{form.title}</p>}
+                  {form.subtitle && <p className="text-[11px] text-white/85 drop-shadow line-clamp-1">{form.subtitle}</p>}
                 </div>
               )}
             </div>

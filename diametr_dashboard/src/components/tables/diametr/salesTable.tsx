@@ -4,11 +4,12 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "../../ui/tab
 import Moment from "moment";
 import Button from "../../ui/button/Button";
 import { DeleteIcon } from "../../../icons";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
+import { useAutoClampPage } from "../../common/Pagination";
 
 export interface SaleItemProps {
   id: number;
@@ -51,8 +52,11 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
 
   const searchQueryKey = searchKey(search);
   const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.address, customerPhone(s), customerName(s)]));
-  const maxPage = Math.ceil(filteredData.length / +optionValue);
-  const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
+  const maxPage = Math.max(1, Math.ceil(filteredData.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
+  const currentItems = filteredData.slice((safePage - 1) * +optionValue, safePage * +optionValue);
 
   const doAction = async (id: number, action: "confirm" | "cancel" | "finish") => {
     setLoadingId(id);
@@ -88,7 +92,7 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
         <TableToolbar search={search} onSearch={(v) => { setSearch(v); setCurrentPage(1); }} searchPlaceholder="Qidirish..." showValue={optionValue} onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }} onExport={handleExport} />
         <Table>
@@ -111,7 +115,7 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
               const busy = loadingId === item.id;
               return (
                 <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
-                  <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(currentPage - 1) * +optionValue + idx + 1}</TableCell>
+                  <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
                   <TableCell className="px-5 py-4 font-medium text-gray-800 dark:text-white">{item.shop?.name ?? "-"}</TableCell>
                   <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                     {customerName(item) || customerPhone(item) || "-"}

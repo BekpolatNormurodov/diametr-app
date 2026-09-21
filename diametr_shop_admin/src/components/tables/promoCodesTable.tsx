@@ -3,7 +3,8 @@ import TableActions from "./TableActions";
 import TableToolbar from "./TableToolbar";
 import Button from "../ui/button/Button";
 import { PlusIcon, DownloadIcon } from "../../icons";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Pagination, { useAutoClampPage } from "../common/Pagination";
 import { useModal } from "../../hooks/useModal";
 import Input from "../form/input/InputField";
 import Label from "../form/Label";
@@ -69,9 +70,12 @@ export default function PromoCodesTable({
     ? tableData
     : filterSearchIndex(searchIndex, search);
 
-  const maxPage = Math.ceil(filteredData.length / +optionValue);
-  const startIndex = (currentPage - 1) * +optionValue;
+  const maxPage = Math.max(1, Math.ceil(filteredData.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const startIndex = (safePage - 1) * +optionValue;
   const currentItems = filteredData.sort((a: any, b: any) => b.id - a.id).slice(startIndex, startIndex + +optionValue);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
 
   const openEdit = (item: PromoCodeItemProps) => {
     setEditItem(item);
@@ -169,7 +173,7 @@ export default function PromoCodesTable({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
         <TableToolbar
           search={search}
@@ -246,13 +250,14 @@ export default function PromoCodesTable({
             ))}
           </TableBody>
         </Table>
-        <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
-          <span className="text-sm text-gray-500 dark:text-gray-400">{filteredData.length} ta promo kod</span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={currentPage >= maxPage} onClick={() => setCurrentPage((p) => p + 1)}>Keyingi</Button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          maxPage={maxPage}
+          totalItems={filteredData.length}
+          totalLabel="ta promo kod"
+          onChange={setCurrentPage}
+          scrollTargetRef={tableTopRef}
+        />
       </div>
 
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[520px] m-4">

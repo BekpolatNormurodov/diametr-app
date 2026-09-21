@@ -3,7 +3,7 @@ import TableToolbar from "./TableToolbar";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "../../ui/table";
 import Moment from "moment";
 import Badge from "../../ui/badge/Badge";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
@@ -12,6 +12,7 @@ import { useModal } from "../../../hooks/useModal";
 import { Modal } from "../../ui/modal";
 import Input from "../../form/input/InputField";
 import Label from "../../form/Label";
+import Pagination, { useAutoClampPage } from "../../common/Pagination";
 
 export interface UserItemProps {
   id: number;
@@ -69,7 +70,9 @@ export default function UsersTable({
 
   const pageSize = parseInt(showValue);
   const maxPage  = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const current  = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const current  = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSearch = (v: string) => { setSearch(v); setCurrentPage(1); };
   const handleShow   = (v: string) => { setShowValue(v); setCurrentPage(1); };
@@ -133,7 +136,7 @@ export default function UsersTable({
             ) : current.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                 <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                  {(currentPage - 1) * pageSize + idx + 1}
+                  {(safePage - 1) * pageSize + idx + 1}
                 </TableCell>
                 <TableCell className="px-5 py-4">
                   <div className="flex items-center gap-3">
@@ -179,31 +182,13 @@ export default function UsersTable({
         </Table>
       </div>
 
-      {/* Pagination */}
-      <div className="px-5 py-3 flex flex-wrap gap-2 justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
-        <span className="text-sm text-gray-500 dark:text-gray-400">
-          {filtered.length} ta ichidan {Math.min((currentPage - 1) * pageSize + 1, filtered.length)}–{Math.min(currentPage * pageSize, filtered.length)} ko'rsatilmoqda
-        </span>
-        <div className="flex gap-1.5">
-          <button
-            disabled={currentPage <= 1}
-            onClick={() => setCurrentPage((p) => p - 1)}
-            className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-white/[0.05] text-gray-600 dark:text-gray-400 transition-colors"
-          >
-            Oldingi
-          </button>
-          <span className="px-3 py-1.5 text-xs rounded-lg bg-brand-500 text-white font-medium">
-            {currentPage} / {maxPage}
-          </span>
-          <button
-            disabled={currentPage >= maxPage}
-            onClick={() => setCurrentPage((p) => p + 1)}
-            className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-white/[0.05] text-gray-600 dark:text-gray-400 transition-colors"
-          >
-            Keyingi
-          </button>
-        </div>
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        maxPage={maxPage}
+        totalItems={filtered.length}
+        totalLabel="ta foydalanuvchi"
+        onChange={setCurrentPage}
+      />
 
       {/* Foydalanuvchi ma'lumotlari — Ko'rish / Tahrirlash */}
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[480px] m-4">

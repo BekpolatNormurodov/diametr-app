@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "../../ui/tab
 import Moment from "moment";
 import Button from "../../ui/button/Button";
 import { DeleteIcon, EditIcon, DownloadIcon } from "../../../icons";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useModal } from "../../../hooks/useModal";
 import Input from "../../form/input/InputField";
 import Label from "../../form/Label";
@@ -14,6 +14,7 @@ import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
+import { useAutoClampPage } from "../../common/Pagination";
 
 export interface RegionItemProps {
   id: number;
@@ -38,8 +39,11 @@ export default function RegionsTable({ data, onRefetch }: { data: RegionItemProp
 
   const searchQueryKey = searchKey(search);
   const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.name]));
-  const maxPage = Math.ceil(filteredData.length / +optionValue);
-  const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
+  const maxPage = Math.max(1, Math.ceil(filteredData.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
+  const currentItems = filteredData.slice((safePage - 1) * +optionValue, safePage * +optionValue);
 
   const openEdit = (item: RegionItemProps) => {
     setEditItem(item);
@@ -76,7 +80,7 @@ export default function RegionsTable({ data, onRefetch }: { data: RegionItemProp
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
         <TableToolbar search={search} onSearch={(v) => { setSearch(v); setCurrentPage(1); }} searchPlaceholder="Qidirish..." showValue={optionValue} onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }} onExport={handleExport} />
         <Table>
@@ -93,7 +97,7 @@ export default function RegionsTable({ data, onRefetch }: { data: RegionItemProp
               <TableRow><TableCell colSpan={4} className="py-8 text-center text-gray-400">Ma'lumot yo'q</TableCell></TableRow>
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
-                <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(currentPage - 1) * +optionValue + idx + 1}</TableCell>
+                <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
                 <TableCell className="px-5 py-4 font-medium text-gray-800 dark:text-white">{item.name ?? "-"}</TableCell>
                 <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{Moment(item.createdt ?? item.createdAt).format("DD.MM.YYYY")}</TableCell>
                 <TableCell className="px-5 py-4">

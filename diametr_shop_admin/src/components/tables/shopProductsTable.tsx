@@ -17,6 +17,7 @@ import * as XLSX from "xlsx";
 import Moment from "moment";
 import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
 import { beginBusy, endBusy } from "../../utils/busy";
+import Pagination, { useAutoClampPage } from "../common/Pagination";
 
 export interface ShopProductItemProps {
   id: number;
@@ -258,13 +259,25 @@ export default function ShopProductsTable({
 
   useEffect(() => { setTableData(data); }, [data]);
   useEffect(() => { setCurrentPage(1); }, [optionValue]);
+  // Anchor for the pager to scroll back into view after a page jump.
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
 
   // ─── Catalog (categories, products, variants) ──────────
   // Loaded on mount, again every time the add/edit modal opens (cached lists show meanwhile),
-  // and when the tab becomes visible after a minute; one automatic retry on failure.
+  // when the tab becomes visible after 20s, and on demand (the modal's Yangilash button); one automatic retry on failure.
+  //
+  // Why the manual refresh exists: the SUPER admin creates categories and
+  // products, and shop owners need to see them right after — before this,
+  // a shop owner who had the modal open when a new category was added had to
+  // close and reopen it (and even then only if the lock had cleared). The
+  // Yangilash button asks for the newest catalog on demand, and the load lock
+  // now self-releases after 15s so a stuck request never freezes future loads.
   const loadCatalog = useCallback(async (attempt: number = 1) => {
     if (catalogInFlight.current) return;
     catalogInFlight.current = true;
+    // Safety net: if a request hangs (no dio timeout on axiosClient.get here),
+    // release the in-flight lock so subsequent opens can still refresh.
+    const releaseTimer = setTimeout(() => { catalogInFlight.current = false; }, 15_000);
     catalogLoadedAt.current = Date.now();
     if (!(catalogLoaded.current.products && catalogLoaded.current.items)) setCatalogStatus("loading");
     let failed = false;
@@ -287,6 +300,7 @@ export default function ShopProductsTable({
         catalogLoaded.current.items = true;
       } else failed = true;
     } finally {
+      clearTimeout(releaseTimer);
       catalogInFlight.current = false;
     }
     const ready = catalogLoaded.current.products && catalogLoaded.current.items;
@@ -296,8 +310,11 @@ export default function ShopProductsTable({
 
   useEffect(() => {
     loadCatalog();
+    // 20s (was 60s) — a SUPER admin often adds a category/product and switches
+    // right back to the shop admin tab; a full minute of stale dropdowns feels
+    // broken.
     const onVisible = () => {
-      if (document.visibilityState === "visible" && Date.now() - catalogLoadedAt.current > 60_000) loadCatalog();
+      if (document.visibilityState === "visible" && Date.now() - catalogLoadedAt.current > 20_000) loadCatalog();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
@@ -370,7 +387,11 @@ export default function ShopProductsTable({
   }, [tableData, tableSearchIndex, search]);
 
   const maxPage = Math.ceil(groupedData.length / +optionValue) || 1;
-  const currentGroups = groupedData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
+  // Never leave the pager on a page that no longer exists (a poll removed rows,
+  // a filter narrowed them) — else Keyingi/Oldingi feel like they "went back".
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const currentGroups = groupedData.slice((safePage - 1) * +optionValue, safePage * +optionValue);
 
   const toggleExpand = (pid: number) => {
     setExpandedProducts((prev) => {
@@ -783,7 +804,7 @@ export default function ShopProductsTable({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/5 dark:bg-white/3">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/5 dark:bg-white/3">
       <div className="max-w-full overflow-x-auto">
         <TableToolbar
           search={search}
@@ -822,7 +843,7 @@ export default function ShopProductsTable({
                   <TableCell className="px-3 py-4 text-center">
                     <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                   </TableCell>
-                  <TableCell className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">{(currentPage - 1) * +optionValue + idx + 1}</TableCell>
+                  <TableCell className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
                   <TableCell className="px-4 py-4">
                     {(() => {
                       const imgUrl = getProductImage(group);
@@ -979,13 +1000,14 @@ export default function ShopProductsTable({
             })}
           </TableBody>
         </Table>
-        <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/5">
-          <span className="text-sm text-gray-500 dark:text-gray-400">{groupedData.length} ta tovar</span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={currentPage >= maxPage} onClick={() => setCurrentPage((p) => p + 1)}>Keyingi</Button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          maxPage={maxPage}
+          totalItems={groupedData.length}
+          totalLabel="ta tovar"
+          onChange={setCurrentPage}
+          scrollTargetRef={tableTopRef}
+        />
       </div>
 
       {/* ─── ADD MODAL ──────────────────────────────────── */}
@@ -996,10 +1018,26 @@ export default function ShopProductsTable({
               <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <h4 className="text-lg font-bold text-white">Tovar qo&apos;shish</h4>
                 <p className="text-sm text-white/70">Kategoriya tanlang yoki qidiring, variantlarni belgilang</p>
               </div>
+              {/* Manual refresh — for the case when a SUPER admin just added
+                  a new category/product and the shop owner wants it visible
+                  without closing the modal. */}
+              <button
+                type="button"
+                onClick={() => loadCatalog()}
+                disabled={catalogStatus === "loading"}
+                title="Katalogni yangilash — SUPER admin yangi tovar/kategoriya qo'shsa, shu tugma orqali darhol ko'rasiz"
+                aria-label="Katalogni yangilash"
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-white/15 hover:bg-white/25 disabled:opacity-50 transition-colors backdrop-blur-sm"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className={catalogStatus === "loading" ? "animate-spin" : ""}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 12a8 8 0 1 1-3.05-6.29M20 4v5h-5" />
+                </svg>
+                Yangilash
+              </button>
             </div>
           </div>
           <div className="px-6 pt-4 pb-2 shrink-0 border-b border-gray-100 dark:border-white/5">

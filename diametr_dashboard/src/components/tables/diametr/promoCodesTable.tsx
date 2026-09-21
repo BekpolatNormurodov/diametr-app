@@ -18,7 +18,8 @@ import {
   DownloadIcon,
   PlusIcon,
 } from "../../../icons";
-import { useEffect, useState } from "react";
+import Pagination, { useAutoClampPage } from "../../common/Pagination";
+import { useEffect, useState, useRef } from "react";
 import { useModal } from "../../../hooks/useModal";
 import Input from "../../form/input/InputField";
 import Label from "../../form/Label";
@@ -86,8 +87,11 @@ export default function PromoCodesTable({
 
   const searchQueryKey = searchKey(search);
   const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.code]));
-  const maxPage = Math.ceil(filteredData.length / +optionValue);
-  const startIndex = (currentPage - 1) * +optionValue;
+  const maxPage = Math.max(1, Math.ceil(filteredData.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
+  const startIndex = (safePage - 1) * +optionValue;
   const currentItems = filteredData.slice(startIndex, startIndex + +optionValue);
 
   const openEdit = (item: PromoCodeItemProps) => {
@@ -184,7 +188,7 @@ export default function PromoCodesTable({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
         <div className="px-5 py-3 flex flex-row justify-between items-center border-b border-gray-100 dark:border-white/[0.05]">
           <div className="flex flex-row items-center gap-2 text-theme-sm font-medium text-gray-500 dark:text-gray-400">
@@ -269,20 +273,13 @@ export default function PromoCodesTable({
             )}
           </TableBody>
         </Table>
-        {/* Pagination */}
-        <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
-          <span className="text-theme-sm text-gray-500 dark:text-gray-400">
-            {startIndex + 1}–{Math.min(startIndex + +optionValue, tableData.length)} / {tableData.length}
-          </span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1}>
-              ←
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setCurrentPage((p) => Math.min(p + 1, maxPage))} disabled={currentPage === maxPage || maxPage === 0}>
-              →
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          maxPage={maxPage}
+          totalItems={tableData.length}
+          totalLabel="ta promo kod"
+          onChange={setCurrentPage}
+        />
       </div>
 
       {/* Add / Edit Modal */}

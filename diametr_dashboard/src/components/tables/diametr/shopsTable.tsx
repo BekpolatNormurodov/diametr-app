@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "../../ui/tab
 import Moment from "moment";
 import Button from "../../ui/button/Button";
 import { DeleteIcon, EditIcon, DownloadIcon } from "../../../icons";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useModal } from "../../../hooks/useModal";
 import Input from "../../form/input/InputField";
 import Label from "../../form/Label";
@@ -14,6 +14,7 @@ import axiosClient from "../../../service/axios.service";
 import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
+import { useAutoClampPage } from "../../common/Pagination";
 
 export interface ShopItemProps {
   id: number;
@@ -84,8 +85,11 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
 
   const searchQueryKey = searchKey(search);
   const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.name, s.inn, s.address, s.region?.name]));
-  const maxPage = Math.ceil(filteredData.length / +optionValue);
-  const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
+  const maxPage = Math.max(1, Math.ceil(filteredData.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
+  const currentItems = filteredData.slice((safePage - 1) * +optionValue, safePage * +optionValue);
   const staticUrl = import.meta.env.VITE_STATIC_PATH ?? "";
 
   const openEdit = (item: ShopItemProps) => {
@@ -190,7 +194,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
         <TableToolbar search={search} onSearch={(v) => { setSearch(v); setCurrentPage(1); }} searchPlaceholder="Qidirish..." showValue={optionValue} onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }} onExport={handleExport} />
         <Table>
@@ -217,7 +221,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
               const exp = expiryBadge(item.expired);
               return (
               <TableRow key={item.id} className={`hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors ${item.work_status === "BLOCKED" ? "bg-red-50/30 dark:bg-red-900/5" : ""}`}>
-                <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(currentPage - 1) * +optionValue + idx + 1}</TableCell>
+                <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
                 <TableCell className="px-5 py-4">
                   {item.image ? (
                     <img src={`${staticUrl}/static/shops/${item.image}`} alt={item.name} className="w-10 h-10 rounded-xl object-cover ring-2 ring-white dark:ring-white/[0.06] shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />

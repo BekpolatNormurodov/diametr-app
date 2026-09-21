@@ -3,7 +3,7 @@ import TableToolbar from "./TableToolbar";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "../../ui/table";
 import Moment from "moment";
 import Button from "../../ui/button/Button";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useModal } from "../../../hooks/useModal";
 import Input from "../../form/input/InputField";
 import Label from "../../form/Label";
@@ -13,6 +13,7 @@ import { toast } from "../../ui/toast";
 import TranslateButton from "../../common/TranslateButton";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
+import { useAutoClampPage } from "../../common/Pagination";
 
 export interface UnitTypeItemProps {
   id: number;
@@ -43,8 +44,11 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
   const filteredData = searchQueryKey === ""
     ? tableData
     : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.name, s.name_uz, s.name_ru, s.symbol]));
-  const maxPage = Math.ceil(filteredData.length / +optionValue);
-  const currentItems = filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
+  const maxPage = Math.max(1, Math.ceil(filteredData.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
+  const currentItems = filteredData.slice((safePage - 1) * +optionValue, safePage * +optionValue);
 
   const openEdit = (item: UnitTypeItemProps) => {
     setEditItem(item);
@@ -100,7 +104,7 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
         <TableToolbar
           search={search}
@@ -129,7 +133,7 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                 <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">
-                  {(currentPage - 1) * +optionValue + idx + 1}
+                  {(safePage - 1) * +optionValue + idx + 1}
                 </TableCell>
                 <TableCell className="px-5 py-4 font-medium text-gray-800 dark:text-white">{item.name_uz ?? item.name}</TableCell>
                 <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{item.name_ru ?? "—"}</TableCell>
@@ -150,7 +154,7 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
         </Table>
         <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            {tableData.length} ta ichidan {Math.min((currentPage - 1) * +optionValue + 1, tableData.length)}–{Math.min(currentPage * +optionValue, tableData.length)} ko'rsatilmoqda
+            {tableData.length} ta ichidan {Math.min((safePage - 1) * +optionValue + 1, tableData.length)}–{Math.min(safePage * +optionValue, tableData.length)} ko'rsatilmoqda
           </span>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}>Oldingi</Button>

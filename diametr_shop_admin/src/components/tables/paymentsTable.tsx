@@ -4,7 +4,8 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "../ui/table"
 import Moment from "moment";
 import Button from "../ui/button/Button";
 import { PlusIcon, DownloadIcon } from "../../icons";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Pagination, { useAutoClampPage } from "../common/Pagination";
 import { useModal } from "../../hooks/useModal";
 import Input from "../form/input/InputField";
 import Label from "../form/Label";
@@ -64,8 +65,11 @@ export default function PaymentsTable({
     ? tableData
     : filterSearchIndex(searchIndex, search);
 
-  const maxPage = Math.ceil(filteredData.length / +optionValue);
-  const currentItems = filteredData.sort((a: any, b: any) => b.id - a.id).slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
+  const maxPage = Math.max(1, Math.ceil(filteredData.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const currentItems = filteredData.sort((a: any, b: any) => b.id - a.id).slice((safePage - 1) * +optionValue, safePage * +optionValue);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
 
   const openEdit = (item: PaymentItemProps) => {
     setEditItem(item);
@@ -152,7 +156,7 @@ export default function PaymentsTable({
       : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400";
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
         <TableToolbar
           search={search}
@@ -187,7 +191,7 @@ export default function PaymentsTable({
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                 <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">
-                  {(currentPage - 1) * +optionValue + idx + 1}
+                  {(safePage - 1) * +optionValue + idx + 1}
                 </TableCell>
                 <TableCell className="px-5 py-4 text-sm font-semibold text-green-600 dark:text-green-400">
                   {item.amount != null ? `${formatMoney(item.amount)} so'm` : "-"}
@@ -213,15 +217,14 @@ export default function PaymentsTable({
             ))}
           </TableBody>
         </Table>
-        <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {filteredData.length} ta to'lov · Jami: {formatMoney(tableData.reduce((s, p) => s + (p.amount ?? 0), 0))} so'm
-          </span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={currentPage >= maxPage} onClick={() => setCurrentPage((p) => p + 1)}>Keyingi</Button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          maxPage={maxPage}
+          totalItems={filteredData.length}
+          totalLabel={`ta to'lov · Jami: ${formatMoney(tableData.reduce((s, p) => s + (p.amount ?? 0), 0))} so'm`}
+          onChange={setCurrentPage}
+          scrollTargetRef={tableTopRef}
+        />
       </div>
 
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[500px] m-4">

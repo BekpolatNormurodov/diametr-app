@@ -16,6 +16,7 @@ import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 import ImageField, { ImageFieldResult } from "../../common/ImageField";
 import TranslateButton from "../../common/TranslateButton";
+import { useAutoClampPage } from "../../common/Pagination";
 
 export interface CategoryItemProps {
   id: number;
@@ -47,6 +48,7 @@ export default function CategorysTable({ data, onRefetch }: { data: CategoryItem
   const searchQueryKey = searchKey(search);
   const filteredData = searchQueryKey === "" ? tableData : tableData.filter((s) => matchesSearchKey(searchQueryKey, [s.name, s.name_uz, s.name_ru]));
   const maxPage = Math.max(1, Math.ceil(filteredData.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
   const safePage = Math.min(currentPage, maxPage);
   const currentItems = filteredData.slice((safePage - 1) * +optionValue, safePage * +optionValue);
 

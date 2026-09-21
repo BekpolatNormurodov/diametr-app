@@ -16,6 +16,7 @@ import ImageField, { ImageFieldResult } from "../../common/ImageField";
 import ColorPalette from "../../common/ColorPalette";
 import TranslateButton from "../../common/TranslateButton";
 import { cachedSearchKey, searchKey } from "../../../utils/searchKey";
+import { useAutoClampPage } from "../../common/Pagination";
 
 /* ─── Types ────────────────────────────────────────────────── */
 export interface VariantProps {
@@ -216,11 +217,12 @@ export default function ProductsTable({
   const maxPage = groupByCategory
     ? 1
     : Math.max(1, Math.ceil(filteredData.length / +optionValue));
+  // Rows can leave the active filter (e.g. "Variantsiz" after a variant is added) — never stay on an empty page past the end.
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
   const currentItems = groupByCategory
     ? filteredData
-    : filteredData.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
-  // Rows can leave the active filter (e.g. "Variantsiz" after a variant is added) — never stay on an empty page past the end.
-  useEffect(() => { if (currentPage > maxPage) setCurrentPage(maxPage); }, [currentPage, maxPage]);
+    : filteredData.slice((safePage - 1) * +optionValue, safePage * +optionValue);
 
   // Group by category: filteredData'ning hammasini kategoriya bo'yicha guruhlash
   const groupedItems = (() => {
@@ -245,7 +247,7 @@ export default function ProductsTable({
   const pageNumbers = (() => {
     const pages: (number | "...")[] = [];
     const total = maxPage;
-    const cur = currentPage;
+    const cur = safePage;
     const window = 1; // joriy sahifa atrofidagi sahifalar
     for (let i = 1; i <= total; i++) {
       if (i === 1 || i === total || (i >= cur - window && i <= cur + window)) {
@@ -765,7 +767,7 @@ export default function ProductsTable({
                     onClick={() => setExpandedId(isExpanded ? null : item.id)}
                   >
                     <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">
-                      {(currentPage - 1) * +optionValue + idx + 1}
+                      {(safePage - 1) * +optionValue + idx + 1}
                     </TableCell>
                     <TableCell className="px-5 py-4">
                       {item.image ? (
@@ -1039,7 +1041,7 @@ export default function ProductsTable({
         </Table>
         <div className="px-5 py-3 flex flex-wrap gap-3 justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            {filteredData.length} ta ichidan {Math.min((currentPage - 1) * +optionValue + 1, filteredData.length)}–{Math.min(currentPage * +optionValue, filteredData.length)} ko'rsatilmoqda
+            {filteredData.length} ta ichidan {Math.min((safePage - 1) * +optionValue + 1, filteredData.length)}–{Math.min(safePage * +optionValue, filteredData.length)} ko'rsatilmoqda
           </span>
           <div className="flex items-center gap-1">
             <button

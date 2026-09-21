@@ -4,7 +4,8 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "../ui/table"
 import Moment from "moment";
 import Button from "../ui/button/Button";
 import { DeleteIcon } from "../../icons";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Pagination, { useAutoClampPage } from "../common/Pagination";
 import axiosClient from "../../service/axios.service";
 import { toast } from "../ui/toast";
 import * as XLSX from "xlsx";
@@ -110,8 +111,11 @@ export default function OrdersTable({
   }, [tableData, searchIndex, search]);
 
   const sorted = useMemo(() => [...filteredData].sort((a, b) => b.id - a.id), [filteredData]);
-  const maxPage = Math.ceil(sorted.length / +optionValue);
-  const currentItems = sorted.slice((currentPage - 1) * +optionValue, currentPage * +optionValue);
+  const maxPage = Math.max(1, Math.ceil(sorted.length / +optionValue));
+  useAutoClampPage(currentPage, maxPage, setCurrentPage);
+  const safePage = Math.min(currentPage, maxPage);
+  const currentItems = sorted.slice((safePage - 1) * +optionValue, safePage * +optionValue);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
 
   const doAction = async (id: number, action: "confirm" | "cancel" | "finish") => {
     setLoadingId(id);
@@ -156,7 +160,7 @@ export default function OrdersTable({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/5 dark:bg-white/3">
+    <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/5 dark:bg-white/3">
       <div className="max-w-full overflow-x-auto">
         <TableToolbar
           search={search}
@@ -198,7 +202,7 @@ export default function OrdersTable({
                         {products.length > 0 && (
                           <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M9 5l7 7-7 7"/></svg>
                         )}
-                        {(currentPage - 1) * +optionValue + idx + 1}
+                        {(safePage - 1) * +optionValue + idx + 1}
                       </div>
                     </TableCell>
                     {/* Customer from order.user ({id, fullname, phone}, sent by /order/all for the owner's shop) */}
@@ -332,15 +336,14 @@ export default function OrdersTable({
             })}
           </TableBody>
         </Table>
-        <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/5">
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {sorted.length} ta ichidan {Math.min((currentPage - 1) * +optionValue + 1, sorted.length)}–{Math.min(currentPage * +optionValue, sorted.length)} ko'rsatilmoqda
-          </span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={currentPage >= maxPage} onClick={() => setCurrentPage((p) => p + 1)}>Keyingi</Button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          maxPage={maxPage}
+          totalItems={sorted.length}
+          totalLabel="ta buyurtma"
+          onChange={setCurrentPage}
+          scrollTargetRef={tableTopRef}
+        />
       </div>
       {confirmId !== null && (
         <ConfirmDeleteModal
