@@ -175,11 +175,14 @@ export default function BannerSlider() {
                   decoding="async"
                   className={
                     isHero
-                      // Hero: no cropping. Width fills the container, height
-                      // scales with the natural aspect ratio so every part of
-                      // the baked-in art (logo, tagline, category strip,
-                      // feature row, CTA) is visible at every breakpoint.
-                      ? `block w-full h-auto transition-opacity duration-350 ${animating ? 'opacity-0' : 'opacity-100'}`
+                      // Hero: web renders at a 16:6 slot (matching the raw
+                      // hero content — logo, tagline, category strip, feature
+                      // row, CTA). The file on disk is a 16:9 padded version
+                      // (so the mobile 16:9 carousel fits perfectly without
+                      // cropping); object-cover object-center clips exactly
+                      // the padding zones, leaving only the hero content on
+                      // web. Single source of truth for both platforms.
+                      ? `block w-full aspect-[16/6] object-cover object-center transition-opacity duration-350 ${animating ? 'opacity-0' : 'opacity-100'}`
                       // Ad banners: fixed height and object-cover so ads of
                       // any aspect ratio all fill the same slider slot.
                       : `block w-full h-[200px] sm:h-[300px] lg:h-[400px] object-cover object-top transition-opacity duration-350 ${animating ? 'opacity-0' : 'opacity-100'}`
