@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
+import { useLang } from "../context/LangContext";
 import {
   GridIcon,
   BoxCubeIcon,
@@ -26,36 +27,40 @@ interface SidebarGroup {
   items: NavItem[];
 }
 
-const SIDEBAR_GROUPS: SidebarGroup[] = [
+type L = { uz: string; ru: string };
+type LocalizedItem = Omit<NavItem, "name"> & { name: L };
+type LocalizedGroup = Omit<SidebarGroup, "label" | "items"> & { label: L; items: LocalizedItem[] };
+
+const SIDEBAR_GROUPS_L: LocalizedGroup[] = [
   {
-    label: "Asosiy",
+    label: { uz: "Asosiy", ru: "Основное" },
     key: "main",
     items: [
-      { icon: <GridIcon />, name: "Dashboard", path: "/" },
+      { icon: <GridIcon />, name: { uz: "Dashboard", ru: "Панель" }, path: "/" },
     ],
   },
   {
-    label: "Do'kon",
+    label: { uz: "Do'kon", ru: "Магазин" },
     key: "shop",
     items: [
-      { icon: <ShopIcon />,  name: "Tovarlar",  path: "/shop-products" },
+      { icon: <ShopIcon />,  name: { uz: "Tovarlar", ru: "Товары" },  path: "/shop-products" },
     ],
   },
   {
-    label: "Savdo",
+    label: { uz: "Savdo", ru: "Продажи" },
     key: "sales",
     items: [
-      { icon: <SaleIcon />,  name: "Buyurtmalar", path: "/orders" },
-      { icon: <CardIcon />,  name: "To'lovlar",   path: "/payments" },
-      { icon: <CopyIcon />,  name: "Promo Kodlar", path: "/promo-codes" },
+      { icon: <SaleIcon />,  name: { uz: "Buyurtmalar", ru: "Заказы" }, path: "/orders" },
+      { icon: <CardIcon />,  name: { uz: "To'lovlar",   ru: "Платежи" }, path: "/payments" },
+      { icon: <CopyIcon />,  name: { uz: "Promo Kodlar", ru: "Промокоды" }, path: "/promo-codes" },
     ],
   },
   {
-    label: "Profil",
+    label: { uz: "Profil", ru: "Профиль" },
     key: "profile",
     items: [
-      { icon: <CalenderIcon />, name: "Obuna holati", path: "/subscription" },
-      { icon: <UserCircleIcon />, name: "Sozlamalar", path: "/profile" },
+      { icon: <CalenderIcon />, name: { uz: "Obuna holati", ru: "Статус подписки" }, path: "/subscription" },
+      { icon: <UserCircleIcon />, name: { uz: "Sozlamalar", ru: "Настройки" }, path: "/profile" },
     ],
   },
 ];
@@ -63,9 +68,20 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const location = useLocation();
+  const { lang } = useLang();
+
+  const SIDEBAR_GROUPS = useMemo(
+    () =>
+      SIDEBAR_GROUPS_L.map((g) => ({
+        ...g,
+        label: g.label[lang],
+        items: g.items.map((it) => ({ ...it, name: it.name[lang] })),
+      })),
+    [lang],
+  );
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set(SIDEBAR_GROUPS.map((g) => g.key))
+    () => new Set(SIDEBAR_GROUPS_L.map((g) => g.key))
   );
 
   const isActive = useCallback(

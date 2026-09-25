@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { useSidebar } from "../context/SidebarContext";
 import { ThemeToggleButton } from "../components/common/ThemeToggleButton";
+import LangSwitcher from "../components/common/LangSwitcher";
 import Moment from "moment";
 import { useShopSession, type SessionUser } from "../context/ShopSessionContext";
 
@@ -62,6 +63,7 @@ const AppHeader: React.FC = () => {
           <span className="hidden sm:block text-sm font-medium text-gray-600 dark:text-gray-300">
             🏪 {shopName}
           </span>
+          <LangSwitcher />
           <ThemeToggleButton />
           <ShopUserDropdown user={user} />
         </div>

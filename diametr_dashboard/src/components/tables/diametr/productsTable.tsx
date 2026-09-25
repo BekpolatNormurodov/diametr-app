@@ -17,6 +17,7 @@ import ColorPalette from "../../common/ColorPalette";
 import TranslateButton from "../../common/TranslateButton";
 import { cachedSearchKey, searchKey } from "../../../utils/searchKey";
 import { useAutoClampPage } from "../../common/Pagination";
+import { useLang } from "../../../context/LangContext";
 
 /* ─── Types ────────────────────────────────────────────────── */
 export interface VariantProps {
@@ -88,6 +89,7 @@ export default function ProductsTable({
   /** Re-fetch category / unit type option lists (called when the edit modal opens). */
   onOptionsRefresh?: () => void;
 }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -619,7 +621,7 @@ export default function ProductsTable({
         <TableToolbar
           search={search}
           onSearch={(v) => { setSearch(v); setCurrentPage(1); }}
-          searchPlaceholder="Qidirish..."
+          searchPlaceholder={t.k("searchPh")}
           showValue={optionValue}
           onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }}
           onExport={handleExport}
@@ -636,7 +638,7 @@ export default function ProductsTable({
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M3 6h18M3 12h18M3 18h18" />
               </svg>
-              {groupByCategory ? "Guruhlash: ON" : "Guruhlash"}
+              {groupByCategory ? t("Guruhlash: ON", "Группировка: ВКЛ") : t.k("group")}
             </button>
           }
         />
@@ -651,7 +653,7 @@ export default function ProductsTable({
                   : "bg-white text-gray-600 border-gray-200 hover:bg-gray-100 hover:border-gray-300 dark:bg-white/[0.03] dark:text-gray-400 dark:border-white/[0.08] dark:hover:bg-white/[0.05]"
               }`}
             >
-              Hammasi
+              {t.k("all")}
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                 categoryFilter === "" ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500 dark:bg-white/[0.05] dark:text-gray-400"
               }`}>
@@ -669,7 +671,7 @@ export default function ProductsTable({
               }`}
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
-              Variantsiz
+              {t.k("variantless")}
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                 onlyVariantless ? "bg-white/25 text-white" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
               }`}>
@@ -733,14 +735,14 @@ export default function ProductsTable({
           <TableHeader>
             <TableRow>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Rasm</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Nomi (UZ)</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Nomi (RU)</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Kategoriya</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">O'lchov</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Variantlar</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Yaratilgan</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Amallar</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("photo")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("nameUz")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("nameRu")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("category")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("unit")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("variants")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("createdAt")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
           <TableBody>

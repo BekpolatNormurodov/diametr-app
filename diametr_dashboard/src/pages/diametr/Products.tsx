@@ -1,6 +1,7 @@
 ﻿import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import ComponentCard from "../../components/common/ComponentCard";
 import PageMeta from "../../components/common/PageMeta";
+import { useLang } from "../../context/LangContext";
 
 import { PlusIcon } from "../../icons";
 import Button from "../../components/ui/button/Button";
@@ -33,6 +34,7 @@ export interface Product {
   unit_type_id?: string;
 }
 export default function ProductsPage() {
+  const { t } = useLang();
   const { isOpen, openModal, closeModal } = useModal();
   const [autoExpandId, setAutoExpandId] = useState<number | null>(null);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>("");
@@ -185,10 +187,10 @@ export default function ProductsPage() {
   return (
     <>
       <PageMeta
-        title="Mahsulotlar | Diametr Dashboard"
+        title={`${t.k("products")} | Diametr Dashboard`}
         description="Diametr Dashboard"
       />
-      <PageBreadcrumb pageTitle="Mahsulotlar" />
+      <PageBreadcrumb pageTitle={t.k("products")} />
 
       <div className="space-y-6 ">
         {/* O'lchov birligi qo'shish tugmasi */}
@@ -198,12 +200,12 @@ export default function ProductsPage() {
             variant="outline"
             onClick={() => { setUtForm({ name_uz: "", name_ru: "", symbol: "" }); openUtModal(); }}
           >
-            + O'lchov birligi qo'shish
+            + {t.k("addUnitType")}
           </Button>
         </div>
 
         <ComponentCard
-          title="Mahsulotlar"
+          title={t.k("products")}
           action={
             <Button
               size="sm"
@@ -220,7 +222,7 @@ export default function ProductsPage() {
                 openModal();
               }}
             >
-              Mahsulot qo'shish
+              {t.k("addProduct")}
             </Button>
           }
         >
@@ -254,7 +256,7 @@ export default function ProductsPage() {
                 </svg>
               </div>
               <div>
-                <h4 className="text-lg font-bold text-white">Yangi mahsulot</h4>
+                <h4 className="text-lg font-bold text-white">{t.k("createProduct")}</h4>
                 <p className="text-sm text-white/70">Mahsulot yarating, keyin variantlarni qo'shing</p>
               </div>
             </div>
