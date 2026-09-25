@@ -1211,11 +1211,25 @@ export default function ProductsTable({
           <div className="p-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
-                <Label>Variant nomi (UZ) *</Label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label>Variant nomi (UZ) *</Label>
+                  <TranslateButton
+                    source={vForm.name_ru}
+                    direction="ru->uz"
+                    onResult={(t) => setVForm({ ...vForm, name: t })}
+                  />
+                </div>
                 <Input type="text" placeholder="Cola 1.5L, Qizil 5kg..." value={vForm.name} onChange={(e) => setVForm({ ...vForm, name: e.target.value })} />
               </div>
               <div>
-                <Label>Variant nomi (RU) <span className="text-xs text-gray-400">ixtiyoriy</span></Label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label>Variant nomi (RU) <span className="text-xs text-gray-400">ixtiyoriy</span></Label>
+                  <TranslateButton
+                    source={vForm.name}
+                    direction="uz->ru"
+                    onResult={(t) => setVForm({ ...vForm, name_ru: t })}
+                  />
+                </div>
                 <Input type="text" placeholder="Кола 1.5Л, Красный 5кг..." value={vForm.name_ru} onChange={(e) => setVForm({ ...vForm, name_ru: e.target.value })} />
               </div>
 
@@ -1268,7 +1282,14 @@ export default function ProductsTable({
               {/* Bilingual descriptions — `desc` columns are now @db.Text, so
                   long product/variant descriptions fit without truncation. */}
               <div>
-                <Label>Tavsif (UZ)</Label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label>Tavsif (UZ)</Label>
+                  <TranslateButton
+                    source={vForm.desc_ru}
+                    direction="ru->uz"
+                    onResult={(t) => setVForm({ ...vForm, desc: t })}
+                  />
+                </div>
                 <textarea
                   className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm text-gray-800 dark:text-white/90 focus:border-brand-500 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10"
                   rows={4}
@@ -1278,7 +1299,14 @@ export default function ProductsTable({
                 />
               </div>
               <div>
-                <Label>Tavsif (RU) <span className="text-xs text-gray-400">ixtiyoriy</span></Label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label>Tavsif (RU) <span className="text-xs text-gray-400">ixtiyoriy</span></Label>
+                  <TranslateButton
+                    source={vForm.desc}
+                    direction="uz->ru"
+                    onResult={(t) => setVForm({ ...vForm, desc_ru: t })}
+                  />
+                </div>
                 <textarea
                   className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm text-gray-800 dark:text-white/90 focus:border-brand-500 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10"
                   rows={4}

@@ -1,5 +1,6 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
+import { useLang } from "../context/LangContext";
 
 import {
   BoxCubeIcon,
@@ -36,63 +37,70 @@ interface SidebarGroup {
   items: NavItem[];
 }
 
-const SIDEBAR_GROUPS: SidebarGroup[] = [
+// Sidebar labels carry both languages so the switcher (LangSwitcher in the
+// header) can flip them without refetching the whole tree. Item names stay
+// string-literal to keep grep-ability; the render site chooses by lang.
+type L = { uz: string; ru: string };
+type LocalizedItem = Omit<NavItem, "name"> & { name: L };
+type LocalizedGroup = Omit<SidebarGroup, "label" | "items"> & { label: L; items: LocalizedItem[] };
+
+const SIDEBAR_GROUPS_L: LocalizedGroup[] = [
   {
-    label: "Asosiy",
+    label: { uz: "Asosiy", ru: "Основное" },
     key: "main",
     items: [
-      { icon: <GridIcon />,      name: "Dashboard",  path: "/" },
-      { icon: <PieChartIcon />,  name: "Analitika",  path: "/analytics" },
+      { icon: <GridIcon />,      name: { uz: "Dashboard", ru: "Панель" },  path: "/" },
+      { icon: <PieChartIcon />,  name: { uz: "Analitika", ru: "Аналитика" }, path: "/analytics" },
     ],
   },
   {
-    label: "Katalog",
+    label: { uz: "Katalog", ru: "Каталог" },
     key: "catalog",
     items: [
-      { icon: <CategoryIcon />, name: "Kategoriyalar",    path: "/categories" },
-      { icon: <BoxCubeIcon />,  name: "Mahsulotlar",     path: "/products" },
+      { icon: <CategoryIcon />, name: { uz: "Kategoriyalar", ru: "Категории" }, path: "/categories" },
+      { icon: <BoxCubeIcon />,  name: { uz: "Mahsulotlar",   ru: "Товары" },   path: "/products" },
     ],
   },
   {
-    label: "Do'konlar",
+    label: { uz: "Do'konlar", ru: "Магазины" },
     key: "shops",
     items: [
-      { icon: <LocationsIcon />,  name: "Regionlar",         path: "/regions" },
-      { icon: <ShopIcon />,       name: "Do'konlar",         path: "/shops" },
-      { icon: <UserCircleIcon />, name: "Do'kon Adminlari",  path: "/admins" },
+      { icon: <LocationsIcon />,  name: { uz: "Regionlar",        ru: "Регионы" },              path: "/regions" },
+      { icon: <ShopIcon />,       name: { uz: "Do'konlar",        ru: "Магазины" },             path: "/shops" },
+      { icon: <UserCircleIcon />, name: { uz: "Do'kon Adminlari", ru: "Администраторы магазинов" }, path: "/admins" },
     ],
   },
   {
-    label: "Xizmatlar",
+    label: { uz: "Xizmatlar", ru: "Услуги" },
     key: "services",
     items: [
-      { icon: <ServiceIcon />, name: "Xizmatlar", path: "/services" },
-      { icon: <WorkerIcon />,  name: "Ustalar",   path: "/workers" },
+      { icon: <ServiceIcon />, name: { uz: "Xizmatlar", ru: "Услуги" }, path: "/services" },
+      { icon: <WorkerIcon />,  name: { uz: "Ustalar",   ru: "Мастера" }, path: "/workers" },
     ],
   },
   {
-    label: "Sotish",
+    label: { uz: "Sotish", ru: "Продажи" },
     key: "sales",
     items: [
-      { icon: <SaleIcon />,  name: "Buyurtmalar",  path: "/sales" },
-      { icon: <CardIcon />,  name: "To'lovlar",    path: "/payments" },
-      { icon: <CopyIcon />,  name: "Promo Kodlar", path: "/promo-codes" },
+      { icon: <SaleIcon />,  name: { uz: "Buyurtmalar",  ru: "Заказы" },       path: "/sales" },
+      { icon: <CardIcon />,  name: { uz: "To'lovlar",    ru: "Платежи" },      path: "/payments" },
+      { icon: <CopyIcon />,  name: { uz: "Promo Kodlar", ru: "Промокоды" },     path: "/promo-codes" },
     ],
   },
   {
-    label: "Kontent",
+    label: { uz: "Kontent", ru: "Контент" },
     key: "content",
     items: [
-      { icon: <NewsIcon />, name: "Yangiliklar", path: "/news" },
-      { icon: <AdIcon />,   name: "Reklamalar",  path: "/ads" },
+      { icon: <NewsIcon />, name: { uz: "Yangiliklar", ru: "Новости" }, path: "/news" },
+      { icon: <AdIcon />,   name: { uz: "Reklamalar",  ru: "Реклама" }, path: "/ads" },
     ],
   },
   {
-    label: "Boshqaruv",
+    label: { uz: "Boshqaruv", ru: "Управление" },
     key: "management",
     items: [
-      { icon: <GroupIcon />, name: "Foydalanuvchilar", path: "/users" },
-      { icon: <CardIcon />,  name: "Obunalar",         path: "/subscriptions" },
+      { icon: <GroupIcon />, name: { uz: "Foydalanuvchilar", ru: "Пользователи" }, path: "/users" },
+      { icon: <CardIcon />,  name: { uz: "Obunalar",        ru: "Подписки" },     path: "/subscriptions" },
     ],
   },
 ];
@@ -100,10 +108,22 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const location = useLocation();
+  const { lang } = useLang();
+
+  // Locale-mapped groups: keeps the render loop unchanged.
+  const SIDEBAR_GROUPS = useMemo(
+    () =>
+      SIDEBAR_GROUPS_L.map((g) => ({
+        ...g,
+        label: g.label[lang],
+        items: g.items.map((it) => ({ ...it, name: it.name[lang] })),
+      })),
+    [lang],
+  );
 
   // All groups open by default
   const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set(SIDEBAR_GROUPS.map((g) => g.key))
+    () => new Set(SIDEBAR_GROUPS_L.map((g) => g.key))
   );
 
   const isActive = useCallback(

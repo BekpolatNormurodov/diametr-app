@@ -6,6 +6,7 @@ import AppLayout from "./layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
 import { DiametrToastProvider } from "./components/ui/toast";
+import { LangProvider } from "./context/LangContext";
 import ShopsPage from "./pages/diametr/Shops";
 import UsersPage from "./pages/diametr/Users";
 import AdminsPage from "./pages/diametr/Admins";
@@ -39,6 +40,7 @@ function SplashWrapper({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <LangProvider>
     <DiametrToastProvider>
       <Router basename="/">
         <VersionWatcher />
@@ -76,5 +78,6 @@ export default function App() {
         </SplashWrapper>
       </Router>
     </DiametrToastProvider>
+    </LangProvider>
   );
 }
