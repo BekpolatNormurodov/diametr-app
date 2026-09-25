@@ -9,9 +9,12 @@
 export const SHOP_PUBLIC_SELECT = {
   id: true,
   name: true,
+  name_uz: true,
+  name_ru: true,
   image: true,
   work_status: true,
   address: true,
+  address_ru: true,
   lat: true,
   lon: true,
   delivery_amount: true,

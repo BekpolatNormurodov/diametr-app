@@ -1,7 +1,16 @@
 model ProductItem {
     id          Int           @id @default(autoincrement())
+    // Bilingual variant names + descriptions. The old single `name` column is
+    // kept so historic rows still render; new rows fill name_uz/name_ru and the
+    // frontend prefers the locale match with a fallback chain.
     name    String?
-    desc        String?
+    name_uz String?
+    name_ru String?
+    // Text (not VARCHAR(191)) so long Russian descriptions fit — the default
+    // limit ran out on a 200-char cyrillic string and the dashboard showed a
+    // generic 500.
+    desc    String? @db.Text
+    desc_ru String? @db.Text
     image       String?
 
     // Variant details

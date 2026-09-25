@@ -31,5 +31,9 @@ export class CreateCategoryDto {
 
   @IsOptional()
   @IsString()
+  desc_ru: string;
+
+  @IsOptional()
+  @IsString()
   image: string;
 }

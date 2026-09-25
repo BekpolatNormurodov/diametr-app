@@ -35,10 +35,15 @@ export class CreateProductDto {
   @IsString()
   name_ru: string;
 
-  @ApiPropertyOptional({ example: 'Qurilish gishti', description: 'Tavsif' })
+  @ApiPropertyOptional({ example: 'Qurilish gishti', description: 'Tavsif (uz)' })
   @IsOptional()
   @IsString()
   desc: string;
+
+  @ApiPropertyOptional({ example: 'Строительный кирпич', description: 'Tavsif (ru)' })
+  @IsOptional()
+  @IsString()
+  desc_ru: string;
 
   @ApiPropertyOptional({ example: 'image.jpg', description: 'Rasm fayl nomi' })
   @IsOptional()

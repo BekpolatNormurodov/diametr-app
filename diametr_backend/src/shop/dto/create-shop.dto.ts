@@ -23,6 +23,16 @@ export class CreateShopDto {
   @MinLength(4)
   name: string;
 
+  @ApiPropertyOptional({ example: 'Mega Market', description: "Do'kon nomi (uz)" })
+  @IsOptional()
+  @IsString()
+  name_uz: string;
+
+  @ApiPropertyOptional({ example: 'Мега Маркет', description: "Do'kon nomi (ru)" })
+  @IsOptional()
+  @IsString()
+  name_ru: string;
+
   @ApiPropertyOptional({
     example: 2,
     description: 'Bepul sinov muddati (oy, 0 = muddatsiz)',
@@ -56,11 +66,19 @@ export class CreateShopDto {
 
   @ApiPropertyOptional({
     example: 'Toshkent, Chilonzor tumani',
-    description: 'Manzil',
+    description: 'Manzil (uz)',
   })
   @IsOptional()
   @IsString()
   address: string;
+
+  @ApiPropertyOptional({
+    example: 'Ташкент, Чиланзарский район',
+    description: 'Manzil (ru)',
+  })
+  @IsOptional()
+  @IsString()
+  address_ru: string;
 
   @ApiPropertyOptional({
     example: 5000,

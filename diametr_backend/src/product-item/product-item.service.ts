@@ -55,19 +55,47 @@ export class ProductItemService {
     this.logger.log('create');
     await this.assertUnitType(data.unit_type_id);
 
-    return await this.prisma.$transaction(
-      async (tx) => {
-        await this.lockWorkingProduct(
-          tx,
-          data.product_id,
-          "Bu mahsulot o'chirilgan, unga variant qo'shib bo'lmaydi",
-        );
-        return await tx.productItem.create({
-          data: data,
-        });
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
-    );
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          await this.lockWorkingProduct(
+            tx,
+            data.product_id,
+            "Bu mahsulot o'chirilgan, unga variant qo'shib bo'lmaydi",
+          );
+          return await tx.productItem.create({
+            data: data,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+      );
+    } catch (e) {
+      throw this.mapValidationError(e);
+    }
+  }
+
+  /**
+   * Turn Prisma's low-level column errors into a clean 400 with a message the
+   * dashboard can show verbatim — otherwise the admin just sees a generic
+   * "Serverda xatolik" toast and has no way to know that (say) the tavsif
+   * exceeded the DB column length.
+   */
+  private mapValidationError(e: unknown): unknown {
+    const err = e as { code?: string; meta?: { column?: string } };
+    if (err?.code === 'P2000') {
+      const col = err.meta?.column ?? '';
+      const uzbekName: Record<string, string> = {
+        name: 'Variant nomi',
+        desc: 'Tavsif',
+        color: 'Rang',
+        size: "O'lcham",
+      };
+      const field = uzbekName[col] || `"${col}"`;
+      return new BadRequestException(
+        `${field} juda uzun (maksimal 190 belgi). Qisqartirib qayta urinib ko'ring.`,
+      );
+    }
+    return e;
   }
 
   async findAll() {
@@ -114,22 +142,26 @@ export class ProductItemService {
     await this.assertUnitType(data.unit_type_id);
 
     const targetProductId = data.product_id || productItem.product_id;
-    return await this.prisma.$transaction(
-      async (tx) => {
-        if (targetProductId) {
-          await this.lockWorkingProduct(
-            tx,
-            targetProductId,
-            "Bu mahsulot o'chirilgan, uning variantini o'zgartirib bo'lmaydi",
-          );
-        }
-        return await tx.productItem.update({
-          where: { id },
-          data,
-        });
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
-    );
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          if (targetProductId) {
+            await this.lockWorkingProduct(
+              tx,
+              targetProductId,
+              "Bu mahsulot o'chirilgan, uning variantini o'zgartirib bo'lmaydi",
+            );
+          }
+          return await tx.productItem.update({
+            where: { id },
+            data,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+      );
+    } catch (e) {
+      throw this.mapValidationError(e);
+    }
   }
 
   async remove(id: number) {

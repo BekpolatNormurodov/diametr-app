@@ -53,7 +53,7 @@ export interface ProductItemProps {
 }
 
 const emptyProductForm = { name_uz: "", name_ru: "", category_id: "", unit_type_id: "" };
-const emptyVariantForm = { name: "", desc: "", color: "", size: "", value: "", size_x: "", size_y: "", size_z: "" };
+const emptyVariantForm = { name: "", name_ru: "", desc: "", desc_ru: "", color: "", size: "", value: "", size_x: "", size_y: "", size_z: "" };
 
 const variantsOf = (p: ProductItemProps): VariantProps[] => p.items ?? p.product_items ?? [];
 const categoryIdOf = (p: ProductItemProps): string =>
@@ -454,7 +454,11 @@ export default function ProductsTable({
     }
     setVForm({
       name: v.name ?? "",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      name_ru: (v as any).name_ru ?? "",
       desc: v.desc ?? "",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      desc_ru: (v as any).desc_ru ?? "",
       color: v.color ?? "",
       size: v.size ?? "",
       value: v.value != null ? String(v.value) : "",
@@ -523,15 +527,22 @@ export default function ProductsTable({
         imageFilename = res.data?.data?.image ?? res.data?.image ?? imgResult.url;
       }
       const payload: any = { name, product_id: varProductId };
+      // Bilingual name + description; `name` (single language, legacy) stays
+      // in sync with `name_uz` so existing clients keep working.
+      payload.name_uz = name;
+      if (vForm.name_ru.trim()) payload.name_ru = vForm.name_ru.trim();
+      else if (editVariant) payload.name_ru = null;
       if (editVariant) {
         // Edit: send every field the form owns, so a cleared field is cleared (null) on the server.
         payload.desc = vForm.desc.trim() || null;
+        payload.desc_ru = vForm.desc_ru.trim() || null;
         payload.color = vForm.color || null;
         payload.unit_type_id = unitTypeId;
         payload.value = value;
         payload.size = size;
       } else {
         if (vForm.desc.trim()) payload.desc = vForm.desc.trim();
+        if (vForm.desc_ru.trim()) payload.desc_ru = vForm.desc_ru.trim();
         if (vForm.color) payload.color = vForm.color;
         if (unitTypeId) payload.unit_type_id = unitTypeId;
         if (value != null) payload.value = value;
@@ -1200,8 +1211,12 @@ export default function ProductsTable({
           <div className="p-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
-                <Label>Variant nomi *</Label>
+                <Label>Variant nomi (UZ) *</Label>
                 <Input type="text" placeholder="Cola 1.5L, Qizil 5kg..." value={vForm.name} onChange={(e) => setVForm({ ...vForm, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Variant nomi (RU) <span className="text-xs text-gray-400">ixtiyoriy</span></Label>
+                <Input type="text" placeholder="Кола 1.5Л, Красный 5кг..." value={vForm.name_ru} onChange={(e) => setVForm({ ...vForm, name_ru: e.target.value })} />
               </div>
 
               {/* Unit type ga qarab miqdor inputlar */}
@@ -1250,9 +1265,27 @@ export default function ProductsTable({
                 onChange={(hex) => setVForm({ ...vForm, color: hex })}
                 onClear={() => setVForm({ ...vForm, color: "" })}
               />
-              <div className="lg:col-span-2">
-                <Label>Tavsif</Label>
-                <Input type="text" placeholder="Ixtiyoriy tavsif" value={vForm.desc} onChange={(e) => setVForm({ ...vForm, desc: e.target.value })} />
+              {/* Bilingual descriptions — `desc` columns are now @db.Text, so
+                  long product/variant descriptions fit without truncation. */}
+              <div>
+                <Label>Tavsif (UZ)</Label>
+                <textarea
+                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm text-gray-800 dark:text-white/90 focus:border-brand-500 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10"
+                  rows={4}
+                  placeholder="Ixtiyoriy tavsif"
+                  value={vForm.desc}
+                  onChange={(e) => setVForm({ ...vForm, desc: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Tavsif (RU) <span className="text-xs text-gray-400">ixtiyoriy</span></Label>
+                <textarea
+                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm text-gray-800 dark:text-white/90 focus:border-brand-500 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10"
+                  rows={4}
+                  placeholder="Необязательное описание"
+                  value={vForm.desc_ru}
+                  onChange={(e) => setVForm({ ...vForm, desc_ru: e.target.value })}
+                />
               </div>
               <div className="lg:col-span-2">
                 <ImageField key={varImgKey.current} label="Rasm (ixtiyoriy)" allowUrl={false} onChange={(r) => { varImgRef.current = r; if (r?.file || r?.url) setVarImgChanged(true); }} />

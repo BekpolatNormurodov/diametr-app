@@ -4,7 +4,9 @@ model Category {
   name_uz String?
   name_ru String?
 
-  desc  String?
+  // Text + Russian sibling — same rationale as Product/ProductItem.
+  desc     String? @db.Text
+  desc_ru  String? @db.Text
   image  String?
   work_status     WORK_STATUS @default(WORKING)
 

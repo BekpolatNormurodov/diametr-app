@@ -10,15 +10,30 @@ import {
 import { Type } from 'class-transformer';
 
 export class CreateProductItemDto {
-  @ApiProperty({ example: 'Qizil rang, 250g', description: 'Variant nomi' })
+  @ApiProperty({ example: 'Qizil rang, 250g', description: 'Variant nomi (uz — asosiy)' })
   @IsNotEmpty()
   @IsString()
   name: string;
 
-  @ApiPropertyOptional({ example: 'Maxsus qadoqlash', description: 'Tavsif' })
+  @ApiPropertyOptional({ example: 'Qizil rang, 250g', description: 'Variant nomi (uz — takroriy)' })
+  @IsOptional()
+  @IsString()
+  name_uz: string;
+
+  @ApiPropertyOptional({ example: 'Красный цвет, 250г', description: 'Variant nomi (ru)' })
+  @IsOptional()
+  @IsString()
+  name_ru: string;
+
+  @ApiPropertyOptional({ example: 'Maxsus qadoqlash', description: 'Tavsif (uz)' })
   @IsOptional()
   @IsString()
   desc: string;
+
+  @ApiPropertyOptional({ example: 'Особая упаковка', description: 'Tavsif (ru)' })
+  @IsOptional()
+  @IsString()
+  desc_ru: string;
 
   @ApiProperty({ example: 1, description: 'Mahsulot ID', minimum: 1 })
   @IsNumber()

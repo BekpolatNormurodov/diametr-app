@@ -3,7 +3,13 @@ model Product {
     name    String?
     name_uz String?
     name_ru String?
-    desc    String?
+    // Text (not VARCHAR(191)) — Russian descriptions typically run 200-500
+    // characters and cyrillic UTF-8 uses 2 bytes per char, so the default
+    // limit ran out and the dashboard returned a generic 500. Add a Russian
+    // sibling column so the site and mobile can show a proper localised
+    // description; the Uzbek/default text falls back when it is empty.
+    desc    String? @db.Text
+    desc_ru String? @db.Text
     image   String?
     work_status WORK_STATUS   @default(WORKING)
     type        PRODUCT_TYPE?

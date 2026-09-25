@@ -1,10 +1,16 @@
 model Shop {
     id    Int     @id @default(autoincrement())
+    // Bilingual shop identity. name kept for legacy rows; name_uz/name_ru
+    // preferred going forward. Address in Text form so a longer street +
+    // landmark description fits.
     name  String?
+    name_uz String?
+    name_ru String?
     image String?
 
     work_status     WORK_STATUS @default(WORKING)
-    address         String?
+    address         String? @db.Text
+    address_ru      String? @db.Text
     inn         String?
     lat             Float?
     lon            Float?
