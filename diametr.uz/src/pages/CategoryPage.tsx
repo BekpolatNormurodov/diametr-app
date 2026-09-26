@@ -10,8 +10,8 @@ import CartDrawer from '../components/cart/CartDrawer'
 import { authService } from '../service/authService'
 import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useAuthUser } from '../hooks/useAuthUser'
-import { searchKey, buildSearchKeys, scoreSearch } from '../utils/searchKey'
-import { productImageUrl, variantImageUrl } from '../utils/productImage'
+import { searchKey, buildSearchKeys, searchKeyOfFields, scoreSearch } from '../utils/searchKey'
+import { productImageUrl, heroImageUrl, variantImageUrl } from '../utils/productImage'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
@@ -21,6 +21,8 @@ interface ProductItem {
   name?: string
   name_uz?: string
   name_ru?: string
+  desc?: string | null
+  image?: string | null
   value?: number | string | null
   size?: string | null
   color?: string | null
@@ -47,11 +49,12 @@ interface Product {
   items?: ProductItem[]
 }
 
-// Lowest effective price over the rows a customer can actually buy
-// (a real shop, in stock). Infinity when there is none.
-const minPriceOf = (data: any) => {
-  let minP = Infinity
+// Lowest effective price per variant over the rows a customer can actually
+// buy (a real shop, in stock). Variants with no such row are left out.
+const variantMinPrices = (data: any): Record<number, number> => {
+  const out: Record<number, number> = {}
   ;(data?.items ?? []).forEach((item: any) => {
+    let minP = Infinity
     ;(item.shop_products ?? []).forEach((sp: any) => {
       if (!sp?.shop?.id || sp.count == null || sp.count <= 0) return
       const eff = (sp.price != null && sp.bonus_price != null && sp.bonus_price > 0 && sp.bonus_price < sp.price)
@@ -59,9 +62,22 @@ const minPriceOf = (data: any) => {
         : sp.price
       if (eff != null && eff < minP) minP = eff
     })
+    if (minP !== Infinity && item?.id != null) out[item.id] = minP
   })
-  return minP
+  return out
 }
+
+const minPriceOf = (data: any) => Math.min(Infinity, ...Object.values(variantMinPrices(data)))
+
+const ruVariants = (n: number) => {
+  const d10 = n % 10, d100 = n % 100
+  if (d10 === 1 && d100 !== 11) return `${n} вид`
+  if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return `${n} вида`
+  return `${n} видов`
+}
+
+// A search result card: the whole product, or (while searching) one variant of it
+type Card = { key: string; p: Product; item?: ProductItem }
 
 interface Category {
   id: number
@@ -94,6 +110,9 @@ export default function CategoryPage() {
   const revealRef = useScrollReveal()
   const [cartOpen, setCartOpen] = useState(false)
   const [pricesMap, setPricesMap] = useState<Record<number, number>>({})
+  const [variantPrices, setVariantPrices] = useState<Record<number, number>>({})
+  // Variant the modal pins to the top (the variant card that was clicked)
+  const [focusItemId, setFocusItemId] = useState<number | null>(null)
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set())
@@ -212,10 +231,11 @@ export default function CategoryPage() {
       .finally(() => setLoading(false))
   }, [id])
 
-  const openDetail = (p: Product) => {
+  const openDetail = (p: Product, itemId?: number) => {
     const req = ++detailReqRef.current
     setSelected(null)
     setDetailError(null)
+    setFocusItemId(itemId ?? null)
     setDetailLoading(true)
     // The modal is where customers add to cart: read live prices/stock
     // (no-store skips the browser and the short (2s) API proxy cache).
@@ -238,6 +258,12 @@ export default function CategoryPage() {
         }
         setSelected(data)
         // keep the card's "... so'm dan" in step with the prices shown in the modal
+        const vPrices = variantMinPrices(data)
+        setVariantPrices(prev => {
+          const next = { ...prev }
+          ;(data.items ?? []).forEach((it: any) => { delete next[it.id] })
+          return Object.assign(next, vPrices)
+        })
         const minP = minPriceOf(data)
         setPricesMap(prev => {
           if (minP === Infinity && prev[p.id] == null) return prev
@@ -274,19 +300,21 @@ export default function CategoryPage() {
         const results = await Promise.all(wave.map(p =>
           axios.get(`${API_URL}/product/${p.id}`, { signal: controller.signal })
             .then(res => {
-              const minP = minPriceOf(res.data?.data ?? res.data)
-              return minP !== Infinity ? ([p.id, minP] as [number, number]) : null
+              const vPrices = variantMinPrices(res.data?.data ?? res.data)
+              const minP = Math.min(Infinity, ...Object.values(vPrices))
+              return minP !== Infinity ? ([p.id, minP, vPrices] as [number, number, Record<number, number>]) : null
             })
             .catch(() => null)
         ))
         if (cancelled) return
-        const found = results.filter(Boolean) as Array<[number, number]>
+        const found = results.filter(Boolean) as Array<[number, number, Record<number, number>]>
         if (found.length > 0) {
           setPricesMap(prev => {
             const next = { ...prev }
             found.forEach(([pid, minP]) => { next[pid] = minP })
             return next
           })
+          setVariantPrices(prev => Object.assign({ ...prev }, ...found.map(f => f[2])))
         }
       }
     }, 1200)
@@ -373,35 +401,62 @@ export default function CategoryPage() {
   // "category + product" mix). Category navigation lives in the chip strip.
   // Keys are Latin/Cyrillic-normalized (searchKey) and built once per product
   // list, so "rakovina" finds "раковина" and typing stays fast.
-  const productKeys = useMemo(() => buildSearchKeys(products, p => [
-    p.name_uz, p.name_ru, p.name, p.desc,
-    // variant names too — a shopper may search by a variant (e.g. "seyf")
-    ...(p.items ?? []).flatMap((it: any) => [it?.name, it?.name_uz, it?.name_ru, it?.desc]),
-  ]), [products])
+  const productKeys = useMemo(() => buildSearchKeys(products, p => [p.name_uz, p.name_ru, p.name, p.desc]), [products])
+  // Per variant: its own names (e.g. "seyf", "2.5 mm2"), and "product + variant"
+  // phrases so a query spanning both ("kabel 2.5") still lands on one variant.
+  const variantKeys = useMemo(() => {
+    const own = new Map<number, string>()
+    const combo = new Map<number, string>()
+    products.forEach(p => (p.items ?? []).forEach(it => {
+      const label = getName(it) || variantLabelOf(it) || ''
+      own.set(it.id, searchKeyOfFields([it.name, it.name_uz, it.name_ru, variantLabelOf(it)]))
+      combo.set(it.id, searchKeyOfFields([
+        it.desc,
+        ...[p.name_uz, p.name_ru, p.name].filter(Boolean).map(n => `${n} ${label}`),
+      ]))
+    }))
+    return { own, combo }
+  }, [products, lang]) // eslint-disable-line
   const q = searchKey(search)
-  // Rank by match: exact substring hits (score 0) come first, then fuzzy ones
-  // ordered by edit distance. Variantless "Tovar turlari qo'shilmoqda" products
-  // are still shown (not buyable yet), just not stripped by the match filter.
-  const filtered = (() => {
-    const priceOk = (p: typeof products[number]) => {
+  // Browsing: one card per product. Searching: one card PER VARIANT, so a
+  // product with 5 sizes shows all 5 (each with its own price and photo)
+  // instead of being folded into a single card. Ranked by match score (exact
+  // substring 0 first, then fuzzy by edit distance), then variants whose own
+  // name matched, then in-stock before not-in-shops. Variantless "Tovar
+  // turlari qo'shilmoqda" products stay a single product card.
+  const cards: Card[] = (() => {
+    const priceOk = (c: Card) => {
       if (!minPrice && !maxPrice) return true
-      const price = pricesMap[p.id]
+      const price = c.item ? variantPrices[c.item.id] : pricesMap[c.p.id]
       if (price == null) return false
       if (minPrice && price < Number(parseInput(minPrice))) return false
       if (maxPrice && price > Number(parseInput(maxPrice))) return false
       return true
     }
-    if (!q) return products.filter(priceOk)
-    const scored: Array<[number, number, typeof products[number]]> = []
-    for (let i = 0; i < products.length; i++) {
-      const p = products[i]
-      const s = scoreSearch(productKeys.get(p), q)
-      if (s < 0) continue
-      if (!priceOk(p)) continue
-      scored.push([s, i, p])
+    if (!q) return products.map(p => ({ key: `p${p.id}`, p })).filter(priceOk)
+    const scored: Array<[number, number, number, number, Card]> = []
+    let order = 0
+    for (const p of products) {
+      const ps = scoreSearch(productKeys.get(p), q)
+      const items = p.items ?? []
+      if (items.length === 0) {
+        const c = { key: `p${p.id}`, p }
+        if (ps >= 0 && priceOk(c)) scored.push([ps, 1, 2, order++, c])
+        continue
+      }
+      for (const it of items) {
+        const own = scoreSearch(variantKeys.own.get(it.id), q)
+        const combo = scoreSearch(variantKeys.combo.get(it.id), q)
+        const hits = [ps, own, combo].filter(s => s >= 0)
+        if (hits.length === 0) continue
+        const c = { key: `v${it.id}`, p, item: it }
+        if (!priceOk(c)) continue
+        const inShops = it._count == null || (it._count.shop_products ?? 0) > 0
+        scored.push([Math.min(...hits), own >= 0 ? 0 : 1, inShops ? 0 : 1, order++, c])
+      }
     }
-    scored.sort((a, b) => a[0] - b[0] || a[1] - b[1])
-    return scored.map(r => r[2])
+    scored.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3])
+    return scored.map(r => r[4])
   })()
 
   return (
@@ -498,7 +553,7 @@ export default function CategoryPage() {
               <h1 className="text-lg font-bold text-slate-800 dark:text-white leading-tight truncate">{catName}</h1>
               {!loading && (
                 <p className="text-xs text-slate-400 dark:text-slate-500">
-                  {lang === 'uz' ? `${filtered.length} ta mahsulot` : `${filtered.length} товаров`}
+                  {lang === 'uz' ? `${cards.length} ta mahsulot` : `${cards.length} товаров`}
                 </p>
               )}
             </div>
@@ -572,7 +627,7 @@ export default function CategoryPage() {
               </div>
             ))}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : cards.length === 0 ? (
           <div className="text-center py-20 text-slate-400">
             <svg className="w-14 h-14 mx-auto mb-4 opacity-30" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
@@ -582,14 +637,17 @@ export default function CategoryPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
-            {filtered.map((p, i) => {
-              const comingSoon = !(p.items ?? []).length
-              // Has variants, but no shop stocks any of them yet (count known from /product/all)
-              const notInShops = !comingSoon && (p.items ?? []).every(it => it._count != null && (it._count.shop_products ?? 0) === 0)
+            {cards.map(({ key, p, item }, i) => {
+              const comingSoon = !item && !(p.items ?? []).length
+              // Has variants, but no shop stocks any of them (or this one) yet (count known from /product/all)
+              const notInShops = !comingSoon && (item ? [item] : p.items ?? []).every(it => it._count != null && (it._count.shop_products ?? 0) === 0)
+              const variantCount = (p.items ?? []).length
+              const itemLabel = item ? getName(item) || variantLabelOf(item) : ''
+              const cardPrice = item ? variantPrices[item.id] : pricesMap[p.id]
               return (
               <div
-                key={p.id}
-                onClick={() => openDetail(p)}
+                key={key}
+                onClick={() => openDetail(p, item?.id)}
                 style={{ transitionDelay: `${Math.min(i * 0.06, 0.3)}s` }}
                 className="reveal group bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 hover:-translate-y-1 border border-transparent dark:border-slate-700 hover:border-primary/20 cursor-pointer"
               >
@@ -603,7 +661,7 @@ export default function CategoryPage() {
                     </svg>
                   </div>
                   {(() => {
-                    const src = productImageUrl(p)
+                    const src = (item && variantImageUrl(item)) || productImageUrl(p)
                     return src ? (
                     <img
                       src={src}
@@ -623,6 +681,11 @@ export default function CategoryPage() {
                       {lang === 'uz' ? "Qo'shilmoqda" : 'Добавляется'}
                     </span>
                   )}
+                  {!item && variantCount > 1 && (
+                    <span className="absolute top-2 right-2 bg-white/90 dark:bg-slate-900/80 text-primary text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-sm">
+                      {lang === 'uz' ? `${variantCount} turi` : ruVariants(variantCount)}
+                    </span>
+                  )}
                 </div>
 
                 {/* Info */}
@@ -630,7 +693,11 @@ export default function CategoryPage() {
                   <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
                     {getName(p) || (lang === 'uz' ? "Nomi yo'q" : 'Без названия')}
                   </h3>
-                  {p.desc && (
+                  {itemLabel ? (
+                    <span className="inline-block max-w-full truncate mt-1.5 bg-primary/10 text-primary text-[11px] font-semibold px-2 py-0.5 rounded-full">
+                      {itemLabel}
+                    </span>
+                  ) : p.desc && (
                     <p className="text-slate-400 dark:text-slate-500 text-xs mt-1 line-clamp-1">{p.desc}</p>
                   )}
                   <div className="mt-3">
@@ -643,9 +710,9 @@ export default function CategoryPage() {
                       </div>
                     ) : (
                       <>
-                        {pricesMap[p.id] != null ? (
+                        {cardPrice != null ? (
                           <p className="text-primary font-bold text-sm mb-2">
-                            {lang === 'uz' ? `${pricesMap[p.id].toLocaleString()} so'm dan` : `от ${pricesMap[p.id].toLocaleString()} сум`}
+                            {lang === 'uz' ? `${cardPrice.toLocaleString()} so'm dan` : `от ${cardPrice.toLocaleString()} сум`}
                           </p>
                         ) : notInShops ? (
                           <p className="text-slate-400 dark:text-slate-500 font-semibold text-sm mb-2">
@@ -749,7 +816,7 @@ export default function CategoryPage() {
                       </svg>
                     </div>
                     {(() => {
-                      const heroSrc = productImageUrl(selected)
+                      const heroSrc = heroImageUrl(selected, (selected.items ?? []).find(it => it.id === focusItemId))
                       return heroSrc ? (
                       <img
                         src={heroSrc}
@@ -783,13 +850,52 @@ export default function CategoryPage() {
                     <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">
                       {lang === 'uz' ? "Do'konlardagi narxlar" : 'Цены в магазинах'}
                     </h4>
-                    {selected.items.map(item => {
+                    {(() => {
+                      // Clicked variant first, then variants a shop stocks, then the rest —
+                      // every variant is listed so all sizes/types are visible.
+                      const hasShop = (it: ProductItem) => (it.shop_products ?? []).some(sp => !!sp.shop?.id)
+                      const rank = (it: ProductItem) => it.id === focusItemId ? 0 : hasShop(it) ? 1 : 2
+                      return selected.items!.map((it, i) => [rank(it), i, it] as const)
+                        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+                        .map(r => r[2])
+                    })().map((item, idx, arr) => {
                       // Stock rows without a real shop can't be ordered — never list them
                       const shopRows = (item.shop_products ?? []).filter(sp => !!sp.shop?.id)
                       const itemLabel = getName(item) || variantLabelOf(item)
                       const vImg = variantImageUrl(item)
-                      return shopRows.length > 0 ? (
-                        <div key={item.id} className="space-y-2">
+                      const focused = item.id === focusItemId
+                      return (
+                        <React.Fragment key={item.id}>
+                        {idx === 1 && arr[0].id === focusItemId && (
+                          <p className="pt-2 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide border-t border-slate-100 dark:border-slate-700">
+                            {lang === 'uz' ? 'Boshqa turlari' : 'Другие виды'}
+                          </p>
+                        )}
+                        {shopRows.length === 0 ? (
+                          <div className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-dashed border-slate-200 dark:border-slate-600">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {vImg && (
+                                <img
+                                  src={vImg}
+                                  alt={itemLabel}
+                                  width={28}
+                                  height={28}
+                                  loading="lazy"
+                                  decoding="async"
+                                  className="w-7 h-7 rounded-lg object-cover border border-slate-200 dark:border-slate-600"
+                                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                                />
+                              )}
+                              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide truncate">
+                                {itemLabel || (lang === 'uz' ? 'Turi' : 'Вид')}
+                              </p>
+                            </div>
+                            <span className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                              {lang === 'uz' ? "Hozircha do'konlarda yo'q" : 'Пока нет в магазинах'}
+                            </span>
+                          </div>
+                        ) : (
+                        <div className={`space-y-2 ${focused ? 'p-3 -mx-3 rounded-2xl bg-primary/5 ring-1 ring-primary/20' : ''}`}>
                           {itemLabel ? (
                             <div className="flex items-center gap-2">
                               {/* Variant own image (when uploaded by SUPER admin) —
@@ -931,7 +1037,9 @@ export default function CategoryPage() {
                             </div>
                           ))}
                         </div>
-                      ) : null
+                        )}
+                        </React.Fragment>
+                      )
                     })}
                   </div>
                 ) : selected.items && selected.items.length > 0 ? (
