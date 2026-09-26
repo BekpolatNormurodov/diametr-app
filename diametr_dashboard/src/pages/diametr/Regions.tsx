@@ -1,6 +1,7 @@
 ﻿import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import ComponentCard from "../../components/common/ComponentCard";
 import PageMeta from "../../components/common/PageMeta";
+import { useLang } from "../../context/LangContext";
 
 import { PlusIcon } from "../../icons";
 import Button from "../../components/ui/button/Button";
@@ -21,6 +22,8 @@ export interface Region {
   name?: string;
 }
 export default function RegionsPage() {
+  const { t } = useLang();
+
   const { isOpen, openModal, closeModal } = useModal();
 
   const emptyRegion: Region = { name: "" };
@@ -60,11 +63,11 @@ export default function RegionsPage() {
   return (
     <>
       <PageMeta title="Regions | Diametr Dashboard" description="Diametr Dashboard" />
-      <PageBreadcrumb pageTitle="Hududlar" />
+      <PageBreadcrumb pageTitle={t.k("regions")} />
 
       <div className="space-y-6">
         <ComponentCard
-          title="Hududlar"
+          title={t.k("regions")}
           action={
             <Button
               size="sm"
@@ -83,7 +86,7 @@ export default function RegionsPage() {
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[700px] m-4">
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-11">
           <div className="px-2 pr-14">
-            <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">Hudud qo'shish</h4>
+            <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">{t.k("addRegion")}</h4>
             <p className="mb-6 text-sm text-gray-500 dark:text-gray-400 lg:mb-7">Yangi region qo'shish.</p>
           </div>
           <form className="flex flex-col">

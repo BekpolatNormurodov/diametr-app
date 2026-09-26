@@ -6,8 +6,11 @@ import { toast } from "../../components/ui/toast";
 import ShopProductsTable, { ShopProductItemProps, isCatalogArchived } from "../../components/tables/shopProductsTable";
 import { usePolling, useRequestSeq } from "../../hooks/usePolling";
 import { useShopId } from "../../context/ShopSessionContext";
+import { useLang } from "../../context/LangContext";
 
 export default function ShopProductsPage() {
+  const { t } = useLang();
+
   const [data, setData] = useState<ShopProductItemProps[]>([]);
   const shopId = useShopId();
   const req = useRequestSeq();
@@ -63,38 +66,38 @@ export default function ShopProductsPage() {
 
   return (
     <>
-      <PageMeta title="Do'kon Tovarlar" description="Do'kon tovarlar ro'yxati" />
-      <PageBreadcrumb pageTitle="Tovarlar" />
+      <PageMeta title={t.k("shopProducts")} description="Do'kon tovarlar ro'yxati" />
+      <PageBreadcrumb pageTitle={t.k("products")} />
       <div className="space-y-6">
         {/* Inventory Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
-            <p className="text-xs text-gray-400 font-medium mb-1">Jami tovarlar</p>
+            <p className="text-xs text-gray-400 font-medium mb-1">{t("Jami tovarlar", "Всего товаров")}</p>
             <p className="text-2xl font-bold text-gray-800 dark:text-white">{stats.totalProducts}</p>
             <p className="text-[11px] text-gray-400">xil tovar</p>
           </div>
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
-            <p className="text-xs text-gray-400 font-medium mb-1">Skladda</p>
+            <p className="text-xs text-gray-400 font-medium mb-1">{t.k("stock")}</p>
             <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.totalStock.toLocaleString()}</p>
             <p className="text-[11px] text-gray-400">ta mahsulot</p>
           </div>
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
-            <p className="text-xs text-gray-400 font-medium mb-1">Umumiy qiymati</p>
+            <p className="text-xs text-gray-400 font-medium mb-1">{t.k("stockValue")}</p>
             <p className="text-2xl font-bold text-gray-800 dark:text-white">{fmt(stats.totalValue)}</p>
             <p className="text-[11px] text-gray-400">so'm</p>
           </div>
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
-            <p className="text-xs text-gray-400 font-medium mb-1">Sotilgan</p>
+            <p className="text-xs text-gray-400 font-medium mb-1">{t.k("soldItems")}</p>
             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalSold.toLocaleString()}</p>
             <p className="text-[11px] text-gray-400">ta jami</p>
           </div>
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
-            <p className="text-xs text-gray-400 font-medium mb-1">Kam qolgan</p>
+            <p className="text-xs text-gray-400 font-medium mb-1">{t.k("lowStock")}</p>
             <p className={`text-2xl font-bold ${stats.lowStock > 0 ? 'text-orange-500' : 'text-gray-300 dark:text-gray-600'}`}>{stats.lowStock}</p>
             <p className="text-[11px] text-gray-400">≤5 ta qolgan</p>
           </div>
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
-            <p className="text-xs text-gray-400 font-medium mb-1">Tugagan</p>
+            <p className="text-xs text-gray-400 font-medium mb-1">{t.k("outOfStock")}</p>
             <p className={`text-2xl font-bold ${stats.outOfStock > 0 ? 'text-red-500' : 'text-gray-300 dark:text-gray-600'}`}>{stats.outOfStock}</p>
             <p className="text-[11px] text-gray-400">0 ta qolgan</p>
           </div>
@@ -111,8 +114,8 @@ export default function ShopProductsPage() {
                   <tr className="bg-gray-50 dark:bg-white/2">
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kategoriya</th>
                     <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Tovarlar</th>
-                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Skladda</th>
-                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Sotilgan</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{t.k("stock")}</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{t.k("soldItems")}</th>
                     <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qiymati</th>
                   </tr>
                 </thead>

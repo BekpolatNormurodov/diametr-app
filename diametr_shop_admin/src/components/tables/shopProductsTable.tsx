@@ -18,6 +18,7 @@ import Moment from "moment";
 import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
 import { beginBusy, endBusy } from "../../utils/busy";
 import Pagination, { useAutoClampPage } from "../common/Pagination";
+import { useLang } from "../../context/LangContext";
 
 export interface ShopProductItemProps {
   id: number;
@@ -195,6 +196,8 @@ const toList = (body: any): any[] => (Array.isArray(body) ? body : Array.isArray
 const stockVariantId = (sp: ShopProductItemProps) => sp.product_item_id ?? sp.product_item?.id;
 
 function getVariantInfo(sp: ShopProductItemProps) {
+  const { t } = useLang();
+
   const pi = sp.product_item;
   if (!pi) return { label: "", color: "" };
   const unitSymbol = pi.product?.unit_type?.symbol ?? pi.unit_type?.symbol;
@@ -844,12 +847,12 @@ export default function ShopProductsTable({
             <TableRow>
               <TableCell isHeader className="px-3 py-3 w-8"></TableCell>
               <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">#</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">Rasm</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Tovar</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">Variantlar</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-right">Soni</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-right">Sotilgan</TableCell>
-              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">Amallar</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">{t.k("photo")}</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("products")}</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">{t.k("variants")}</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-right">{t.k("count")}</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-right">{t.k("soldItems")}</TableCell>
+              <TableCell isHeader className="px-4 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-center">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
           <TableBody>

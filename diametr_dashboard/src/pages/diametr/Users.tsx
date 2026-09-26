@@ -6,8 +6,11 @@ import { useFetchWithLoader } from "../../hooks/useFetchWithLoader";
 import { SkeletonTable } from "../../components/spinner/load-spinner";
 import { usePolling } from "../../hooks/usePolling";
 import axiosClient from "../../service/axios.service";
+import { useLang } from "../../context/LangContext";
 
 export default function UsersPage() {
+  const { t } = useLang();
+
   const { data, isLoading, refetch } = useFetchWithLoader<UserItemProps[]>({
     fetcher: () => axiosClient.get("/user/all").then((r) => r.data),
   });
@@ -22,7 +25,7 @@ export default function UsersPage() {
         title="Foydalanuvchilar – Diametr"
         description="Barcha ro'yxatdan o'tgan foydalanuvchilar"
       />
-      <PageBreadcrumb pageTitle="Foydalanuvchilar" />
+      <PageBreadcrumb pageTitle={t.k("usersTitle")} />
       <ComponentCard title={`Foydalanuvchilar (${users.length})`}>
         {isLoading ? (
           <SkeletonTable rows={8} cols={6} />

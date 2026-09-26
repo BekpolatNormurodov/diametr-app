@@ -1,6 +1,7 @@
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import ComponentCard from "../../components/common/ComponentCard";
 import PageMeta from "../../components/common/PageMeta";
+import { useLang } from "../../context/LangContext";
 
 import { PlusIcon } from "../../icons";
 import Button from "../../components/ui/button/Button";
@@ -16,6 +17,8 @@ import AdsTable, {
 import { usePolling } from "../../hooks/usePolling";
 
 export default function AdsPage() {
+  const { t } = useLang();
+
   // The rich add/edit modal (banner image + link target) lives inside AdsTable.
   // The "Add" button here just opens it in create mode via this ref, so there is
   // a single form for both adding and editing.
@@ -35,11 +38,11 @@ export default function AdsPage() {
   return (
     <>
       <PageMeta title="Reklamalar | Diametr" description="Diametr boshqaruv paneli" />
-      <PageBreadcrumb pageTitle="Reklamalar" />
+      <PageBreadcrumb pageTitle={t.k("ads")} />
 
       <div className="space-y-6">
         <ComponentCard
-          title="Reklamalar"
+          title={t.k("ads")}
           action={
             <Button
               size="sm"

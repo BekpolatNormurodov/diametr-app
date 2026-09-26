@@ -15,6 +15,7 @@ import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 import { useAutoClampPage } from "../../common/Pagination";
+import { useLang } from "../../../context/LangContext";
 
 export interface NewsItemProps {
   id: number;
@@ -35,6 +36,8 @@ const emptyForm = { title: "", subtitle: "", title_ru: "", subtitle_ru: "", expi
 
 const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch?: () => void }>(
   function NewsTable({ data, onRefetch }, ref) {
+  const { t } = useLang();
+
     const [tableData, setTableData] = useState(data);
     const { isOpen, openModal, closeModal } = useModal();
     const [editItem, setEditItem] = useState<NewsItemProps | null>(null);
@@ -143,17 +146,17 @@ const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch
     return (
       <div ref={tableTopRef} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
         <div className="max-w-full overflow-x-auto">
-          <TableToolbar search={search} onSearch={(v) => { setSearch(v); setCurrentPage(1); }} searchPlaceholder="Qidirish..." showValue={optionValue} onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }} onExport={handleExport} />
+          <TableToolbar search={search} onSearch={(v) => { setSearch(v); setCurrentPage(1); }} searchPlaceholder={t.k("searchPh")} showValue={optionValue} onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }} onExport={handleExport} />
           <Table>
             <TableHeader>
               <TableRow>
                 <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
-                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Rasm</TableCell>
-                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Sarlavha</TableCell>
-                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Tavsif</TableCell>
-                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Muddati</TableCell>
-                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Yaratilgan</TableCell>
-                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Amallar</TableCell>
+                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("photo")}</TableCell>
+                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("title")}</TableCell>
+                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("subtitle")}</TableCell>
+                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("expiration")}</TableCell>
+                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("createdAt")}</TableCell>
+                <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
               </TableRow>
             </TableHeader>
             <TableBody>

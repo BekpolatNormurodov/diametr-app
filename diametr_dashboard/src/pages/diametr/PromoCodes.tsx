@@ -7,10 +7,13 @@ import { useFetchWithLoader } from "../../hooks/useFetchWithLoader";
 import { SkeletonTable } from "../../components/spinner/load-spinner";
 import { usePolling } from "../../hooks/usePolling";
 import PromoCodesTable, {
+import { useLang } from "../../context/LangContext";
   PromoCodeItemProps,
 } from "../../components/tables/diametr/promoCodesTable";
 
 export default function PromoCodesPage() {
+  const { t } = useLang();
+
   const fetchPromoCodes = useCallback(
     () => axiosClient.get("/promo-code/all").then((res) => res.data),
     []
@@ -24,10 +27,10 @@ export default function PromoCodesPage() {
 
   return (
     <>
-      <PageMeta title="Promo Kodlar | Diametr Dashboard" description="Diametr Dashboard" />
-      <PageBreadcrumb pageTitle="Promo Kodlar" />
+      <PageMeta title={`${t.k("promoCodes")} | Diametr Dashboard`} description="Diametr Dashboard" />
+      <PageBreadcrumb pageTitle={t.k("promoCodes")} />
       <div className="space-y-6">
-        <ComponentCard title="Promo Kodlar">
+        <ComponentCard title={t.k("promoCodes")}>
           {isLoading ? <SkeletonTable cols={6} rows={7} /> : <PromoCodesTable data={promoData} onRefetch={refetch} />}
         </ComponentCard>
       </div>

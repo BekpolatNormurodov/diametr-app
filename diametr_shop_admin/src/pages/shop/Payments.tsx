@@ -6,8 +6,11 @@ import { toast } from "../../components/ui/toast";
 import PaymentsTable, { PaymentItemProps } from "../../components/tables/paymentsTable";
 import { usePolling, useRequestSeq } from "../../hooks/usePolling";
 import { useShopId } from "../../context/ShopSessionContext";
+import { useLang } from "../../context/LangContext";
 
 export default function PaymentsPage() {
+  const { t } = useLang();
+
   const [data, setData] = useState<PaymentItemProps[]>([]);
   const shopId = useShopId();
   const req = useRequestSeq();
@@ -30,8 +33,8 @@ export default function PaymentsPage() {
 
   return (
     <>
-      <PageMeta title="To'lovlar" description="Do'kon to'lovlari" />
-      <PageBreadcrumb pageTitle="To'lovlar" />
+      <PageMeta title={t.k("payments")} description="Do'kon to'lovlari" />
+      <PageBreadcrumb pageTitle={t.k("payments")} />
       <div className="space-y-6">
         <PaymentsTable data={data} onRefetch={fetchData} />
       </div>

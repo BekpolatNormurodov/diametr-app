@@ -16,6 +16,7 @@ import PaymentsTable, { PaymentItemProps } from "../../components/tables/diametr
 import { usePolling } from "../../hooks/usePolling";
 import { toast } from "../../components/ui/toast";
 import Moment from "moment";
+import { useLang } from "../../context/LangContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Subscription Plans
@@ -65,6 +66,8 @@ function buildUzumUrl(amount: number) {
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PaymentsPage() {
+  const { t } = useLang();
+
   const { isOpen, openModal, closeModal } = useModal();
   const [payLinkModal, setPayLinkModal] = useState(false);
   const [payLink, setPayLink] = useState("");
@@ -148,7 +151,7 @@ export default function PaymentsPage() {
 
   return (
     <>
-      <PageMeta title="To'lovlar | Diametr Dashboard" description="Diametr Dashboard" />
+      <PageMeta title={`${t.k("payments")} | Diametr Dashboard`} description="Diametr Dashboard" />
       <PageBreadcrumb pageTitle="Obunalar & To'lovlar" />
 
       {/* Plan overview cards */}

@@ -9,6 +9,7 @@ import Label from "../../components/form/Label";
 import Moment from "moment";
 import { formatMoney } from "../../service/formatters/money.format";
 import { matchesSearchKey, searchKey } from "../../utils/searchKey";
+import { useLang } from "../../context/LangContext";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function subStatusInfo(expired?: string | null) {
@@ -31,6 +32,8 @@ const LOG_LABELS: Record<string, { label: string; cls: string }> = {
 };
 
 export default function SubscriptionsPage() {
+  const { t } = useLang();
+
   const [settings, setSettings] = useState<{ free_trial_months: number; subscription_price: number } | null>(null);
   const [shops, setShops] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
@@ -170,7 +173,7 @@ export default function SubscriptionsPage() {
 
   return (
     <>
-      <PageMeta title="Obunalar" description="Obuna boshqaruvi" />
+      <PageMeta title={t.k("subscriptionsTitle")} description="Obuna boshqaruvi" />
       <PageBreadcrumb pageTitle="Obuna Boshqaruvi" />
 
       {/* ── Summary Cards ─────────────────────────────────────────── */}

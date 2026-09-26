@@ -10,6 +10,7 @@ import * as XLSX from "xlsx";
 import { DownloadIcon } from "../../icons";
 import Button from "../../components/ui/button/Button";
 import { isSoldOrder } from "../../utils/orderStatus";
+import { useLang } from "../../context/LangContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Interfaces
@@ -146,6 +147,8 @@ function exportOverview(orders: OrderItem[]) {
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
+  const { t } = useLang();
+
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateFrom, setDateFrom] = useState(Moment().startOf("month").format("YYYY-MM-DD"));
@@ -176,7 +179,7 @@ export default function AnalyticsPage() {
 
   return (
     <>
-      <PageMeta title="Analitika | Diametr Dashboard" description="Diametr Dashboard" />
+      <PageMeta title={`${t.k("analytics")} | Diametr Dashboard`} description="Diametr Dashboard" />
       <PageBreadcrumb pageTitle="Analitika & Statistika" />
 
       {/* Date filter */}

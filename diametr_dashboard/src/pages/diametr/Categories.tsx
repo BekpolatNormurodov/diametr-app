@@ -1,6 +1,7 @@
 ﻿import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import ComponentCard from "../../components/common/ComponentCard";
 import PageMeta from "../../components/common/PageMeta";
+import { useLang } from "../../context/LangContext";
 
 import { PlusIcon } from "../../icons";
 import Button from "../../components/ui/button/Button";
@@ -47,6 +48,8 @@ export interface Category {
   image?: string;
 }
 export default function CategorysPage() {
+  const { t } = useLang();
+
   const { isOpen, openModal, closeModal } = useModal();
 
   let emptyCategory: Category = {
@@ -129,7 +132,7 @@ export default function CategorysPage() {
         title="Categorys | Diametr Dashboard"
         description="Diametr Dashboard"
       />
-      <PageBreadcrumb pageTitle="Kategoriyalar" />
+      <PageBreadcrumb pageTitle={t.k("categoriesTitle")} />
 
       <div className="space-y-6 ">
         {/* Category Stats */}
@@ -230,7 +233,7 @@ export default function CategorysPage() {
         )}
 
         <ComponentCard
-          title="Kategoriyalar"
+          title={t.k("categoriesTitle")}
           action={
             <Button
               size="sm"

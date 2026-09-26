@@ -107,7 +107,98 @@ const DICT = {
   optional_short: { uz: "ixtiyoriy", ru: "необязательно" },
   saving: { uz: "Saqlanmoqda...", ru: "Сохранение..." },
   deleteConfirm: { uz: "O'chirishni tasdiqlaysizmi?", ru: "Подтверждаете удаление?" },
+  // Category
+  addCategory: { uz: "Kategoriya qo'shish", ru: "Добавить категорию" },
+  editCategory: { uz: "Kategoriyani tahrirlash", ru: "Редактировать категорию" },
+  categoriesTitle: { uz: "Kategoriyalar", ru: "Категории" },
+  // Shop
+  addShop: { uz: "Do'kon qo'shish", ru: "Добавить магазин" },
+  editShop: { uz: "Do'konni tahrirlash", ru: "Редактировать магазин" },
+  address: { uz: "Manzil", ru: "Адрес" },
+  balance: { uz: "Balans", ru: "Баланс" },
+  phone: { uz: "Telefon", ru: "Телефон" },
+  region: { uz: "Hudud", ru: "Регион" },
+  // Order / Sales
+  order: { uz: "Buyurtma", ru: "Заказ" },
+  orderList: { uz: "Buyurtmalar", ru: "Заказы" },
+  amount: { uz: "Summa", ru: "Сумма" },
+  deliveryType: { uz: "Yetkazish turi", ru: "Тип доставки" },
+  finished: { uz: "Yakunlangan", ru: "Завершён" },
+  new_: { uz: "Yangi", ru: "Новый" },
+  processing: { uz: "Jarayonda", ru: "В процессе" },
+  cancelled: { uz: "Bekor qilingan", ru: "Отменён" },
+  // Ad
+  addAd: { uz: "Reklama qo'shish", ru: "Добавить рекламу" },
+  editAd: { uz: "Reklamani tahrirlash", ru: "Редактировать рекламу" },
+  title: { uz: "Sarlavha", ru: "Заголовок" },
+  titleUz: { uz: "Sarlavha (UZ)", ru: "Заголовок (UZ)" },
+  titleRu: { uz: "Sarlavha (RU)", ru: "Заголовок (RU)" },
+  subtitle: { uz: "Tavsif", ru: "Подзаголовок" },
+  subtitleUz: { uz: "Tavsif (UZ)", ru: "Подзаголовок (UZ)" },
+  subtitleRu: { uz: "Tavsif (RU)", ru: "Подзаголовок (RU)" },
+  expiration: { uz: "Muddat", ru: "Срок" },
+  type: { uz: "Tur", ru: "Тип" },
+  target: { uz: "Manzil", ru: "Ссылка" },
+  // News
+  addNews: { uz: "Yangilik qo'shish", ru: "Добавить новость" },
+  editNews: { uz: "Yangilikni tahrirlash", ru: "Редактировать новость" },
+  // User
+  usersTitle: { uz: "Foydalanuvchilar", ru: "Пользователи" },
+  fullname: { uz: "To'liq ismi", ru: "Полное имя" },
+  role: { uz: "Rol", ru: "Роль" },
+  // Admin
+  addAdmin: { uz: "Admin qo'shish", ru: "Добавить администратора" },
+  editAdmin: { uz: "Adminni tahrirlash", ru: "Редактировать администратора" },
+  login: { uz: "Login", ru: "Логин" },
+  password: { uz: "Parol", ru: "Пароль" },
+  // Region
+  addRegion: { uz: "Hudud qo'shish", ru: "Добавить регион" },
+  editRegion: { uz: "Hududni tahrirlash", ru: "Редактировать регион" },
+  // Service
+  addService: { uz: "Xizmat qo'shish", ru: "Добавить услугу" },
+  editService: { uz: "Xizmatni tahrirlash", ru: "Редактировать услугу" },
+  // Worker
+  addWorker: { uz: "Usta qo'shish", ru: "Добавить мастера" },
+  editWorker: { uz: "Ustani tahrirlash", ru: "Редактировать мастера" },
+  // Payment
+  addPayment: { uz: "To'lov qo'shish", ru: "Добавить платёж" },
+  editPayment: { uz: "To'lovni tahrirlash", ru: "Редактировать платёж" },
+  // Promo
+  addPromo: { uz: "Promo kod qo'shish", ru: "Добавить промокод" },
+  editPromo: { uz: "Promo kodni tahrirlash", ru: "Редактировать промокод" },
+  code: { uz: "Kod", ru: "Код" },
+  discount: { uz: "Chegirma", ru: "Скидка" },
+  // Unit type
+  unitTypesTitle: { uz: "O'lchov birliklari", ru: "Единицы измерения" },
+  symbol: { uz: "Belgi", ru: "Символ" },
+  // Analytics / dashboard home
+  analytics: { uz: "Analitika", ru: "Аналитика" },
+  overview: { uz: "Umumiy ko'rinish", ru: "Обзор" },
+  total: { uz: "Jami", ru: "Всего" },
+  today: { uz: "Bugun", ru: "Сегодня" },
+  yesterday: { uz: "Kecha", ru: "Вчера" },
+  thisMonth: { uz: "Bu oy", ru: "Этот месяц" },
+  // Subscription
+  subscriptionsTitle: { uz: "Obunalar", ru: "Подписки" },
+  active: { uz: "Faol", ru: "Активно" },
+  expired: { uz: "Muddati tugagan", ru: "Истёк срок" },
+  blocked: { uz: "Bloklangan", ru: "Заблокирован" },
+  // shop_admin extras
+  stock: { uz: "Zaxira", ru: "Остаток" },
+  stockValue: { uz: "Umumiy qiymati", ru: "Общая стоимость" },
+  soldItems: { uz: "Sotilgan", ru: "Продано" },
+  lowStock: { uz: "Kam qolgan", ru: "Мало осталось" },
+  outOfStock: { uz: "Tugagan", ru: "Закончилось" },
+  shopProducts: { uz: "Do'kon Tovarlar", ru: "Товары магазина" },
+  // Fallbacks
+  yes: { uz: "Ha", ru: "Да" },
+  no: { uz: "Yo'q", ru: "Нет" },
 } as const;
+
+// TypeScript sees `home` twice above — the second literal wins at runtime but
+// the type checker treats the earlier one as duplicate. Remove any duplicate
+// keys before compile. NOTE: keep this file in sync with shop_admin's copy —
+// same DICT keys let the same `t.k('...')` call work in both apps.
 
 const LangContext = createContext<LangContextValue | null>(null);
 

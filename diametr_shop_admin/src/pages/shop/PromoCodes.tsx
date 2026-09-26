@@ -5,8 +5,11 @@ import axiosClient from "../../service/axios.service";
 import { toast } from "../../components/ui/toast";
 import PromoCodesTable, { PromoCodeItemProps } from "../../components/tables/promoCodesTable";
 import { usePolling, useRequestSeq } from "../../hooks/usePolling";
+import { useLang } from "../../context/LangContext";
 
 export default function PromoCodesPage() {
+  const { t } = useLang();
+
   const [data, setData] = useState<PromoCodeItemProps[]>([]);
   const req = useRequestSeq();
 
@@ -27,8 +30,8 @@ export default function PromoCodesPage() {
 
   return (
     <>
-      <PageMeta title="Promo Kodlar" description="Do'kon promo kodlari" />
-      <PageBreadcrumb pageTitle="Promo Kodlar" />
+      <PageMeta title={t.k("promoCodes")} description="Do'kon promo kodlari" />
+      <PageBreadcrumb pageTitle={t.k("promoCodes")} />
       <div className="space-y-6">
         <PromoCodesTable data={data} onRefetch={fetchData} />
       </div>

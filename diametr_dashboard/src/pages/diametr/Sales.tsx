@@ -7,8 +7,11 @@ import axiosClient from "../../service/axios.service";
 import { useFetchWithLoader } from "../../hooks/useFetchWithLoader";
 import { SkeletonTable } from "../../components/spinner/load-spinner";
 import { usePolling } from "../../hooks/usePolling";
+import { useLang } from "../../context/LangContext";
 
 export default function SalesPage() {
+  const { t } = useLang();
+
   const fetchOrders = useCallback(
     () => axiosClient.get("/order/all").then((res) => res.data),
     []
@@ -22,10 +25,10 @@ export default function SalesPage() {
 
   return (
     <>
-      <PageMeta title="Buyurtmalar | Diametr Dashboard" description="Diametr Dashboard" />
-      <PageBreadcrumb pageTitle="Buyurtmalar" />
+      <PageMeta title={`${t.k("orderList")} | Diametr Dashboard`} description="Diametr Dashboard" />
+      <PageBreadcrumb pageTitle={t.k("orderList")} />
       <div className="space-y-6">
-        <ComponentCard title="Buyurtmalar">
+        <ComponentCard title={t.k("orderList")}>
           {isLoading ? <SkeletonTable cols={7} rows={7} /> : <SalesTable data={saleData} onRefetch={refetch} />}
         </ComponentCard>
       </div>

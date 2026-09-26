@@ -1,6 +1,7 @@
 ﻿import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import ComponentCard from "../../components/common/ComponentCard";
 import PageMeta from "../../components/common/PageMeta";
+import { useLang } from "../../context/LangContext";
 
 import { PlusIcon } from "../../icons";
 import Button from "../../components/ui/button/Button";
@@ -35,6 +36,8 @@ export interface Shop {
 }
 
 export default function ShopsPage() {
+  const { t } = useLang();
+
   const { isOpen, openModal, closeModal } = useModal();
 
   const emptyShop: Shop = {
@@ -125,11 +128,11 @@ export default function ShopsPage() {
   return (
     <>
       <PageMeta title="Shops | Diametr Dashboard" description="Diametr Dashboard" />
-      <PageBreadcrumb pageTitle="Do'konlar" />
+      <PageBreadcrumb pageTitle={t.k("shops")} />
 
       <div className="space-y-6">
         <ComponentCard
-          title="Do'konlar"
+          title={t.k("shops")}
           action={
             <Button
               size="sm"
@@ -147,7 +150,7 @@ export default function ShopsPage() {
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[700px] m-4">
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-11">
           <div className="px-2 pr-14">
-            <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">Do'kon qo'shish</h4>
+            <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">{t.k("addShop")}</h4>
             <p className="mb-6 text-sm text-gray-500 dark:text-gray-400 lg:mb-7">
               Create new Shop with full details.
             </p>

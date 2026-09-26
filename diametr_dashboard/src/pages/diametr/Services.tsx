@@ -14,9 +14,12 @@ import { SkeletonTable } from "../../components/spinner/load-spinner";
 import ServicesTable, { ServiceItemProps } from "../../components/tables/diametr/servicesTable";
 import { usePolling } from "../../hooks/usePolling";
 import { toast } from "../../components/ui/toast";
+import { useLang } from "../../context/LangContext";
 
 export interface Service { name?: string; desc?: string; }
 export default function ServicesPage() {
+  const { t } = useLang();
+
   const { isOpen, openModal, closeModal } = useModal();
   const emptyService: Service = { name: "", desc: "" };
   const [Service, setService] = useState<Service>(emptyService);
@@ -45,9 +48,9 @@ export default function ServicesPage() {
   return (
     <>
       <PageMeta title="Services | Diametr Dashboard" description="Diametr Dashboard" />
-      <PageBreadcrumb pageTitle="Xizmatlar" />
+      <PageBreadcrumb pageTitle={t.k("services")} />
       <div className="space-y-6">
-        <ComponentCard title="Xizmatlar" action={
+        <ComponentCard title={t.k("services")} action={
             <Button size="sm" variant="primary" startIcon={<PlusIcon className="size-5 fill-white" />} onClick={() => { setService(emptyService); openModal(); }}>
               Xizmat qo'shish
             </Button>
@@ -58,7 +61,7 @@ export default function ServicesPage() {
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[700px] m-4">
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-11">
           <div className="px-2 pr-14">
-            <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">Xizmat qo'shish</h4>
+            <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">{t.k("addService")}</h4>
             <p className="mb-6 text-sm text-gray-500 dark:text-gray-400 lg:mb-7">Yangi xizmat qoshish.</p>
           </div>
           <form className="flex flex-col">

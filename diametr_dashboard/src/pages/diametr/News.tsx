@@ -1,6 +1,7 @@
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import ComponentCard from "../../components/common/ComponentCard";
 import PageMeta from "../../components/common/PageMeta";
+import { useLang } from "../../context/LangContext";
 
 import { PlusIcon } from "../../icons";
 import Button from "../../components/ui/button/Button";
@@ -16,6 +17,8 @@ import NewsTable, {
 import { usePolling } from "../../hooks/usePolling";
 
 export default function NewsPage() {
+  const { t } = useLang();
+
   // The rich add/edit modal (image + date) lives inside NewsTable; the "Add"
   // button opens it in create mode via this ref — one form for add and edit.
   const newsRef = useRef<NewsTableHandle>(null);
@@ -34,11 +37,11 @@ export default function NewsPage() {
   return (
     <>
       <PageMeta title="Yangiliklar | Diametr" description="Diametr boshqaruv paneli" />
-      <PageBreadcrumb pageTitle="Yangiliklar" />
+      <PageBreadcrumb pageTitle={t.k("news")} />
 
       <div className="space-y-6">
         <ComponentCard
-          title="Yangiliklar"
+          title={t.k("news")}
           action={
             <Button
               size="sm"

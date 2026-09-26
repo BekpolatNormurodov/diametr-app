@@ -6,8 +6,11 @@ import { toast } from "../../components/ui/toast";
 import OrdersTable, { OrderItemProps } from "../../components/tables/ordersTable";
 import { usePolling, useRequestSeq } from "../../hooks/usePolling";
 import { useShopId } from "../../context/ShopSessionContext";
+import { useLang } from "../../context/LangContext";
 
 export default function OrdersPage() {
+  const { t } = useLang();
+
   const [data, setData] = useState<OrderItemProps[]>([]);
   const shopId = useShopId();
   const req = useRequestSeq();
@@ -32,8 +35,8 @@ export default function OrdersPage() {
 
   return (
     <>
-      <PageMeta title="Buyurtmalar" description="Do'kon buyurtmalari" />
-      <PageBreadcrumb pageTitle="Buyurtmalar" />
+      <PageMeta title={t.k("orderList")} description="Do'kon buyurtmalari" />
+      <PageBreadcrumb pageTitle={t.k("orderList")} />
       <div className="space-y-6">
         <OrdersTable data={data} onRefetch={fetchData} />
       </div>
