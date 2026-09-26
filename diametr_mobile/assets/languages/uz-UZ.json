@@ -170,5 +170,9 @@
   "update_ignore": "E'TIBORSIZ QOLDIRISH",
   "network_timeout": "Server javob bermadi. Internet aloqangizni tekshiring.",
   "network_no_internet": "Internet aloqasi yo'q. Ulanishni tekshiring.",
-  "network_error": "Serverga ulanib bo'lmadi. Qayta urinib ko'ring."
+  "network_error": "Serverga ulanib bo'lmadi. Qayta urinib ko'ring.",
+  "variants_title": "Turlari",
+  "variant_all": "Hammasi",
+  "variant_count": "{} turi",
+  "variant_no_shops_sub": "Bu tur hozircha hech bir do'konda yo'q. Boshqa turini tanlab ko'ring."
 }

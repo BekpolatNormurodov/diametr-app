@@ -1,3 +1,6 @@
+import 'package:stroymarket/core/extensions/str.dart';
+import 'package:stroymarket/core/utils/price.dart';
+import 'package:stroymarket/core/utils/variant.dart';
 import 'package:stroymarket/manager/5_product_manager.dart';
 import 'package:stroymarket/manager/8_shop_manager.dart';
 
@@ -13,7 +16,10 @@ import '../../export_files.dart';
 class ProductScreen extends StatefulWidget {
   String? name;
   String? product_id;
-  ProductScreen({super.key, required this.name, required this.product_id});
+  /// Variant to preselect, e.g. the size tapped in search results.
+  int? itemId;
+  ProductScreen(
+      {super.key, required this.name, required this.product_id, this.itemId});
 
   @override
   State<ProductScreen> createState() => _ProductScreenState();
@@ -69,10 +75,54 @@ class _ProductScreenState extends State<ProductScreen> {
   ];
   int itemCount = 1;
 
+  /// Chosen variant (null = all). Filters the shop list to shops that have it
+  /// in stock and shows its price there.
+  int? _variantId;
+
   @override
   void initState() {
+    _variantId = widget.itemId;
     _load();
     super.initState();
+  }
+
+  Map? _selectedVariant(ProductState s) {
+    if (_variantId == null || s is! ProductSuccessState || s.data is! Map) {
+      return null;
+    }
+    final items = (s.data as Map)["items"];
+    if (items is! List) return null;
+    for (final it in items) {
+      if (it is Map && '${it["id"]}' == '$_variantId') return it;
+    }
+    return null;
+  }
+
+  Widget _variantChip(String label,
+      {required bool selected, bool dimmed = false, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 7.h),
+        decoration: BoxDecoration(
+          color: selected ? AppConstant.primaryColor : context.tInput,
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected
+                ? Colors.white
+                : dimmed
+                    ? context.tSub.withValues(alpha: 0.55)
+                    : context.tText,
+            fontSize: 12.sp,
+            fontWeight: FontWeight.w600,
+            decoration: dimmed && !selected ? TextDecoration.lineThrough : null,
+          ),
+        ),
+      ),
+    );
   }
 
   /// Loads the product and the shops selling it (on open and on pull-to-refresh).
@@ -135,12 +185,17 @@ class _ProductScreenState extends State<ProductScreen> {
             final List itemsList = (state.data["items"] is List)
                 ? state.data["items"] as List
                 : const [];
+            // 0. the chosen variant's own image
+            final Map? selVar = _selectedVariant(state);
+            String? resolvedImageUrl = _pick('product-items', selVar?["image"]);
             // 1. any variant that has an image
-            String? resolvedImageUrl;
-            for (final it in itemsList) {
-              final u = _pick('product-items', it is Map ? it["image"] : null);
-              if (u != null) { resolvedImageUrl = u; break; }
+            if (resolvedImageUrl == null) {
+              for (final it in itemsList) {
+                final u = _pick('product-items', it is Map ? it["image"] : null);
+                if (u != null) { resolvedImageUrl = u; break; }
+              }
             }
+            final String lang = context.locale.languageCode;
             // 2. product's own image
             resolvedImageUrl ??= _pick('products', state.data["image"]);
             // 3. category image
@@ -207,6 +262,48 @@ class _ProductScreenState extends State<ProductScreen> {
                           ),
                         ),
                       ],
+                      // Every size/type of the product; picking one narrows
+                      // the shops below to those that stock it.
+                      if (itemsList.isNotEmpty) ...[
+                        SizedBox(height: 16.h),
+                        Text(
+                          'variants_title'.tr(),
+                          style: TextStyle(
+                            color: context.tText,
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 8.h),
+                        Wrap(
+                          spacing: 8.w,
+                          runSpacing: 8.h,
+                          children: [
+                            if (itemsList.length > 1)
+                              _variantChip('variant_all'.tr(),
+                                  selected: selVar == null,
+                                  onTap: () =>
+                                      setState(() => _variantId = null)),
+                            for (final it in itemsList)
+                              if (it is Map)
+                                _variantChip(
+                                  variantLabel(it, lang) ?? '—',
+                                  selected: selVar != null &&
+                                      '${selVar["id"]}' == '${it["id"]}',
+                                  dimmed: variantShopOffers(it).isEmpty,
+                                  onTap: () => setState(() {
+                                    final int? id =
+                                        int.tryParse('${it["id"]}');
+                                    // Tapping the chosen one again = all
+                                    _variantId = (_variantId == id &&
+                                            itemsList.length > 1)
+                                        ? null
+                                        : id;
+                                  }),
+                                ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -234,7 +331,29 @@ class _ProductScreenState extends State<ProductScreen> {
         BlocBuilder<ShopByProductBloc, ShopByProductState>(
             builder: (context, state) {
           if (state is ShopByProductSuccessState) {
-            final list = state.data ?? [];
+            // A chosen variant narrows the list to shops that have it in stock.
+            final Map? selVar =
+                _selectedVariant(context.watch<ProductBloc>().state);
+            final Map<int, Map> offers =
+                selVar != null ? variantShopOffers(selVar) : const {};
+            final List list = selVar == null
+                ? (state.data ?? [])
+                : (state.data ?? [])
+                    .where((s) =>
+                        s is Map &&
+                        offers.containsKey(int.tryParse('${s["id"]}')))
+                    .toList();
+            if (list.isEmpty && selVar != null) {
+              return Padding(
+                padding: EdgeInsets.symmetric(vertical: 24.h),
+                child: EmptyState(
+                  height: 280.h,
+                  icon: Iconsax.shop_remove,
+                  title: 'no_shops'.tr(),
+                  subtitle: 'variant_no_shops_sub'.tr(),
+                ),
+              );
+            }
             if (list.isEmpty) {
               // Three different reasons a product has no shops — say which one:
               //  1) no variant yet  -> its types are still being added
@@ -335,7 +454,7 @@ class _ProductScreenState extends State<ProductScreen> {
                   ),
                 ),
                 SizedBox(height: 14.h),
-                ShopByProductScreenBody(list),
+                ShopByProductScreenBody(list, offers),
               ],
             );
           } else if (state is ShopByProductWaitingState) {
@@ -375,7 +494,8 @@ class _ProductScreenState extends State<ProductScreen> {
     );
   }
 
-  Widget ShopByProductScreenBody(List data) {
+  /// [offers]: shop id -> the chosen variant's stock row there (empty = none chosen).
+  Widget ShopByProductScreenBody(List data, Map<int, Map> offers) {
     return SizedBox(
       width: 1.sw,
       height: 200.h,
@@ -385,6 +505,10 @@ class _ProductScreenState extends State<ProductScreen> {
         scrollDirection: Axis.horizontal,
         shrinkWrap: true,
         itemBuilder: (context, index) {
+          final Map? offer = offers[int.tryParse('${data[index]["id"]}')];
+          final num? offerPrice = offer != null
+              ? effectivePrice(offer["price"], offer["bonus_price"])
+              : null;
           return GestureDetector(
             onTap: () {
               // Open THIS product's variants in that shop. Opening the whole
@@ -401,6 +525,7 @@ class _ProductScreenState extends State<ProductScreen> {
                 "shop_id": data[index]["id"],
                 "image": product?["image"],
                 "desc": product?["desc"],
+                if (offer != null) "shop_product_id": offer["id"],
               });
             },
             child: Container(
@@ -468,7 +593,7 @@ class _ProductScreenState extends State<ProductScreen> {
                             SizedBox(height: 3.h),
                             Text(
                               data[index]["address"].toString(),
-                              maxLines: 2,
+                              maxLines: offerPrice != null ? 1 : 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: context.tSub,
@@ -476,6 +601,16 @@ class _ProductScreenState extends State<ProductScreen> {
                                 fontWeight: FontWeight.w300,
                               ),
                             ),
+                            if (offerPrice != null)
+                              Text(
+                                '${offerPrice.toString().toMoney()} so\'m',
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: AppConstant.primaryColor,
+                                  fontSize: 12.sp,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                           ],
                         ),
                       ),

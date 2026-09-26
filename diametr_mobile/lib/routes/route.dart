@@ -88,12 +88,15 @@ class FullRoutes {
             shop_id: args != null ? args["shop_id"]?.toString() : null,
             desc: args != null ? args["desc"] : null,
             image: args != null ? args["image"] : null,
+            shopProductId:
+                args != null ? int.tryParse('${args["shop_product_id"]}') : null,
           ),
         ));
       case RouteNames.productScreen:
         return customPageRoute(ProductScreen(
           name: args != null ? args["name"] : null,
           product_id: args != null ? args["product_id"]?.toString() : null,
+          itemId: args != null ? int.tryParse('${args["item_id"]}') : null,
         ));
 
       case RouteNames.popularProductsScreen:

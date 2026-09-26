@@ -18,6 +18,9 @@ class ShopProductScreen extends StatefulWidget {
   String? shop_id;
   String? desc;
   String? image;
+  /// Stock row (shop product id) to preselect: the variant already chosen
+  /// on the product page.
+  int? shopProductId;
 
   ShopProductScreen(
       {super.key,
@@ -25,7 +28,8 @@ class ShopProductScreen extends StatefulWidget {
       required this.product_id,
       required this.shop_id,
       required this.desc,
-      required this.image});
+      required this.image,
+      this.shopProductId});
 
   @override
   State<ShopProductScreen> createState() => _ShopProductScreenState();
@@ -459,6 +463,8 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
   }
 
   ShopProductScreenBody<Widget>(data, tavsiyalar) {
+    // First open: preselect the variant already chosen on the product page.
+    _selectedId ??= widget.shopProductId;
     // Keep the chosen variant after a refresh; never index past the list.
     if (_selectedId != null) {
       final int kept = (data as List).indexWhere((e) => e["id"] == _selectedId);
