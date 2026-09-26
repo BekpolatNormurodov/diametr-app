@@ -81,6 +81,7 @@ export default function OrdersTable({
   data: OrderItemProps[];
   onRefetch?: () => void;
 }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);

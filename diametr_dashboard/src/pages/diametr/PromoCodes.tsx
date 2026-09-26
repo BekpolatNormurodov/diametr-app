@@ -6,8 +6,8 @@ import axiosClient from "../../service/axios.service";
 import { useFetchWithLoader } from "../../hooks/useFetchWithLoader";
 import { SkeletonTable } from "../../components/spinner/load-spinner";
 import { usePolling } from "../../hooks/usePolling";
-import PromoCodesTable, {
 import { useLang } from "../../context/LangContext";
+import PromoCodesTable, {
   PromoCodeItemProps,
 } from "../../components/tables/diametr/promoCodesTable";
 

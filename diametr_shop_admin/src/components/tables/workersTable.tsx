@@ -38,6 +38,7 @@ export default function WorkersTable({
   data: WorkerItemProps[];
   onRefetch?: () => void;
 }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const { isOpen, openModal, closeModal } = useModal();
   const [editItem, setEditItem] = useState<WorkerItemProps | null>(null);

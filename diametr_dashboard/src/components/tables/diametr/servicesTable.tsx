@@ -29,6 +29,7 @@ const showOptions = [{ value: "10", label: "10" }, { value: "20", label: "20" },
 const emptyForm = { name: "", desc: "" };
 
 export default function ServicesTable({ data, onRefetch }: { data: ServiceItemProps[]; onRefetch?: () => void }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const { isOpen, openModal, closeModal } = useModal();
   const [editItem, setEditItem] = useState<ServiceItemProps | null>(null);

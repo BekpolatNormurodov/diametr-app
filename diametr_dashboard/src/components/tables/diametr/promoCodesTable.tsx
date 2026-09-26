@@ -30,6 +30,7 @@ import { toast } from "../../ui/toast";
 import { formatMoney } from "../../../service/formatters/money.format";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
+import { useLang } from "../../../context/LangContext";
 
 export interface PromoCodeItemProps {
   id: number;
@@ -71,6 +72,7 @@ export default function PromoCodesTable({
   data: PromoCodeItemProps[];
   onRefetch: () => void;
 }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const { isOpen, openModal, closeModal } = useModal();
   const [editItem, setEditItem] = useState<PromoCodeItemProps | null>(null);

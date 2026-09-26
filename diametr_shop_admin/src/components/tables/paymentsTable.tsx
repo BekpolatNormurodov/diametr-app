@@ -48,6 +48,7 @@ export default function PaymentsTable({
   data: PaymentItemProps[];
   onRefetch?: () => void;
 }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const { isOpen, openModal, closeModal } = useModal();
   const [editItem, setEditItem] = useState<PaymentItemProps | null>(null);

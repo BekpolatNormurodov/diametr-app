@@ -34,6 +34,7 @@ const typeOptions = [{ value: "SHOP", label: "Do'kon" }, { value: "WORKER", labe
 const emptyForm = { amount: "", type: "CARD", start_date: "", end_date: "" };
 
 export default function PaymentsTable({ data, onRefetch }: { data: PaymentItemProps[]; onRefetch?: () => void }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const { isOpen, openModal, closeModal } = useModal();
   const [editItem, setEditItem] = useState<PaymentItemProps | null>(null);

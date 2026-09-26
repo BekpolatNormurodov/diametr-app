@@ -32,6 +32,7 @@ export default function UsersTable({
   data: UserItemProps[];
   onRefetch?: () => void;
 }) {
+  const { t } = useLang();
   const [search, setSearch]     = useState("");
   const [showValue, setShowValue] = useState("10");
   const [currentPage, setCurrentPage] = useState(1);

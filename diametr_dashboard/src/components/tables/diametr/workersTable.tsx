@@ -32,6 +32,7 @@ const showOptions = [{ value: "10", label: "10" }, { value: "20", label: "20" },
 const emptyForm = { fullname: "", phone: "", service_id: "", expired: "" };
 
 export default function WorkersTable({ data, onRefetch }: { data: WorkerItemProps[]; onRefetch?: () => void }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const { isOpen, openModal, closeModal } = useModal();
   const [editItem, setEditItem] = useState<WorkerItemProps | null>(null);

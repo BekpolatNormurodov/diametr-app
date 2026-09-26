@@ -26,6 +26,7 @@ export interface RegionItemProps {
 const showOptions = [{ value: "10", label: "10" }, { value: "20", label: "20" }, { value: "50", label: "50" }];
 
 export default function RegionsTable({ data, onRefetch }: { data: RegionItemProps[]; onRefetch?: () => void }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const { isOpen, openModal, closeModal } = useModal();
   const [editItem, setEditItem] = useState<RegionItemProps | null>(null);

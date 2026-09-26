@@ -51,7 +51,6 @@ const gradientFor = (seed: string | number) => {
 
 // Password cell — yashirin/ko'rsatish + copy
 function PasswordCell({ value }: { value?: string }) {
-  const { t } = useLang();
 
   const [shown, setShown] = useState(false);
   if (!value) return <span className="text-gray-400 text-sm">-</span>;
@@ -91,6 +90,7 @@ export default function AdminsTable({
   data: AdminItemProps[];
   onRefetch?: () => void;
 }) {
+  const { t } = useLang();
   const [search, setSearch]     = useState("");
   const [showValue, setShowValue] = useState("10");
   const [currentPage, setCurrentPage] = useState(1);

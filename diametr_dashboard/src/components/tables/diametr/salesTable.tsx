@@ -41,6 +41,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[]; onRefetch?: () => void }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);

@@ -41,7 +41,6 @@ export interface ShopItemProps {
 const showOptions = [{ value: "10", label: "10" }, { value: "20", label: "20" }, { value: "50", label: "50" }];
 
 function formatMoney(n: number) {
-  const { t } = useLang();
 
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(n);
 }
@@ -62,6 +61,7 @@ function expiryBadge(expired?: string) {
 }
 
 export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[]; onRefetch?: () => void }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const { isOpen, openModal, closeModal } = useModal();
   const [editItem, setEditItem] = useState<ShopItemProps | null>(null);

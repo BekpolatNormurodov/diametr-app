@@ -29,6 +29,7 @@ const showOptions = [{ value: "10", label: "10" }, { value: "20", label: "20" },
 const emptyForm = { name_uz: "", name_ru: "", symbol: "" };
 
 export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItemProps[]; onRefetch?: () => void }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const { isOpen, openModal, closeModal } = useModal();
   const [editItem, setEditItem] = useState<UnitTypeItemProps | null>(null);

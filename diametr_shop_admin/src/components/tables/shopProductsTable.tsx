@@ -196,7 +196,6 @@ const toList = (body: any): any[] => (Array.isArray(body) ? body : Array.isArray
 const stockVariantId = (sp: ShopProductItemProps) => sp.product_item_id ?? sp.product_item?.id;
 
 function getVariantInfo(sp: ShopProductItemProps) {
-  const { t } = useLang();
 
   const pi = sp.product_item;
   if (!pi) return { label: "", color: "" };
@@ -228,6 +227,7 @@ export default function ShopProductsTable({
   data: ShopProductItemProps[];
   onRefetch?: () => void;
 }) {
+  const { t } = useLang();
   const [tableData, setTableData] = useState(data);
   const { isOpen: addOpen, openModal: openAddModal, closeModal: closeAddModal } = useModal();
   const { isOpen: editOpen, openModal: openEditModal, closeModal: closeEditModal } = useModal();
