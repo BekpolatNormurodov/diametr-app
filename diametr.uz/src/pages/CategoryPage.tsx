@@ -76,8 +76,8 @@ const ruVariants = (n: number) => {
   return `${n} видов`
 }
 
-// A search result card: the whole product, or (while searching) one variant of it
-type Card = { key: string; p: Product; item?: ProductItem }
+// A result card: one product, plus the variants the search query picked out
+type Card = { key: string; p: Product; matched: ProductItem[] }
 
 interface Category {
   id: number
@@ -111,8 +111,8 @@ export default function CategoryPage() {
   const [cartOpen, setCartOpen] = useState(false)
   const [pricesMap, setPricesMap] = useState<Record<number, number>>({})
   const [variantPrices, setVariantPrices] = useState<Record<number, number>>({})
-  // Variant the modal pins to the top (the variant card that was clicked)
-  const [focusItemId, setFocusItemId] = useState<number | null>(null)
+  // Variants the modal pins to the top (the ones the search query picked out)
+  const [focusItemIds, setFocusItemIds] = useState<number[]>([])
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set())
@@ -231,11 +231,11 @@ export default function CategoryPage() {
       .finally(() => setLoading(false))
   }, [id])
 
-  const openDetail = (p: Product, itemId?: number) => {
+  const openDetail = (p: Product, itemIds: number[] = []) => {
     const req = ++detailReqRef.current
     setSelected(null)
     setDetailError(null)
-    setFocusItemId(itemId ?? null)
+    setFocusItemIds(itemIds)
     setDetailLoading(true)
     // The modal is where customers add to cart: read live prices/stock
     // (no-store skips the browser and the short (2s) API proxy cache).
@@ -418,45 +418,58 @@ export default function CategoryPage() {
     return { own, combo }
   }, [products, lang]) // eslint-disable-line
   const q = searchKey(search)
-  // Browsing: one card per product. Searching: one card PER VARIANT, so a
-  // product with 5 sizes shows all 5 (each with its own price and photo)
-  // instead of being folded into a single card. Ranked by match score (exact
-  // substring 0 first, then fuzzy by edit distance), then variants whose own
-  // name matched, then in-stock before not-in-shops. Variantless "Tovar
-  // turlari qo'shilmoqda" products stay a single product card.
+  const inShops = (it: ProductItem) => it._count == null || (it._count.shop_products ?? 0) > 0
+  // One card per product (its sizes open inside the modal). A product matches
+  // on its own names or any variant's; when the query picks out particular
+  // variants ("kulrang", "kabel 2.5") better than the product name does, the
+  // card names them (chip + their price) and the modal pins them on top. A
+  // plain product-name hit ("kabel") names none — the whole product matched.
+  // Ranked by match score (exact substring 0 first, then fuzzy by edit
+  // distance), then in-shops, not-in-shops, variantless "Qo'shilmoqda" last.
   const cards: Card[] = (() => {
+    const priceOf = (c: Card) => c.matched.length
+      ? Math.min(Infinity, ...c.matched.map(it => variantPrices[it.id] ?? Infinity))
+      : pricesMap[c.p.id] ?? Infinity
     const priceOk = (c: Card) => {
       if (!minPrice && !maxPrice) return true
-      const price = c.item ? variantPrices[c.item.id] : pricesMap[c.p.id]
-      if (price == null) return false
+      const price = priceOf(c)
+      if (price === Infinity) return false
       if (minPrice && price < Number(parseInput(minPrice))) return false
       if (maxPrice && price > Number(parseInput(maxPrice))) return false
       return true
     }
-    if (!q) return products.map(p => ({ key: `p${p.id}`, p })).filter(priceOk)
-    const scored: Array<[number, number, number, number, Card]> = []
+    if (!q) return products.map(p => ({ key: `p${p.id}`, p, matched: [] })).filter(priceOk)
+    const scored: Array<[number, number, number, Card]> = []
     let order = 0
     for (const p of products) {
       const ps = scoreSearch(productKeys.get(p), q)
       const items = p.items ?? []
-      if (items.length === 0) {
-        const c = { key: `p${p.id}`, p }
-        if (ps >= 0 && priceOk(c)) scored.push([ps, 1, 2, order++, c])
-        continue
-      }
+      const hits: Array<[number, number, ProductItem]> = []
       for (const it of items) {
         const own = scoreSearch(variantKeys.own.get(it.id), q)
         const combo = scoreSearch(variantKeys.combo.get(it.id), q)
-        const hits = [ps, own, combo].filter(s => s >= 0)
-        if (hits.length === 0) continue
-        const c = { key: `v${it.id}`, p, item: it }
-        if (!priceOk(c)) continue
-        const inShops = it._count == null || (it._count.shop_products ?? 0) > 0
-        scored.push([Math.min(...hits), own >= 0 ? 0 : 1, inShops ? 0 : 1, order++, c])
+        const s = [own, combo].filter(x => x >= 0)
+        if (s.length) hits.push([Math.min(...s), own >= 0 ? 0 : 1, it])
       }
+      const best = Math.min(...[ps, ...hits.map(h => h[0])].filter(s => s >= 0))
+      if (best === Infinity) continue
+      // Only the closest variants: "kabel 2.5" pins 2.5 mm2, not its fuzzy
+      // one-edit neighbour 1.5 mm2.
+      const vBest = Math.min(Infinity, ...hits.map(h => h[0]))
+      const picked = hits
+        .filter(h => h[0] === vBest && (ps < 0 || h[0] < ps))
+        .sort((a, b) => a[1] - b[1])
+        .map(h => h[2])
+      // Naming every variant says nothing — except for a one-variant product,
+      // where it explains the hit ("seyf" → Xavfsizlik tizimlari · Seyf).
+      const matched = picked.length < items.length || items.length === 1 ? picked : []
+      const c: Card = { key: `p${p.id}`, p, matched }
+      if (!priceOk(c)) continue
+      const stock = items.length === 0 ? 2 : (matched.length ? matched : items).some(inShops) ? 0 : 1
+      scored.push([best, stock, order++, c])
     }
-    scored.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3])
-    return scored.map(r => r[4])
+    scored.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
+    return scored.map(r => r[3])
   })()
 
   return (
@@ -637,17 +650,20 @@ export default function CategoryPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
-            {cards.map(({ key, p, item }, i) => {
-              const comingSoon = !item && !(p.items ?? []).length
-              // Has variants, but no shop stocks any of them (or this one) yet (count known from /product/all)
-              const notInShops = !comingSoon && (item ? [item] : p.items ?? []).every(it => it._count != null && (it._count.shop_products ?? 0) === 0)
+            {cards.map(({ key, p, matched }, i) => {
+              const comingSoon = !(p.items ?? []).length
+              // Has variants, but no shop stocks any of them (or the matched ones) yet (count known from /product/all)
+              const notInShops = !comingSoon && (matched.length ? matched : p.items ?? []).every(it => !inShops(it))
               const variantCount = (p.items ?? []).length
-              const itemLabel = item ? getName(item) || variantLabelOf(item) : ''
-              const cardPrice = item ? variantPrices[item.id] : pricesMap[p.id]
+              const itemLabel = matched.length
+                ? `${getName(matched[0]) || variantLabelOf(matched[0]) || ''}${matched.length > 1 ? ` +${matched.length - 1}` : ''}`
+                : ''
+              const matchedMin = Math.min(Infinity, ...matched.map(it => variantPrices[it.id] ?? Infinity))
+              const cardPrice = matched.length ? (matchedMin === Infinity ? undefined : matchedMin) : pricesMap[p.id]
               return (
               <div
                 key={key}
-                onClick={() => openDetail(p, item?.id)}
+                onClick={() => openDetail(p, matched.map(it => it.id))}
                 style={{ transitionDelay: `${Math.min(i * 0.06, 0.3)}s` }}
                 className="reveal group bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 hover:-translate-y-1 border border-transparent dark:border-slate-700 hover:border-primary/20 cursor-pointer"
               >
@@ -661,7 +677,7 @@ export default function CategoryPage() {
                     </svg>
                   </div>
                   {(() => {
-                    const src = (item && variantImageUrl(item)) || productImageUrl(p)
+                    const src = matched.map(it => variantImageUrl(it)).find(Boolean) || productImageUrl(p)
                     return src ? (
                     <img
                       src={src}
@@ -681,7 +697,7 @@ export default function CategoryPage() {
                       {lang === 'uz' ? "Qo'shilmoqda" : 'Добавляется'}
                     </span>
                   )}
-                  {!item && variantCount > 1 && (
+                  {variantCount > 1 && (
                     <span className="absolute top-2 right-2 bg-white/90 dark:bg-slate-900/80 text-primary text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-sm">
                       {lang === 'uz' ? `${variantCount} turi` : ruVariants(variantCount)}
                     </span>
@@ -816,7 +832,7 @@ export default function CategoryPage() {
                       </svg>
                     </div>
                     {(() => {
-                      const heroSrc = heroImageUrl(selected, (selected.items ?? []).find(it => it.id === focusItemId))
+                      const heroSrc = heroImageUrl(selected, (selected.items ?? []).find(it => focusItemIds.includes(it.id) && variantImageUrl(it)))
                       return heroSrc ? (
                       <img
                         src={heroSrc}
@@ -851,10 +867,10 @@ export default function CategoryPage() {
                       {lang === 'uz' ? "Do'konlardagi narxlar" : 'Цены в магазинах'}
                     </h4>
                     {(() => {
-                      // Clicked variant first, then variants a shop stocks, then the rest —
-                      // every variant is listed so all sizes/types are visible.
+                      // Searched-for variants first, then variants a shop stocks, then the
+                      // rest — every variant is listed so all sizes/types are visible.
                       const hasShop = (it: ProductItem) => (it.shop_products ?? []).some(sp => !!sp.shop?.id)
-                      const rank = (it: ProductItem) => it.id === focusItemId ? 0 : hasShop(it) ? 1 : 2
+                      const rank = (it: ProductItem) => focusItemIds.includes(it.id) ? 0 : hasShop(it) ? 1 : 2
                       return selected.items!.map((it, i) => [rank(it), i, it] as const)
                         .sort((a, b) => a[0] - b[0] || a[1] - b[1])
                         .map(r => r[2])
@@ -863,10 +879,10 @@ export default function CategoryPage() {
                       const shopRows = (item.shop_products ?? []).filter(sp => !!sp.shop?.id)
                       const itemLabel = getName(item) || variantLabelOf(item)
                       const vImg = variantImageUrl(item)
-                      const focused = item.id === focusItemId
+                      const focused = focusItemIds.includes(item.id)
                       return (
                         <React.Fragment key={item.id}>
-                        {idx === 1 && arr[0].id === focusItemId && (
+                        {idx > 0 && !focused && focusItemIds.includes(arr[idx - 1].id) && (
                           <p className="pt-2 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide border-t border-slate-100 dark:border-slate-700">
                             {lang === 'uz' ? 'Boshqa turlari' : 'Другие виды'}
                           </p>

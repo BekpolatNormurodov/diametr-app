@@ -40,11 +40,16 @@ List<String> _comboKeysOf(Map product, Map variant) =>
       if (variant["desc"] != null) searchKey(variant["desc"]),
     ];
 
-/// One search result: a whole product, or (while searching) one variant of it.
+/// One search result: a product, plus the variants the query picked out.
 class _Hit {
   final Map product;
-  final Map? variant;
-  const _Hit(this.product, [this.variant]);
+  final List<Map> matched;
+  const _Hit(this.product, [this.matched = const []]);
+}
+
+bool _inShops(Map variant) {
+  final cnt = variant["_count"];
+  return cnt is! Map || ((cnt["shop_products"] as num?) ?? 0) > 0;
 }
 
 class SearchScreen extends StatefulWidget {
@@ -319,10 +324,16 @@ class _ProductsTabState extends State<_ProductsTab> {
       _ProductCardState._minVariantPrice(product) ??
       widget.prices[product["id"]];
 
-  /// A variant card is priced by that variant alone, never the product's min.
-  num? _priceOfHit(_Hit h) => h.variant != null
-      ? widget.variantPrices[h.variant!["id"]]
-      : _priceOf(h.product);
+  /// A card that names variants is priced by those variants alone.
+  num? _priceOfHit(_Hit h) {
+    if (h.matched.isEmpty) return _priceOf(h.product);
+    num? min;
+    for (final v in h.matched) {
+      final num? p = widget.variantPrices[v["id"]];
+      if (p != null && (min == null || p < min)) min = p;
+    }
+    return min;
+  }
 
   @override
   void didUpdateWidget(covariant _ProductsTab old) {
@@ -343,14 +354,14 @@ class _ProductsTabState extends State<_ProductsTab> {
         if (state is ProductAllWaitingState) return _shimmerGrid(context);
         if (state is ProductAllSuccessState) {
           final q = widget.query; // already a searchKey (computed by the parent)
-          // No query: one card per product. Searching: one card PER VARIANT,
-          // so a product with 5 sizes shows all 5 (own price/photo/label)
-          // instead of being folded into one card — same rule as the website.
-          // A query hitting the product name/desc lists all its variants; one
-          // hitting a variant (or "product + variant", e.g. "kabel 2.5") lists
-          // just that one. Order: match score (0 = exact, then fuzzy distance),
-          // variants whose own name matched, in-shops before not-in-shops,
-          // variantless "coming soon" products last.
+          // One card per product (its sizes are picked on the product page).
+          // A product matches on its own names or any variant's; when the
+          // query picks out particular variants ("kulrang", "kabel 2.5")
+          // better than the product name does, the card names them (chip +
+          // their price) and opens with the closest one selected. A plain
+          // product-name hit ("kabel") names none. Same rule as the website.
+          // Order: match score (0 = exact, then fuzzy distance), in-shops,
+          // not-in-shops, variantless "coming soon" products last.
           final List<_Hit> all;
           if (q.isEmpty) {
             all = [
@@ -371,32 +382,49 @@ class _ProductsTabState extends State<_ProductsTab> {
               if (e is! Map) continue;
               final int ps =
                   minHit([_nameKeys.score(e, q), _descKeys.score(e, q)]);
-              final items = e["items"];
-              if (items is! List || items.isEmpty) {
-                if (ps >= 0) scored.add([ps, 1, 2, order++, _Hit(e)]);
-                continue;
-              }
+              final List<Map> items = [
+                if (e["items"] is List)
+                  for (final it in e["items"] as List)
+                    if (it is Map) it
+              ];
+              // [score, own-name missed (1) or hit (0), variant]
+              final List<List<Object>> hits = [];
               for (final it in items) {
-                if (it is! Map) continue;
                 final int own = _variantOwnKeys.score(it, q);
-                final int best = minHit(
-                    [ps, own, searchKeysScore(_comboKeysOf(e, it), q)]);
-                if (best < 0) continue;
-                final cnt = it["_count"];
-                final bool inShops = cnt is! Map ||
-                    ((cnt["shop_products"] as num?) ?? 0) > 0;
-                scored.add(
-                    [best, own >= 0 ? 0 : 1, inShops ? 0 : 1, order++, _Hit(e, it)]);
+                final int s =
+                    minHit([own, searchKeysScore(_comboKeysOf(e, it), q)]);
+                if (s >= 0) hits.add([s, own >= 0 ? 0 : 1, it]);
               }
+              final int best = minHit([ps, for (final h in hits) h[0] as int]);
+              if (best < 0) continue;
+              // Only the closest variants: "kabel 2.5" names 2.5 mm2, not its
+              // fuzzy one-edit neighbour 1.5 mm2.
+              final int vBest = minHit([for (final h in hits) h[0] as int]);
+              final picked = hits
+                  .where((h) => h[0] == vBest && (ps < 0 || vBest < ps))
+                  .toList()
+                ..sort((a, b) => (a[1] as int) - (b[1] as int));
+              // Naming every variant says nothing — except for a one-variant
+              // product, where it explains the hit ("seyf" → ... · Seyf).
+              final List<Map> matched =
+                  picked.length < items.length || items.length == 1
+                      ? [for (final h in picked) h[2] as Map]
+                      : const [];
+              final int stock = items.isEmpty
+                  ? 2
+                  : (matched.isNotEmpty ? matched : items).any(_inShops)
+                      ? 0
+                      : 1;
+              scored.add([best, stock, order++, _Hit(e, matched)]);
             }
             scored.sort((a, b) {
-              for (int i = 0; i < 4; i++) {
+              for (int i = 0; i < 3; i++) {
                 final d = (a[i] as int) - (b[i] as int);
                 if (d != 0) return d;
               }
               return 0;
             });
-            all = [for (final r in scored) r[4] as _Hit];
+            all = [for (final r in scored) r[3] as _Hit];
           }
 
           if (all.isEmpty) return _empty(context);
@@ -638,11 +666,9 @@ class _ProductsTabState extends State<_ProductsTab> {
                       ),
                       delegate: SliverChildBuilderDelegate(
                         (ctx, i) => _ProductCard(
-                            key: ValueKey(displayed[i].variant != null
-                                ? 'v${displayed[i].variant!["id"]}'
-                                : 'p${displayed[i].product["id"]}'),
+                            key: ValueKey('p${displayed[i].product["id"]}'),
                             item: displayed[i].product,
-                            variant: displayed[i].variant,
+                            matched: displayed[i].matched,
                             price: _priceOfHit(displayed[i])),
                         childCount: displayed.length,
                       ),
@@ -980,10 +1006,11 @@ class _PriceFilterSheetState extends State<_PriceFilterSheet> {
 
 class _ProductCard extends StatefulWidget {
   final dynamic item;
-  /// Set on a search result for one variant of [item].
-  final Map? variant;
+  /// Variants of [item] the search query picked out (closest first).
+  final List<Map> matched;
   final num? price;
-  const _ProductCard({super.key, required this.item, this.variant, this.price});
+  const _ProductCard(
+      {super.key, required this.item, this.matched = const [], this.price});
 
   @override
   State<_ProductCard> createState() => _ProductCardState();
@@ -1042,10 +1069,13 @@ class _ProductCardState extends State<_ProductCard> {
     // variant photo (e.g. an actual seyf) is more specific than the product's
     // generic display shot.
     String? imageUrl;
-    final Map? variant = widget.variant;
-    final vImg = variant?['image'];
-    if (vImg != null && vImg.toString().isNotEmpty && vImg.toString() != 'null') {
-      imageUrl = Endpoints.img('product-items', vImg);
+    final List<Map> matched = widget.matched;
+    for (final v in matched) {
+      final vImg = v['image'];
+      if (vImg != null && vImg.toString().isNotEmpty && vImg.toString() != 'null') {
+        imageUrl = Endpoints.img('product-items', vImg);
+        break;
+      }
     }
     final items = widget.item['items'];
     if (imageUrl == null && items is List) {
@@ -1074,7 +1104,7 @@ class _ProductCardState extends State<_ProductCard> {
         '';
     // Price is not on the product itself — take the lowest working shop price
     // across its variants.
-    final dynamic price = variant != null
+    final dynamic price = matched.isNotEmpty
         ? widget.price
         : widget.price ?? widget.item["price"] ?? _minVariantPrice(widget.item);
     // Only a product with NO variant is "types being added". A stocked product
@@ -1082,20 +1112,20 @@ class _ProductCardState extends State<_ProductCard> {
     // must not get that label.
     final int variantCount = (widget.item["items"] as List?)?.length ?? 0;
     final bool hasVariant = variantCount > 0;
-    final String? variantText =
-        variant != null ? variantLabel(variant, lang) : null;
-    final cnt = variant?["_count"];
-    final bool variantNotInShops = variant != null &&
-        price == null &&
-        cnt is Map &&
-        ((cnt["shop_products"] as num?) ?? 0) == 0;
+    // The variant(s) the search named, e.g. "2.5 mm2" or "Kulrang +1".
+    final String? variantText = matched.isEmpty
+        ? null
+        : '${variantLabel(matched.first, lang) ?? ''}'
+            '${matched.length > 1 ? ' +${matched.length - 1}' : ''}';
+    final bool variantNotInShops =
+        matched.isNotEmpty && price == null && !matched.any(_inShops);
 
     return GestureDetector(
       onTap: () => Navigator.of(context).pushNamed('/productScreen',
           arguments: {
             "product_id": widget.item["id"],
             "name": name,
-            if (variant != null) "item_id": variant["id"],
+            if (matched.isNotEmpty) "item_id": matched.first["id"],
           }),
       child: Container(
         decoration: BoxDecoration(
@@ -1138,7 +1168,7 @@ class _ProductCardState extends State<_ProductCard> {
                           : const AppImagePlaceholder(),
                     ),
                   ),
-                  if (variant == null && variantCount > 1)
+                  if (variantCount > 1)
                     Positioned(
                       top: 6.h,
                       left: 6.w,
