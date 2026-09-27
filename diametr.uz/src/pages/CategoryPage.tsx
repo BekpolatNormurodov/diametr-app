@@ -438,7 +438,16 @@ export default function CategoryPage() {
       if (maxPrice && price > Number(parseInput(maxPrice))) return false
       return true
     }
-    if (!q) return products.map(p => ({ key: `p${p.id}`, p, matched: [] })).filter(priceOk)
+    // Browsing: buyable products first, then variants no shop has yet, then
+    // "Qo'shilmoqda" placeholders (313 of 345 today) — newest first within each.
+    const stockRank = (items: ProductItem[]) => items.length === 0 ? 2 : items.some(inShops) ? 0 : 1
+    if (!q) {
+      return products
+        .map((p, i) => [stockRank(p.items ?? []), i, { key: `p${p.id}`, p, matched: [] }] as [number, number, Card])
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+        .map(r => r[2])
+        .filter(priceOk)
+    }
     const scored: Array<[number, number, number, Card]> = []
     let order = 0
     for (const p of products) {
@@ -465,7 +474,7 @@ export default function CategoryPage() {
       const matched = picked.length < items.length || items.length === 1 ? picked : []
       const c: Card = { key: `p${p.id}`, p, matched }
       if (!priceOk(c)) continue
-      const stock = items.length === 0 ? 2 : (matched.length ? matched : items).some(inShops) ? 0 : 1
+      const stock = stockRank(matched.length ? matched : items)
       scored.push([best, stock, order++, c])
     }
     scored.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
@@ -935,7 +944,7 @@ export default function CategoryPage() {
                             </div>
                           ) : null}
                           {shopRows.map(sp => (
-                            <div key={sp.id} className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-primary/10 dark:border-slate-600 hover:border-primary/30 transition-colors">
+                            <div key={sp.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-primary/10 dark:border-slate-600 hover:border-primary/30 transition-colors">
                               <div className="flex items-center gap-3 min-w-0">
                                 {sp.shop?.image ? (
                                   <img
@@ -956,18 +965,19 @@ export default function CategoryPage() {
                                   </div>
                                 )}
                                 <div className="min-w-0">
-                                  <p className="font-semibold text-slate-700 dark:text-slate-200 text-sm truncate">
+                                  <p className="font-semibold text-slate-700 dark:text-slate-200 text-sm break-words sm:truncate">
                                     {sp.shop?.name || (lang === 'uz' ? "Do'kon" : 'Магазин')}
                                   </p>
                                   {sp.shop?.address && (
-                                    <p className="text-xs text-slate-400 truncate">{sp.shop.address}</p>
+                                    <p className="text-xs text-slate-400 line-clamp-2 sm:truncate">{sp.shop.address}</p>
                                   )}
                                 </div>
                               </div>
-                              <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                              <div className="flex items-end justify-between gap-2 sm:flex-col sm:justify-start sm:gap-1.5 flex-shrink-0">
+                                <div className="flex flex-col items-start sm:items-end gap-1">
                                 {sp.price != null ? (
                                   sp.bonus_price != null && sp.bonus_price > 0 && sp.bonus_price < sp.price ? (
-                                    <div className="flex flex-col items-end">
+                                    <div className="flex flex-col items-start sm:items-end">
                                       <span className="font-bold text-primary text-sm whitespace-nowrap">
                                         {sp.bonus_price.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}
                                       </span>
@@ -1005,6 +1015,8 @@ export default function CategoryPage() {
                                     {lang === 'uz' ? `${(sp as any).sold_count} ta sotilgan` : `Продано: ${(sp as any).sold_count}`}
                                   </span>
                                 )}
+                                </div>
+                                <div className="flex flex-col items-end gap-1.5">
                                 {sp.shop?.lat && sp.shop?.lon && (
                                   <button
                                     onClick={e => { e.stopPropagation(); window.open(`https://yandex.com/maps/?pt=${sp.shop!.lon},${sp.shop!.lat}&z=16&l=map&text=${encodeURIComponent(sp.shop!.name || '')}`, '_blank', 'noopener,noreferrer') }}
@@ -1049,6 +1061,7 @@ export default function CategoryPage() {
                                     </button>
                                   )
                                 })()}
+                                </div>
                               </div>
                             </div>
                           ))}

@@ -363,10 +363,24 @@ class _ProductsTabState extends State<_ProductsTab> {
           // Order: match score (0 = exact, then fuzzy distance), in-shops,
           // not-in-shops, variantless "coming soon" products last.
           final List<_Hit> all;
+          // Buyable first, then variants no shop has, then placeholders.
+          int stockRank(List<Map> items) =>
+              items.isEmpty ? 2 : items.any(_inShops) ? 0 : 1;
+          List<Map> itemsOf(Map p) => [
+                if (p["items"] is List)
+                  for (final it in p["items"] as List)
+                    if (it is Map) it
+              ];
           if (q.isEmpty) {
-            all = [
+            final products = [
               for (final e in (state.data ?? []))
-                if (e is Map) _Hit(e)
+                if (e is Map) e
+            ];
+            final ranks = {for (final p in products) p: stockRank(itemsOf(p))};
+            all = [
+              for (int r = 0; r < 3; r++)
+                for (final p in products)
+                  if (ranks[p] == r) _Hit(p)
             ];
           } else {
             int minHit(Iterable<int> scores) {
@@ -382,11 +396,7 @@ class _ProductsTabState extends State<_ProductsTab> {
               if (e is! Map) continue;
               final int ps =
                   minHit([_nameKeys.score(e, q), _descKeys.score(e, q)]);
-              final List<Map> items = [
-                if (e["items"] is List)
-                  for (final it in e["items"] as List)
-                    if (it is Map) it
-              ];
+              final List<Map> items = itemsOf(e);
               // [score, own-name missed (1) or hit (0), variant]
               final List<List<Object>> hits = [];
               for (final it in items) {
@@ -410,11 +420,8 @@ class _ProductsTabState extends State<_ProductsTab> {
                   picked.length < items.length || items.length == 1
                       ? [for (final h in picked) h[2] as Map]
                       : const [];
-              final int stock = items.isEmpty
-                  ? 2
-                  : (matched.isNotEmpty ? matched : items).any(_inShops)
-                      ? 0
-                      : 1;
+              final int stock =
+                  stockRank(matched.isNotEmpty ? matched : items);
               scored.add([best, stock, order++, _Hit(e, matched)]);
             }
             scored.sort((a, b) {

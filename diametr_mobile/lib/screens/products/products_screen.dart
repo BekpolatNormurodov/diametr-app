@@ -80,7 +80,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
           if (state is ProductByCategorySuccessState) {
             // Show every product in the category; variantless ones are marked
             // "Turlari qo'shilmoqda" on the card instead of being hidden.
-            final list = (state.data ?? []).toList();
+            // Products with variants first, "Turlari qo'shilmoqda" placeholders
+            // after, so the buyable ones aren't buried (same as the website).
+            bool hasItems(dynamic p) =>
+                p is Map && ((p["items"] as List?)?.isNotEmpty ?? false);
+            final all = (state.data ?? []).toList();
+            final list = [...all.where(hasItems), ...all.where((p) => !hasItems(p))];
             if (list.isEmpty) {
               return PullToRefreshFill(
                 child: EmptyState(
@@ -90,7 +95,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 ),
               );
             }
-            // Backend orders by id desc → keep that order (newest first).
+            // Backend orders by id desc → newest first within each group.
             return productsScreenBody(list);
           } else if (state is ProductByCategoryWaitingState) {
             return _buildShimmer();
