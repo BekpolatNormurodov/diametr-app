@@ -54,13 +54,17 @@ export const Modal: React.FC<ModalProps> = ({
     : "relative w-full rounded-3xl bg-white  dark:bg-gray-900";
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999">
+    <div className="fixed inset-0 overflow-y-auto modal z-99999">
       {!isFullscreen && (
-        <div
-          className="fixed inset-0 h-full w-full bg-gray-400/50 backdrop-blur-[32px]"
-          onClick={onClose}
-        ></div>
+        <div className="fixed inset-0 h-full w-full bg-gray-400/50 backdrop-blur-[32px]"></div>
       )}
+      {/* min-h-full (not a centring flex on the scroller itself): a window taller
+          than the screen grows the scroll area from its top, so its first fields
+          stay reachable instead of being centred off-screen above the fold. */}
+      <div
+        className={isFullscreen ? "relative h-full" : "relative flex min-h-full items-center justify-center p-4"}
+        onClick={isFullscreen ? undefined : onClose}
+      >
       <div
         ref={modalRef}
         className={`${contentClasses}  ${className}`}
@@ -88,6 +92,7 @@ export const Modal: React.FC<ModalProps> = ({
           </button>
         )}
         <div>{children}</div>
+      </div>
       </div>
     </div>
   );
