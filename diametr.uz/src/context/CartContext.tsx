@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 import { BASE_URL } from '../service/authService'
+import { decodeEntities } from '../utils/text'
 
 export interface CartItem {
   shopProductId: number
@@ -71,7 +72,7 @@ export function variantLabelOf(v?: {
   color?: string | null
 } | null): string | undefined {
   if (!v) return undefined
-  const name = (v.name ?? '').toString().trim()
+  const name = decodeEntities((v.name ?? '').toString()).trim()
   if (name) return name
   const parts: string[] = []
   if (v.value != null && String(v.value) !== '') {

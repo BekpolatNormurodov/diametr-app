@@ -1,5 +1,6 @@
 import 'package:stroymarket/core/extensions/str.dart';
 import 'package:stroymarket/core/utils/price.dart';
+import 'package:stroymarket/core/utils/search_key.dart';
 import 'package:stroymarket/core/utils/variant.dart';
 import 'package:stroymarket/manager/5_product_manager.dart';
 import 'package:stroymarket/manager/8_shop_manager.dart';
@@ -203,9 +204,14 @@ class _ProductScreenState extends State<ProductScreen> {
                 ? (state.data["category"] as Map)["image"]
                 : null;
             resolvedImageUrl ??= _pick('categories', catImg);
-            final String? desc = state.data["desc"]?.toString();
-            final bool hasDesc =
-                desc != null && desc.isNotEmpty && desc != 'null';
+            String textIn(Map m, String key) => decodeEntities(
+                    (lang == 'ru' ? m['${key}_ru'] ?? m[key] : m[key] ?? m['${key}_ru']) ??
+                        '')
+                .trim();
+            final String desc = textIn(state.data as Map, 'desc');
+            final bool hasDesc = desc.isNotEmpty && desc != 'null';
+            final String? selTitle = selVar != null ? variantLabel(selVar, lang) : null;
+            final String selDesc = selVar != null ? textIn(selVar, 'desc') : '';
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -303,6 +309,30 @@ class _ProductScreenState extends State<ProductScreen> {
                                 ),
                           ],
                         ),
+                        // The chosen type on its own: full name + its description
+                        if (selTitle != null) ...[
+                          SizedBox(height: 12.h),
+                          Text(
+                            selTitle,
+                            style: TextStyle(
+                              color: context.tText,
+                              fontSize: 15.sp,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (selDesc.isNotEmpty &&
+                              searchKey(selDesc) != searchKey(selTitle)) ...[
+                            SizedBox(height: 6.h),
+                            Text(
+                              selDesc,
+                              style: TextStyle(
+                                color: context.tSub,
+                                fontSize: 13.sp,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ],
                       ],
                     ],
                   ),

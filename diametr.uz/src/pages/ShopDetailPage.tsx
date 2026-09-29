@@ -4,6 +4,7 @@ import axios from 'axios'
 import { toast } from 'react-toastify'
 import { useLang } from '../context/AppContext'
 import { useCart, variantLabelOf } from '../context/CartContext'
+import { decodeEntities } from '../utils/text'
 import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useAuthUser } from '../hooks/useAuthUser'
 import Navbar from '../components/home/sections/navbar'
@@ -735,16 +736,26 @@ export default function ShopDetailPage() {
                 const alreadyInCart = inCart(uid)
                 const imgSrc = PRODUCT_IMG(sp)
                 const soldOut = !(sp.count > 0)
-                const name =
-                  (lang === 'ru' ? sp.name_ru : sp.name_uz) ??
-                  sp.name ??
-                  sp.variant_name ??
-                  (lang === 'uz' ? 'Mahsulot' : 'Товар')
+                const productName = decodeEntities(
+                  (lang === 'ru' ? sp.name_ru || sp.name_uz : sp.name_uz || sp.name_ru) || sp.name || '')
+                // The variant is what this shop sells — two sinks of one product
+                // must not both read "Lavabolar va lavabolar".
+                const variantName = decodeEntities(sp.variant_name ?? '').trim()
+                const name = variantName || productName || (lang === 'uz' ? 'Mahsulot' : 'Товар')
+                // Open the full product view (photo, description, every shop's
+                // price) with this variant selected.
+                const openProduct = () => {
+                  if (!sp.category?.id) return
+                  navigate(`/category/${sp.category.id}`, {
+                    state: { openProductId: Number(sp.id), itemIds: sp.product_item_id ? [Number(sp.product_item_id)] : [] },
+                  })
+                }
                 return (
                   <div
                     key={uid}
+                    onClick={openProduct}
                     style={{ transitionDelay: `${i * 0.06}s` }}
-                    className="reveal group bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 hover:-translate-y-1 border border-transparent dark:border-slate-700 hover:border-primary/20 flex flex-col"
+                    className="reveal group bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 hover:-translate-y-1 border border-transparent dark:border-slate-700 hover:border-primary/20 flex flex-col cursor-pointer"
                   >
                     {/* Image */}
                     <div className="relative w-full h-44 bg-slate-100 dark:bg-slate-700 overflow-hidden">
@@ -788,6 +799,9 @@ export default function ShopDetailPage() {
 
                     {/* Info */}
                     <div className="p-4 flex flex-col flex-1">
+                      {variantName && productName && (
+                        <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 line-clamp-1 mb-0.5">{productName}</p>
+                      )}
                       <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors mb-1">
                         {name}
                       </h3>
@@ -857,7 +871,7 @@ export default function ShopDetailPage() {
                           )}
                         </div>
                         <button
-                          onClick={() => addToCart(sp)}
+                          onClick={e => { e.stopPropagation(); addToCart(sp) }}
                           disabled={added || soldOut}
                           className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
                             soldOut

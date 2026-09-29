@@ -12,6 +12,7 @@ import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useAuthUser } from '../hooks/useAuthUser'
 import { searchKey, buildSearchKeys, searchKeyOfFields, scoreSearch } from '../utils/searchKey'
 import { productImageUrl, heroImageUrl, variantImageUrl } from '../utils/productImage'
+import { decodeEntities } from '../utils/text'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
@@ -22,6 +23,7 @@ interface ProductItem {
   name_uz?: string
   name_ru?: string
   desc?: string | null
+  desc_ru?: string | null
   image?: string | null
   value?: number | string | null
   size?: string | null
@@ -45,6 +47,7 @@ interface Product {
   name_ru?: string
   image?: string
   desc?: string
+  desc_ru?: string
   category?: { id: number; name_uz?: string; name_ru?: string; name?: string }
   items?: ProductItem[]
 }
@@ -113,6 +116,11 @@ export default function CategoryPage() {
   const [variantPrices, setVariantPrices] = useState<Record<number, number>>({})
   // Variants the modal pins to the top (the ones the search query picked out)
   const [focusItemIds, setFocusItemIds] = useState<number[]>([])
+  // Variant opened on its own inside the modal (photo, full name, description, its shops)
+  const [detailItemId, setDetailItemId] = useState<number | null>(null)
+  useEffect(() => { modalRef.current?.scrollTo({ top: 0 }) }, [detailItemId])
+  // Shop page hand-off: open this product with its variant selected
+  const navHandoffRef = useRef(location.state as { openProductId?: number; itemIds?: number[] } | null)
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set())
@@ -161,11 +169,11 @@ export default function CategoryPage() {
 
   // Auto-focus search when navigated from navbar search icon
   useEffect(() => {
-    const state = location.state as { focusSearch?: boolean } | null
-    if (state?.focusSearch) {
+    const state = location.state as { focusSearch?: boolean; openProductId?: number } | null
+    if (state?.focusSearch || state?.openProductId) {
       // small delay so the input is mounted
-      setTimeout(() => searchInputRef.current?.focus(), 80)
-      // clear the state so refresh won't re-focus
+      if (state.focusSearch) setTimeout(() => searchInputRef.current?.focus(), 80)
+      // clear the state so a refresh won't re-apply it
       navigate(location.pathname, { replace: true, state: {} })
     }
   }, [location, navigate])
@@ -184,6 +192,8 @@ export default function CategoryPage() {
 
   // Fetch products & category info
   useEffect(() => {
+    const handoff = navHandoffRef.current
+    navHandoffRef.current = null
     setLoading(true)
     setSearch('')
     setMinPrice('')
@@ -226,16 +236,20 @@ export default function CategoryPage() {
         setProducts(isAll ? allProds : allProds.filter(p => p.category?.id === catId))
         setCategory(isAll ? null : (allCats.find(c => c.id === catId) || null))
         setAllCategories(sortedCats)
+
+        const openP = handoff?.openProductId != null ? allProds.find(p => p.id === handoff.openProductId) : undefined
+        if (openP) openDetail(openP, handoff?.itemIds ?? [])
       })
       .catch(() => { setProducts([]); setCategory(null) })
       .finally(() => setLoading(false))
-  }, [id])
+  }, [id]) // eslint-disable-line
 
   const openDetail = (p: Product, itemIds: number[] = []) => {
     const req = ++detailReqRef.current
     setSelected(null)
     setDetailError(null)
     setFocusItemIds(itemIds)
+    setDetailItemId(null)
     setDetailLoading(true)
     // The modal is where customers add to cart: read live prices/stock
     // (no-store skips the browser and the short (2s) API proxy cache).
@@ -257,6 +271,9 @@ export default function CategoryPage() {
           throw new Error('Unexpected product response')
         }
         setSelected(data)
+        // One variant (or the one the search named): open it directly
+        const onlyItem = (data.items ?? []).length === 1 ? data.items[0].id : itemIds.length === 1 ? itemIds[0] : null
+        setDetailItemId((data.items ?? []).some((it: any) => it.id === onlyItem) ? onlyItem : null)
         // keep the card's "... so'm dan" in step with the prices shown in the modal
         const vPrices = variantMinPrices(data)
         setVariantPrices(prev => {
@@ -335,7 +352,9 @@ export default function CategoryPage() {
   const parseInput = (v: string) => v.replace(/\./g, '')
 
   const getName = (p: { name?: string; name_uz?: string; name_ru?: string }) =>
-    lang === 'ru' ? p.name_ru || p.name_uz || p.name || '' : p.name_uz || p.name_ru || p.name || ''
+    decodeEntities(lang === 'ru' ? p.name_ru || p.name_uz || p.name || '' : p.name_uz || p.name_ru || p.name || '')
+  const getDesc = (p: { desc?: string | null; desc_ru?: string | null }) =>
+    decodeEntities((lang === 'ru' ? p.desc_ru || p.desc : p.desc || p.desc_ru) || '').trim()
 
   const handleAddToCart = useCallback((sp: {
     id: number; price?: number; bonus_price?: number | null; count?: number
@@ -401,22 +420,28 @@ export default function CategoryPage() {
   // "category + product" mix). Category navigation lives in the chip strip.
   // Keys are Latin/Cyrillic-normalized (searchKey) and built once per product
   // list, so "rakovina" finds "раковина" and typing stays fast.
-  const productKeys = useMemo(() => buildSearchKeys(products, p => [p.name_uz, p.name_ru, p.name, p.desc]), [products])
-  // Per variant: its own names (e.g. "seyf", "2.5 mm2"), and "product + variant"
-  // phrases so a query spanning both ("kabel 2.5") still lands on one variant.
+  const productKeys = useMemo(() => buildSearchKeys(products, p => [p.name_uz, p.name_ru, p.name].map(decodeEntities)), [products])
+  // Descriptions are searched too, but only as a lower tier (below every name
+  // hit) and only as exact text — typo-tolerant matching over long prose
+  // surfaced unrelated products.
+  const productDescKeys = useMemo(() => buildSearchKeys(products, p => [p.desc, p.desc_ru].map(decodeEntities)), [products])
+  // Per variant: its own names (e.g. "seyf", "2.5 mm2"), "product + variant"
+  // phrases so a query spanning both ("kabel 2.5") lands on one variant, and
+  // its description (lower tier).
   const variantKeys = useMemo(() => {
     const own = new Map<number, string>()
     const combo = new Map<number, string>()
+    const desc = new Map<number, string>()
     products.forEach(p => (p.items ?? []).forEach(it => {
-      const label = getName(it) || variantLabelOf(it) || ''
-      own.set(it.id, searchKeyOfFields([it.name, it.name_uz, it.name_ru, variantLabelOf(it)]))
-      combo.set(it.id, searchKeyOfFields([
-        it.desc,
-        ...[p.name_uz, p.name_ru, p.name].filter(Boolean).map(n => `${n} ${label}`),
-      ]))
+      const labels = [it.name_uz, it.name_ru, it.name, variantLabelOf(it)].map(decodeEntities).filter(Boolean)
+      own.set(it.id, searchKeyOfFields(labels))
+      combo.set(it.id, searchKeyOfFields(
+        [p.name_uz, p.name_ru, p.name].map(decodeEntities).filter(Boolean).flatMap(n => labels.map(l => `${n} ${l}`)),
+      ))
+      desc.set(it.id, searchKeyOfFields([it.desc, it.desc_ru].map(decodeEntities)))
     }))
-    return { own, combo }
-  }, [products, lang]) // eslint-disable-line
+    return { own, combo, desc }
+  }, [products])
   const q = searchKey(search)
   const inShops = (it: ProductItem) => it._count == null || (it._count.shop_products ?? 0) > 0
   // One card per product (its sizes open inside the modal). A product matches
@@ -448,38 +473,293 @@ export default function CategoryPage() {
         .map(r => r[2])
         .filter(priceOk)
     }
-    const scored: Array<[number, number, number, Card]> = []
+    const scored: Array<[number, number, number, number, Card]> = []
     let order = 0
+    const exactIn = (key: string | undefined, qk: string) => (key && key.indexOf(qk) !== -1 ? 0 : -1)
     for (const p of products) {
-      const ps = scoreSearch(productKeys.get(p), q)
       const items = p.items ?? []
-      const hits: Array<[number, number, ProductItem]> = []
+      const ps = scoreSearch(productKeys.get(p), q)
+      const nameHits: Array<[number, number, ProductItem]> = []
+      const descHits: ProductItem[] = []
       for (const it of items) {
         const own = scoreSearch(variantKeys.own.get(it.id), q)
         const combo = scoreSearch(variantKeys.combo.get(it.id), q)
         const s = [own, combo].filter(x => x >= 0)
-        if (s.length) hits.push([Math.min(...s), own >= 0 ? 0 : 1, it])
+        if (s.length) nameHits.push([Math.min(...s), own >= 0 ? 0 : 1, it])
+        else if (exactIn(variantKeys.desc.get(it.id), q) === 0) descHits.push(it)
       }
-      const best = Math.min(...[ps, ...hits.map(h => h[0])].filter(s => s >= 0))
-      if (best === Infinity) continue
-      // Only the closest variants: "kabel 2.5" pins 2.5 mm2, not its fuzzy
-      // one-edit neighbour 1.5 mm2.
-      const vBest = Math.min(Infinity, ...hits.map(h => h[0]))
-      const picked = hits
-        .filter(h => h[0] === vBest && (ps < 0 || h[0] < ps))
-        .sort((a, b) => a[1] - b[1])
-        .map(h => h[2])
+      // Tier 0: a name matched (product's or a variant's). Tier 1: only a
+      // description did — listed after every name hit.
+      let tier: number, best: number, picked: ProductItem[]
+      if (ps >= 0 || nameHits.length) {
+        // Only the closest variants: "kabel 2.5" pins 2.5 mm2, not its fuzzy
+        // one-edit neighbour 1.5 mm2.
+        const vBest = Math.min(Infinity, ...nameHits.map(h => h[0]))
+        tier = 0
+        best = Math.min(...[ps, vBest].filter(x => x >= 0))
+        picked = nameHits
+          .filter(h => h[0] === vBest && (ps < 0 || h[0] < ps))
+          .sort((a, b) => a[1] - b[1])
+          .map(h => h[2])
+      } else if (exactIn(productDescKeys.get(p), q) === 0 || descHits.length) {
+        tier = 1
+        best = 0
+        picked = exactIn(productDescKeys.get(p), q) === 0 ? [] : descHits
+      } else continue
       // Naming every variant says nothing — except for a one-variant product,
       // where it explains the hit ("seyf" → Xavfsizlik tizimlari · Seyf).
       const matched = picked.length < items.length || items.length === 1 ? picked : []
       const c: Card = { key: `p${p.id}`, p, matched }
       if (!priceOk(c)) continue
-      const stock = stockRank(matched.length ? matched : items)
-      scored.push([best, stock, order++, c])
+      scored.push([tier, best, stockRank(matched.length ? matched : items), order++, c])
     }
-    scored.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
-    return scored.map(r => r[3])
+    scored.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3])
+    return scored.map(r => r[4])
   })()
+
+
+  type ShopRow = NonNullable<ProductItem['shop_products']>[number]
+
+  // One shop's offer for a variant: shop, price/stock, map and add-to-cart
+  const renderShopRow = (sp: ShopRow, item: ProductItem) => (
+    <div key={sp.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-primary/10 dark:border-slate-600 hover:border-primary/30 transition-colors">
+      <div className="flex items-center gap-3 min-w-0">
+        {sp.shop?.image ? (
+          <img
+            src={`${BASE_URL}/static/shops/${sp.shop.image}`}
+            alt={sp.shop.name}
+            width={36}
+            height={36}
+            loading="lazy"
+            decoding="async"
+            className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+          />
+        ) : (
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349" />
+            </svg>
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="font-semibold text-slate-700 dark:text-slate-200 text-sm break-words sm:truncate">
+            {sp.shop?.name || (lang === 'uz' ? "Do'kon" : 'Магазин')}
+          </p>
+          {sp.shop?.address && (
+            <p className="text-xs text-slate-400 line-clamp-2 sm:truncate">{sp.shop.address}</p>
+          )}
+        </div>
+      </div>
+      <div className="flex items-end justify-between gap-2 sm:flex-col sm:justify-start sm:gap-1.5 flex-shrink-0">
+        <div className="flex flex-col items-start sm:items-end gap-1">
+        {sp.price != null ? (
+          sp.bonus_price != null && sp.bonus_price > 0 && sp.bonus_price < sp.price ? (
+            <div className="flex flex-col items-start sm:items-end">
+              <span className="font-bold text-primary text-sm whitespace-nowrap">
+                {sp.bonus_price.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}
+              </span>
+              <span className="text-[11px] text-slate-400 line-through whitespace-nowrap">
+                {sp.price.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}
+              </span>
+              <span className="text-[10px] font-bold text-rose-500 px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30">
+                -{Math.round(((sp.price - sp.bonus_price) / sp.price) * 100)}%
+              </span>
+            </div>
+          ) : (
+            <span className="font-bold text-primary text-sm whitespace-nowrap">
+              {sp.price.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}
+            </span>
+          )
+        ) : (
+          <span className="text-slate-400 text-xs">{lang === 'uz' ? "Narx yo\u02BBq" : 'Нет цены'}</span>
+        )}
+        {/* Stock + sold count */}
+        {sp.count != null && (
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+            sp.count === 0
+              ? 'bg-red-100 text-red-500 dark:bg-red-900/30'
+              : sp.count <= 5
+                ? 'bg-orange-100 text-orange-500 dark:bg-orange-900/30'
+                : 'bg-green-100 text-green-600 dark:bg-green-900/30'
+          }`}>
+            {sp.count === 0
+              ? (lang === 'uz' ? 'Tugagan' : 'Нет в наличии')
+              : (lang === 'uz' ? `${sp.count} ta qoldi` : `Осталось ${sp.count} шт`)}
+          </span>
+        )}
+        {(sp as any).sold_count != null && (
+          <span className="text-xs text-slate-400">
+            {lang === 'uz' ? `${(sp as any).sold_count} ta sotilgan` : `Продано: ${(sp as any).sold_count}`}
+          </span>
+        )}
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+        {sp.shop?.lat && sp.shop?.lon && (
+          <button
+            onClick={e => { e.stopPropagation(); window.open(`https://yandex.com/maps/?pt=${sp.shop!.lon},${sp.shop!.lat}&z=16&l=map&text=${encodeURIComponent(sp.shop!.name || '')}`, '_blank', 'noopener,noreferrer') }}
+            className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-primary transition-colors font-medium group/map"
+          >
+            {/* Pin icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 flex-shrink-0 group-hover/map:text-primary transition-colors">
+              <path fillRule="evenodd" d="m11.54 22.351.07.04.028.016a.76.76 0 0 0 .723 0l.028-.015.071-.041a16.975 16.975 0 0 0 1.144-.742 19.58 19.58 0 0 0 2.683-2.282c1.944-2.003 3.5-4.697 3.5-8.327a8.25 8.25 0 0 0-16.5 0c0 3.63 1.556 6.326 3.5 8.327a19.58 19.58 0 0 0 2.683 2.282 16.975 16.975 0 0 0 1.145.742ZM12 13.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clipRule="evenodd" />
+            </svg>
+            {lang === 'uz' ? 'Xaritada' : 'На карте'}
+          </button>
+        )}
+        {/* Add to cart button */}
+        {sp.price != null && (sp.count == null || sp.count > 0) && (() => {
+          const added = addedIds.has(sp.id)
+          return (
+            <button
+              onClick={e => { e.stopPropagation(); handleAddToCart(sp, item) }}
+              className={`relative overflow-hidden inline-flex items-center justify-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-all duration-300 whitespace-nowrap select-none ${
+                added
+                  ? 'bg-emerald-500 text-white scale-95 shadow-lg shadow-emerald-500/30'
+                  : 'bg-primary text-white hover:bg-accent hover:scale-[1.03] hover:shadow-lg hover:shadow-primary/30 active:scale-95'
+              }`}
+            >
+              {/* Ripple bg */}
+              <span className={`absolute inset-0 rounded-xl transition-opacity duration-300 bg-white/20 ${added ? 'opacity-100' : 'opacity-0'}`} />
+              {added ? (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="w-3.5 h-3.5 flex-shrink-0 animate-checkPop">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                  </svg>
+                  {lang === 'uz' ? "Qo'shildi!" : 'Добавлено!'}
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3.5 h-3.5 flex-shrink-0">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+                  </svg>
+                  {lang === 'uz' ? 'Savatga' : 'В корзину'}
+                </>
+              )}
+            </button>
+          )
+        })()}
+        </div>
+      </div>
+    </div>
+  )
+
+  const variantTitle = (item: ProductItem) => getName(item) || variantLabelOf(item) || (lang === 'uz' ? 'Turi' : 'Вид')
+
+  // Variant row in the modal list: thumbnail + name; opens the variant view
+  const renderVariantHeader = (item: ProductItem) => {
+    const vImg = variantImageUrl(item)
+    return (
+      <button
+        type="button"
+        onClick={() => setDetailItemId(item.id)}
+        className="w-full flex items-center gap-3 text-left group/v"
+      >
+        <span className="relative w-10 h-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 flex-shrink-0">
+          {vImg && (
+            <img
+              src={vImg}
+              alt=""
+              width={40}
+              height={40}
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover"
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+            />
+          )}
+        </span>
+        <span className="flex-1 min-w-0 text-sm font-semibold text-slate-700 dark:text-slate-200 leading-snug line-clamp-2 group-hover/v:text-primary transition-colors">
+          {variantTitle(item)}
+        </span>
+        <span className="text-xs font-semibold text-primary whitespace-nowrap">
+          {lang === 'uz' ? 'Batafsil →' : 'Подробнее →'}
+        </span>
+      </button>
+    )
+  }
+
+  // A variant on its own: big photo, full name, specs, description, its shops
+  const renderVariantDetail = (item: ProductItem, canGoBack: boolean) => {
+    const title = variantTitle(item)
+    const desc = getDesc(item)
+    const img = variantImageUrl(item) || (selected ? productImageUrl(selected) : null)
+    const shopRows = (item.shop_products ?? []).filter(sp => !!sp.shop?.id)
+    const specs = [
+      item.value != null && String(item.value) !== '' ? `${item.value}${item.unit_type?.symbol ? ` ${item.unit_type.symbol}` : ''}` : null,
+      item.size || null,
+      item.color && !String(item.color).startsWith('#') ? item.color : null,
+    ].filter(Boolean) as string[]
+    const n = selected?.items?.length ?? 0
+    return (
+      <>
+        {canGoBack && (
+          <button
+            type="button"
+            onClick={() => setDetailItemId(null)}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+            </svg>
+            {lang === 'uz' ? `Barcha turlari (${n})` : `Все виды (${n})`}
+          </button>
+        )}
+        <div className="flex flex-col sm:flex-row gap-5">
+          <div className="relative w-full sm:w-52 h-60 sm:h-52 rounded-2xl overflow-hidden bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 flex-shrink-0">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <svg className="w-12 h-12 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+              </svg>
+            </div>
+            {img && (
+              <img
+                src={img}
+                alt={title}
+                decoding="async"
+                className="relative w-full h-full object-contain bg-white"
+                onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+              />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            {selected && (
+              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-1">{getName(selected)}</p>
+            )}
+            <h3 className="font-bold text-slate-800 dark:text-white text-lg leading-snug break-words">{title}</h3>
+            {(specs.length > 0 || selected?.category) && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {selected?.category && (
+                  <span className="bg-primary/10 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">{getName(selected.category)}</span>
+                )}
+                {specs.map(sv => (
+                  <span key={sv} className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold px-2.5 py-1 rounded-full">{sv}</span>
+                ))}
+              </div>
+            )}
+            {desc && searchKey(desc) !== searchKey(title) && (
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-3 leading-relaxed whitespace-pre-line break-words">{desc}</p>
+            )}
+          </div>
+        </div>
+        <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">
+          {lang === 'uz' ? "Do'konlardagi narxlar" : 'Цены в магазинах'}
+        </h4>
+        {shopRows.length > 0 ? (
+          <div className="space-y-2">{shopRows.map(sp => renderShopRow(sp, item))}</div>
+        ) : (
+          <div className="text-center py-6 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
+            <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+              {lang === 'uz' ? "Hozircha do'konlarda yo'q" : 'Пока нет в магазинах'}
+            </p>
+            {canGoBack && (
+              <p className="text-xs mt-1">{lang === 'uz' ? "Boshqa turini tanlab ko'ring" : 'Выберите другой вид'}</p>
+            )}
+          </div>
+        )}
+      </>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
@@ -831,272 +1111,115 @@ export default function CategoryPage() {
               </div>
 
               <div className="p-6 space-y-6">
-                {/* Product image + info */}
-                <div className="flex gap-5">
-                  <div className="relative w-28 h-28 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 flex-shrink-0">
-                    {/* Placeholder always in background so a 404 reveals it. */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <svg className="w-10 h-10 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-                      </svg>
-                    </div>
-                    {(() => {
-                      const heroSrc = heroImageUrl(selected, (selected.items ?? []).find(it => focusItemIds.includes(it.id) && variantImageUrl(it)))
-                      return heroSrc ? (
-                      <img
-                        src={heroSrc}
-                        alt={getName(selected)}
-                        width={112}
-                        height={112}
-                        decoding="async"
-                        fetchPriority="high"
-                        className="relative w-full h-full object-cover"
-                        onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-                      />
-                      ) : null
-                    })()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-slate-800 dark:text-white text-lg leading-snug mb-1">{getName(selected)}</h3>
-                    {selected.category && (
-                      <span className="inline-block bg-primary/10 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">
-                        {getName(selected.category)}
-                      </span>
-                    )}
-                    {selected.desc && (
-                      <p className="text-slate-500 dark:text-slate-400 text-sm mt-2 leading-relaxed">{selected.desc}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Items + prices */}
-                {selected.items && selected.items.length > 0 && selected.items.some(item => (item.shop_products ?? []).some(sp => !!sp.shop?.id)) ? (
-                  <div className="space-y-4">
-                    <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">
-                      {lang === 'uz' ? "Do'konlardagi narxlar" : 'Цены в магазинах'}
-                    </h4>
-                    {(() => {
-                      // Searched-for variants first, then variants a shop stocks, then the
-                      // rest — every variant is listed so all sizes/types are visible.
-                      const hasShop = (it: ProductItem) => (it.shop_products ?? []).some(sp => !!sp.shop?.id)
-                      const rank = (it: ProductItem) => focusItemIds.includes(it.id) ? 0 : hasShop(it) ? 1 : 2
-                      return selected.items!.map((it, i) => [rank(it), i, it] as const)
-                        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
-                        .map(r => r[2])
-                    })().map((item, idx, arr) => {
-                      // Stock rows without a real shop can't be ordered — never list them
-                      const shopRows = (item.shop_products ?? []).filter(sp => !!sp.shop?.id)
-                      const itemLabel = getName(item) || variantLabelOf(item)
-                      const vImg = variantImageUrl(item)
-                      const focused = focusItemIds.includes(item.id)
-                      return (
-                        <React.Fragment key={item.id}>
-                        {idx > 0 && !focused && focusItemIds.includes(arr[idx - 1].id) && (
-                          <p className="pt-2 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide border-t border-slate-100 dark:border-slate-700">
-                            {lang === 'uz' ? 'Boshqa turlari' : 'Другие виды'}
-                          </p>
-                        )}
-                        {shopRows.length === 0 ? (
-                          <div className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-dashed border-slate-200 dark:border-slate-600">
-                            <div className="flex items-center gap-2 min-w-0">
-                              {vImg && (
-                                <img
-                                  src={vImg}
-                                  alt={itemLabel}
-                                  width={28}
-                                  height={28}
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="w-7 h-7 rounded-lg object-cover border border-slate-200 dark:border-slate-600"
-                                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                                />
-                              )}
-                              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide truncate">
-                                {itemLabel || (lang === 'uz' ? 'Turi' : 'Вид')}
-                              </p>
-                            </div>
-                            <span className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">
-                              {lang === 'uz' ? "Hozircha do'konlarda yo'q" : 'Пока нет в магазинах'}
-                            </span>
+                {(() => {
+                  const items = selected.items ?? []
+                  const detail = items.find(it => it.id === detailItemId)
+                  if (detail) return renderVariantDetail(detail, items.length > 1)
+                  const hasShop = (it: ProductItem) => (it.shop_products ?? []).some(sp => !!sp.shop?.id)
+                  const productDesc = getDesc(selected)
+                  return (
+                    <>
+                      {/* Product image + info */}
+                      <div className="flex gap-5">
+                        <div className="relative w-28 h-28 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 flex-shrink-0">
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <svg className="w-10 h-10 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                            </svg>
                           </div>
-                        ) : (
-                        <div className={`space-y-2 ${focused ? 'p-3 -mx-3 rounded-2xl bg-primary/5 ring-1 ring-primary/20' : ''}`}>
-                          {itemLabel ? (
-                            <div className="flex items-center gap-2">
-                              {/* Variant own image (when uploaded by SUPER admin) —
-                                  gives the price row a visual anchor so a product
-                                  with several variants reads as a proper picker. */}
-                              {vImg && (
-                                <img
-                                  src={vImg}
-                                  alt={itemLabel}
-                                  width={28}
-                                  height={28}
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="w-7 h-7 rounded-lg object-cover border border-slate-200 dark:border-slate-600"
-                                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                                />
-                              )}
-                              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                                {itemLabel}
-                              </p>
-                            </div>
-                          ) : null}
-                          {shopRows.map(sp => (
-                            <div key={sp.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-primary/10 dark:border-slate-600 hover:border-primary/30 transition-colors">
-                              <div className="flex items-center gap-3 min-w-0">
-                                {sp.shop?.image ? (
-                                  <img
-                                    src={`${BASE_URL}/static/shops/${sp.shop.image}`}
-                                    alt={sp.shop.name}
-                                    width={36}
-                                    height={36}
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
-                                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                                  />
-                                ) : (
-                                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                    <svg className="w-4 h-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349" />
-                                    </svg>
-                                  </div>
-                                )}
-                                <div className="min-w-0">
-                                  <p className="font-semibold text-slate-700 dark:text-slate-200 text-sm break-words sm:truncate">
-                                    {sp.shop?.name || (lang === 'uz' ? "Do'kon" : 'Магазин')}
-                                  </p>
-                                  {sp.shop?.address && (
-                                    <p className="text-xs text-slate-400 line-clamp-2 sm:truncate">{sp.shop.address}</p>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-end justify-between gap-2 sm:flex-col sm:justify-start sm:gap-1.5 flex-shrink-0">
-                                <div className="flex flex-col items-start sm:items-end gap-1">
-                                {sp.price != null ? (
-                                  sp.bonus_price != null && sp.bonus_price > 0 && sp.bonus_price < sp.price ? (
-                                    <div className="flex flex-col items-start sm:items-end">
-                                      <span className="font-bold text-primary text-sm whitespace-nowrap">
-                                        {sp.bonus_price.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}
-                                      </span>
-                                      <span className="text-[11px] text-slate-400 line-through whitespace-nowrap">
-                                        {sp.price.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}
-                                      </span>
-                                      <span className="text-[10px] font-bold text-rose-500 px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30">
-                                        -{Math.round(((sp.price - sp.bonus_price) / sp.price) * 100)}%
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span className="font-bold text-primary text-sm whitespace-nowrap">
-                                      {sp.price.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}
-                                    </span>
-                                  )
-                                ) : (
-                                  <span className="text-slate-400 text-xs">{lang === 'uz' ? "Narx yo\u02BBq" : 'Нет цены'}</span>
-                                )}
-                                {/* Stock + sold count */}
-                                {sp.count != null && (
-                                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                    sp.count === 0
-                                      ? 'bg-red-100 text-red-500 dark:bg-red-900/30'
-                                      : sp.count <= 5
-                                        ? 'bg-orange-100 text-orange-500 dark:bg-orange-900/30'
-                                        : 'bg-green-100 text-green-600 dark:bg-green-900/30'
-                                  }`}>
-                                    {sp.count === 0
-                                      ? (lang === 'uz' ? 'Tugagan' : 'Нет в наличии')
-                                      : (lang === 'uz' ? `${sp.count} ta qoldi` : `Осталось ${sp.count} шт`)}
-                                  </span>
-                                )}
-                                {(sp as any).sold_count != null && (
-                                  <span className="text-xs text-slate-400">
-                                    {lang === 'uz' ? `${(sp as any).sold_count} ta sotilgan` : `Продано: ${(sp as any).sold_count}`}
-                                  </span>
-                                )}
-                                </div>
-                                <div className="flex flex-col items-end gap-1.5">
-                                {sp.shop?.lat && sp.shop?.lon && (
-                                  <button
-                                    onClick={e => { e.stopPropagation(); window.open(`https://yandex.com/maps/?pt=${sp.shop!.lon},${sp.shop!.lat}&z=16&l=map&text=${encodeURIComponent(sp.shop!.name || '')}`, '_blank', 'noopener,noreferrer') }}
-                                    className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-primary transition-colors font-medium group/map"
-                                  >
-                                    {/* Pin icon */}
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 flex-shrink-0 group-hover/map:text-primary transition-colors">
-                                      <path fillRule="evenodd" d="m11.54 22.351.07.04.028.016a.76.76 0 0 0 .723 0l.028-.015.071-.041a16.975 16.975 0 0 0 1.144-.742 19.58 19.58 0 0 0 2.683-2.282c1.944-2.003 3.5-4.697 3.5-8.327a8.25 8.25 0 0 0-16.5 0c0 3.63 1.556 6.326 3.5 8.327a19.58 19.58 0 0 0 2.683 2.282 16.975 16.975 0 0 0 1.145.742ZM12 13.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clipRule="evenodd" />
-                                    </svg>
-                                    {lang === 'uz' ? 'Xaritada' : 'На карте'}
-                                  </button>
-                                )}
-                                {/* Add to cart button */}
-                                {sp.price != null && (sp.count == null || sp.count > 0) && (() => {
-                                  const added = addedIds.has(sp.id)
-                                  return (
-                                    <button
-                                      onClick={e => { e.stopPropagation(); handleAddToCart(sp, item) }}
-                                      className={`relative overflow-hidden inline-flex items-center justify-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-all duration-300 whitespace-nowrap select-none ${
-                                        added
-                                          ? 'bg-emerald-500 text-white scale-95 shadow-lg shadow-emerald-500/30'
-                                          : 'bg-primary text-white hover:bg-accent hover:scale-[1.03] hover:shadow-lg hover:shadow-primary/30 active:scale-95'
-                                      }`}
-                                    >
-                                      {/* Ripple bg */}
-                                      <span className={`absolute inset-0 rounded-xl transition-opacity duration-300 bg-white/20 ${added ? 'opacity-100' : 'opacity-0'}`} />
-                                      {added ? (
-                                        <>
-                                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="w-3.5 h-3.5 flex-shrink-0 animate-checkPop">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                                          </svg>
-                                          {lang === 'uz' ? "Qo'shildi!" : 'Добавлено!'}
-                                        </>
-                                      ) : (
-                                        <>
-                                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3.5 h-3.5 flex-shrink-0">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
-                                          </svg>
-                                          {lang === 'uz' ? 'Savatga' : 'В корзину'}
-                                        </>
-                                      )}
-                                    </button>
-                                  )
-                                })()}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                          {(() => {
+                            const heroSrc = heroImageUrl(selected, items.find(it => focusItemIds.includes(it.id) && variantImageUrl(it)))
+                            return heroSrc ? (
+                              <img
+                                src={heroSrc}
+                                alt={getName(selected)}
+                                width={112}
+                                height={112}
+                                decoding="async"
+                                fetchPriority="high"
+                                className="relative w-full h-full object-cover"
+                                onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+                              />
+                            ) : null
+                          })()}
                         </div>
-                        )}
-                        </React.Fragment>
-                      )
-                    })}
-                  </div>
-                ) : selected.items && selected.items.length > 0 ? (
-                  // Variants exist, but no shop stocks them yet — say so instead of an empty list
-                  <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
-                    <svg className="w-10 h-10 mx-auto mb-3 text-slate-300 dark:text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
-                    </svg>
-                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                      {lang === 'uz' ? "Hozircha do'konlarda mavjud emas" : 'Пока нет в магазинах'}
-                    </p>
-                    <p className="text-xs mt-1">
-                      {lang === 'uz' ? "Do'konlar bu mahsulotni qo'shgach, shu yerda narxlar ko'rinadi" : 'Когда магазины добавят этот товар, здесь появятся цены'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
-                    <svg className="w-10 h-10 mx-auto mb-3 text-slate-300 dark:text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                      {lang === 'uz' ? "Tovar turlari qo'shilmoqda" : 'Виды товара добавляются'}
-                    </p>
-                    <p className="text-xs mt-1">
-                      {lang === 'uz' ? "Turlari qo'shilgach, shu yerda do'konlar va narxlar ko'rinadi" : 'Когда виды будут добавлены, здесь появятся магазины и цены'}
-                    </p>
-                  </div>
-                )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-slate-800 dark:text-white text-lg leading-snug mb-1">{getName(selected)}</h3>
+                          {selected.category && (
+                            <span className="inline-block bg-primary/10 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">
+                              {getName(selected.category)}
+                            </span>
+                          )}
+                          {productDesc && (
+                            <p className="text-slate-500 dark:text-slate-400 text-sm mt-2 leading-relaxed whitespace-pre-line">{productDesc}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Every variant; tap one to open it on its own */}
+                      {items.length > 0 && items.some(hasShop) ? (
+                        <div className="space-y-4">
+                          <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">
+                            {lang === 'uz' ? "Do'konlardagi narxlar" : 'Цены в магазинах'}
+                          </h4>
+                          {(() => {
+                            // Searched-for variants first, then variants a shop stocks, then the rest.
+                            const rank = (it: ProductItem) => focusItemIds.includes(it.id) ? 0 : hasShop(it) ? 1 : 2
+                            return items.map((it, i) => [rank(it), i, it] as const)
+                              .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+                              .map(r => r[2])
+                          })().map((item, idx, arr) => {
+                            // Stock rows without a real shop can't be ordered — never list them
+                            const shopRows = (item.shop_products ?? []).filter(sp => !!sp.shop?.id)
+                            const focused = focusItemIds.includes(item.id)
+                            return (
+                              <React.Fragment key={item.id}>
+                                {idx > 0 && !focused && focusItemIds.includes(arr[idx - 1].id) && (
+                                  <p className="pt-2 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide border-t border-slate-100 dark:border-slate-700">
+                                    {lang === 'uz' ? 'Boshqa turlari' : 'Другие виды'}
+                                  </p>
+                                )}
+                                <div className={`space-y-2 ${focused ? 'p-3 -mx-3 rounded-2xl bg-primary/5 ring-1 ring-primary/20' : ''}`}>
+                                  {renderVariantHeader(item)}
+                                  {shopRows.length === 0 ? (
+                                    <p className="pl-[52px] text-xs text-slate-400 dark:text-slate-500">
+                                      {lang === 'uz' ? "Hozircha do'konlarda yo'q" : 'Пока нет в магазинах'}
+                                    </p>
+                                  ) : shopRows.map(sp => renderShopRow(sp, item))}
+                                </div>
+                              </React.Fragment>
+                            )
+                          })}
+                        </div>
+                      ) : items.length > 0 ? (
+                        // Variants exist, but no shop stocks them yet — list them, then say so
+                        <div className="space-y-4">
+                          {items.map(item => <React.Fragment key={item.id}>{renderVariantHeader(item)}</React.Fragment>)}
+                          <div className="text-center py-6 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
+                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                              {lang === 'uz' ? "Hozircha do'konlarda mavjud emas" : 'Пока нет в магазинах'}
+                            </p>
+                            <p className="text-xs mt-1">
+                              {lang === 'uz' ? "Do'konlar bu mahsulotni qo'shgach, shu yerda narxlar ko'rinadi" : 'Когда магазины добавят этот товар, здесь появятся цены'}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
+                          <svg className="w-10 h-10 mx-auto mb-3 text-slate-300 dark:text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                          </svg>
+                          <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                            {lang === 'uz' ? "Tovar turlari qo'shilmoqda" : 'Виды товара добавляются'}
+                          </p>
+                          <p className="text-xs mt-1">
+                            {lang === 'uz' ? "Turlari qo'shilgach, shu yerda do'konlar va narxlar ko'rinadi" : 'Когда виды будут добавлены, здесь появятся магазины и цены'}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
             </div>
           ) : null}

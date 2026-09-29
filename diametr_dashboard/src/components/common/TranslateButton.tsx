@@ -10,9 +10,19 @@ async function translateText(text: string, langPair: "uz|ru" | "ru|uz"): Promise
   const res = await fetch(url);
   if (!res.ok) throw new Error("Translate failed");
   const data = await res.json();
-  const out: string = data?.responseData?.translatedText ?? "";
+  const out: string = decodeEntities(data?.responseData?.translatedText ?? "");
   if (!out) throw new Error("Empty translation");
   return out;
+}
+
+// MyMemory returns HTML-escaped text ("jo&#39;mrakli"); saved as-is it showed
+// the entity on the site. Uzbek is full of apostrophes, so always decode.
+function decodeEntities(s: string): string {
+  const named: Record<string, string> = { quot: '"', apos: "'", lt: "<", gt: ">", nbsp: " ", amp: "&" };
+  return s
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&(quot|apos|lt|gt|nbsp|amp);/g, (_, e) => named[e]);
 }
 
 export default function TranslateButton({

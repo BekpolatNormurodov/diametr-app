@@ -1,8 +1,27 @@
 import 'package:stroymarket/core/utils/price.dart';
 
+const Map<String, String> _named = {
+  'quot': '"', 'apos': "'", 'lt': '<', 'gt': '>', 'nbsp': ' ', 'amp': '&',
+};
+
+/// Plain text from catalogue text that may carry HTML entities: the
+/// dashboard's auto-translate used to save them ("jo&#39;mrakli").
+String decodeEntities(Object? value) {
+  final String s = value?.toString() ?? '';
+  if (!s.contains('&')) return s;
+  return s
+      .replaceAllMapped(RegExp(r'&#(\d+);'),
+          (m) => String.fromCharCode(int.parse(m[1]!)))
+      .replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'),
+          (m) => String.fromCharCode(int.parse(m[1]!, radix: 16)))
+      .replaceAllMapped(RegExp(r'&(quot|apos|lt|gt|nbsp|amp);'),
+          (m) => _named[m[1]]!);
+}
+
 String? _text(Object? x) {
-  final String? t = x?.toString().trim();
-  return (t == null || t.isEmpty || t == 'null') ? null : t;
+  if (x == null) return null;
+  final String t = decodeEntities(x).trim();
+  return (t.isEmpty || t == 'null') ? null : t;
 }
 
 /// Display label of a variant (product item): its own name in [lang], else

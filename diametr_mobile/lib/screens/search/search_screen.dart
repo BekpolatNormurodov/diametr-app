@@ -22,13 +22,19 @@ import '../../export_files.dart';
 
 // Search keys (see searchKey) of every record, computed once per record and
 // reused on each keystroke.
-final SearchKeyIndex _nameKeys =
-    SearchKeyIndex((r) => [r["name"], r["name_uz"], r["name_ru"]]);
-final SearchKeyIndex _descKeys = SearchKeyIndex((r) => [r["desc"]]);
+final SearchKeyIndex _nameKeys = SearchKeyIndex(
+    (r) => [r["name"], r["name_uz"], r["name_ru"]].map(decodeEntities));
+// Descriptions are a lower tier (below every name hit) and exact-only:
+// typo-tolerant matching over long prose surfaced unrelated products.
+final SearchKeyIndex _descKeys =
+    SearchKeyIndex((r) => [r["desc"], r["desc_ru"]].map(decodeEntities));
 final SearchKeyIndex _shopNameKeys = SearchKeyIndex((r) => [r["name"]]);
 // A variant's own names/label ("Seyf", "2.5 mm2").
-final SearchKeyIndex _variantOwnKeys = SearchKeyIndex((it) =>
-    [it["name"], it["name_uz"], it["name_ru"], variantLabel(it, 'uz'), variantLabel(it, 'ru')]);
+final SearchKeyIndex _variantOwnKeys = SearchKeyIndex((it) => [
+      ...[it["name"], it["name_uz"], it["name_ru"]].map(decodeEntities),
+      variantLabel(it, 'uz'),
+      variantLabel(it, 'ru'),
+    ]);
 // "product + variant" phrases, so "kabel 2.5" lands on the 2.5 mm2 cable.
 final Expando<List<String>> _variantComboKeys = Expando('variantComboKeys');
 List<String> _comboKeysOf(Map product, Map variant) =>
@@ -36,9 +42,10 @@ List<String> _comboKeysOf(Map product, Map variant) =>
       for (final n in [product["name_uz"], product["name_ru"], product["name"]])
         if (n != null && '$n'.trim().isNotEmpty)
           for (final lang in const ['uz', 'ru'])
-            searchKey('$n ${variantLabel(variant, lang) ?? ''}'),
-      if (variant["desc"] != null) searchKey(variant["desc"]),
+            searchKey('${decodeEntities(n)} ${variantLabel(variant, lang) ?? ''}'),
     ];
+
+bool _exactIn(List<String> keys, String q) => keys.any((k) => k.contains(q));
 
 /// One search result: a product, plus the variants the query picked out.
 class _Hit {
@@ -394,44 +401,65 @@ class _ProductsTabState extends State<_ProductsTab> {
             int order = 0;
             for (final e in (state.data ?? [])) {
               if (e is! Map) continue;
-              final int ps =
-                  minHit([_nameKeys.score(e, q), _descKeys.score(e, q)]);
+              final int ps = _nameKeys.score(e, q);
               final List<Map> items = itemsOf(e);
               // [score, own-name missed (1) or hit (0), variant]
               final List<List<Object>> hits = [];
+              final List<Map> descHits = [];
               for (final it in items) {
                 final int own = _variantOwnKeys.score(it, q);
                 final int s =
                     minHit([own, searchKeysScore(_comboKeysOf(e, it), q)]);
-                if (s >= 0) hits.add([s, own >= 0 ? 0 : 1, it]);
+                if (s >= 0) {
+                  hits.add([s, own >= 0 ? 0 : 1, it]);
+                } else if (_exactIn(_descKeys.keysOf(it), q)) {
+                  descHits.add(it);
+                }
               }
-              final int best = minHit([ps, for (final h in hits) h[0] as int]);
-              if (best < 0) continue;
-              // Only the closest variants: "kabel 2.5" names 2.5 mm2, not its
-              // fuzzy one-edit neighbour 1.5 mm2.
-              final int vBest = minHit([for (final h in hits) h[0] as int]);
-              final picked = hits
-                  .where((h) => h[0] == vBest && (ps < 0 || vBest < ps))
-                  .toList()
-                ..sort((a, b) => (a[1] as int) - (b[1] as int));
+              // Tier 0: a name matched (product's or a variant's). Tier 1:
+              // only a description did — listed after every name hit.
+              final int tier;
+              final int best;
+              final List<Map> picked;
+              if (ps >= 0 || hits.isNotEmpty) {
+                // Only the closest variants: "kabel 2.5" names 2.5 mm2, not
+                // its fuzzy one-edit neighbour 1.5 mm2.
+                final int vBest = minHit([for (final h in hits) h[0] as int]);
+                tier = 0;
+                best = minHit([ps, vBest]);
+                picked = [
+                  for (final h in hits
+                      .where((h) => h[0] == vBest && (ps < 0 || vBest < ps))
+                      .toList()
+                    ..sort((a, b) => (a[1] as int) - (b[1] as int)))
+                    h[2] as Map
+                ];
+              } else if (_exactIn(_descKeys.keysOf(e), q) ||
+                  descHits.isNotEmpty) {
+                tier = 1;
+                best = 0;
+                picked = _exactIn(_descKeys.keysOf(e), q) ? const [] : descHits;
+              } else {
+                continue;
+              }
               // Naming every variant says nothing — except for a one-variant
               // product, where it explains the hit ("seyf" → ... · Seyf).
               final List<Map> matched =
                   picked.length < items.length || items.length == 1
-                      ? [for (final h in picked) h[2] as Map]
+                      ? picked
                       : const [];
               final int stock =
                   stockRank(matched.isNotEmpty ? matched : items);
-              scored.add([best, stock, order++, _Hit(e, matched)]);
+              scored.add([tier, best, stock, order++, _Hit(e, matched)]);
             }
             scored.sort((a, b) {
-              for (int i = 0; i < 3; i++) {
+              for (int i = 0; i < 4; i++) {
                 final d = (a[i] as int) - (b[i] as int);
                 if (d != 0) return d;
               }
               return 0;
             });
-            all = [for (final r in scored) r[3] as _Hit];
+            all = [for (final r in scored) r[4] as _Hit];
           }
 
           if (all.isEmpty) return _empty(context);
