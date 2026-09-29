@@ -1,6 +1,5 @@
 import 'package:stroymarket/core/extensions/str.dart';
 import 'package:stroymarket/core/utils/price.dart';
-import 'package:stroymarket/core/utils/search_key.dart';
 import 'package:stroymarket/core/utils/variant.dart';
 import 'package:stroymarket/manager/5_product_manager.dart';
 import 'package:stroymarket/manager/8_shop_manager.dart';
@@ -80,6 +79,9 @@ class _ProductScreenState extends State<ProductScreen> {
   /// in stock and shows its price there.
   int? _variantId;
 
+  /// Long descriptions start collapsed.
+  bool _descOpen = false;
+
   @override
   void initState() {
     _variantId = widget.itemId;
@@ -88,15 +90,139 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Map? _selectedVariant(ProductState s) {
-    if (_variantId == null || s is! ProductSuccessState || s.data is! Map) {
-      return null;
-    }
+    if (s is! ProductSuccessState || s.data is! Map) return null;
     final items = (s.data as Map)["items"];
     if (items is! List) return null;
+    // A one-type product: that type is the selection
+    if (items.length == 1 && items.first is Map) return items.first as Map;
+    if (_variantId == null) return null;
     for (final it in items) {
       if (it is Map && '${it["id"]}' == '$_variantId') return it;
     }
     return null;
+  }
+
+  /// Shop id -> that shop's cheapest in-stock row over ALL variants.
+  Map<int, Map> _allOffers(List items) {
+    final Map<int, Map> out = {};
+    for (final it in items) {
+      variantShopOffers(it).forEach((shopId, row) {
+        final Map? cur = out[shopId];
+        if (cur == null ||
+            effectivePrice(row['price'], row['bonus_price'])! <
+                effectivePrice(cur['price'], cur['bonus_price'])!) {
+          out[shopId] = row;
+        }
+      });
+    }
+    return out;
+  }
+
+  num? _minPrice(Map<int, Map> offers) {
+    num? min;
+    for (final r in offers.values) {
+      final num? p = effectivePrice(r['price'], r['bonus_price']);
+      if (p != null && (min == null || p < min)) min = p;
+    }
+    return min;
+  }
+
+  /// The dashboard's colour picker stores hex ("#F97316").
+  Color? _hexColor(Object? v) {
+    final m = RegExp(r'^#([0-9a-fA-F]{6})$').firstMatch('${v ?? ''}'.trim());
+    return m == null ? null : Color(int.parse('FF${m[1]}', radix: 16));
+  }
+
+  Widget _descriptionCard(String text) {
+    final bool long = text.length > 280 || '\n'.allMatches(text).length > 5;
+    final bool clipped = long && !_descOpen;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(14.w),
+      decoration: BoxDecoration(
+        color: context.tCard,
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(color: context.tDivider.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('description_title'.tr(),
+              style: TextStyle(
+                  color: context.tText,
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w700)),
+          SizedBox(height: 6.h),
+          Text(
+            text,
+            maxLines: clipped ? 5 : null,
+            overflow: clipped ? TextOverflow.ellipsis : null,
+            style: TextStyle(color: context.tSub, fontSize: 13.sp, height: 1.45),
+          ),
+          if (long)
+            GestureDetector(
+              onTap: () => setState(() => _descOpen = !_descOpen),
+              child: Padding(
+                padding: EdgeInsets.only(top: 6.h),
+                child: Text(
+                  _descOpen ? 'read_less'.tr() : 'read_more'.tr(),
+                  style: TextStyle(
+                      color: AppConstant.primaryColor,
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _specsTable(List<MapEntry<String, Widget>> rows) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: context.tCard,
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(color: context.tDivider.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 9.h),
+            decoration: BoxDecoration(
+              color: context.tInput,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(14.r)),
+            ),
+            child: Text('characteristics'.tr().toUpperCase(),
+                style: TextStyle(
+                    color: context.tSub,
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4)),
+          ),
+          for (int i = 0; i < rows.length; i++) ...[
+            if (i > 0)
+              Divider(height: 1, thickness: 0.5, color: context.tDivider),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+              child: Row(
+                children: [
+                  Text(rows[i].key,
+                      style: TextStyle(color: context.tSub, fontSize: 13.sp)),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Align(
+                        alignment: Alignment.centerRight, child: rows[i].value),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _variantChip(String label,
@@ -157,7 +283,7 @@ class _ProductScreenState extends State<ProductScreen> {
     );
   }
 
-  ProductScreenBody<Widget>() {
+  Widget ProductScreenBody() {
     return ListView(
       shrinkWrap: true,
       scrollDirection: Axis.vertical,
@@ -212,6 +338,66 @@ class _ProductScreenState extends State<ProductScreen> {
             final bool hasDesc = desc.isNotEmpty && desc != 'null';
             final String? selTitle = selVar != null ? variantLabel(selVar, lang) : null;
             final String selDesc = selVar != null ? textIn(selVar, 'desc') : '';
+            final Map? cat = state.data["category"] is Map
+                ? state.data["category"] as Map
+                : null;
+            final String catName = cat == null
+                ? ''
+                : (variantLabel({'name_uz': cat['name_uz'], 'name_ru': cat['name_ru'], 'name': cat['name']}, lang) ?? '');
+            final Map<int, Map> summaryOffers = selVar != null
+                ? variantShopOffers(selVar)
+                : _allOffers(itemsList);
+            final num? minP = _minPrice(summaryOffers);
+            final int shopCount = summaryOffers.length;
+            final List<MapEntry<String, Widget>> specRows = [];
+            if (selVar != null) {
+              Widget val(String t) => Text(t,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                      color: context.tText,
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w600));
+              final String color = '${selVar['color'] ?? ''}'.trim();
+              final Color? swatch = _hexColor(color);
+              if (color.isNotEmpty && color != 'null') {
+                specRows.add(MapEntry(
+                    'spec_color'.tr(),
+                    swatch != null
+                        ? Container(
+                            width: 20.w,
+                            height: 20.w,
+                            decoration: BoxDecoration(
+                              color: swatch,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: Colors.black.withValues(alpha: 0.12)),
+                            ),
+                          )
+                        : val(color)));
+              }
+              final String size = '${selVar['size'] ?? ''}'.trim();
+              if (size.isNotEmpty && size != 'null') {
+                specRows.add(MapEntry('spec_size'.tr(), val(size)));
+              }
+              final Map? unit =
+                  selVar['unit_type'] is Map ? selVar['unit_type'] as Map : null;
+              final String value = '${selVar['value'] ?? ''}'.trim();
+              if (value.isNotEmpty && value != 'null') {
+                specRows.add(MapEntry('spec_amount'.tr(),
+                    val('$value ${unit?['symbol'] ?? ''}'.trim())));
+              } else if (unit != null) {
+                final String unitName = variantLabel(
+                        {'name_uz': unit['name_uz'], 'name_ru': unit['name_ru'], 'name': unit['name'] ?? unit['symbol']},
+                        lang) ??
+                    '';
+                if (unitName.isNotEmpty) {
+                  specRows.add(MapEntry('spec_unit'.tr(), val(unitName)));
+                }
+              }
+              if (catName.isNotEmpty) {
+                specRows.add(MapEntry('spec_section'.tr(), val(catName)));
+              }
+            }
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -237,36 +423,45 @@ class _ProductScreenState extends State<ProductScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
-                        child: Row(
-                          children: [
-                            Image.asset(
-                              'assets/icons/home.png',
-                              scale: 3.sp,
-                              color: context.tIconTint,
-                            ),
-                            SizedBox(width: 10.w),
-                            Text(
-                              'Stroymarket',
+                      if (catName.isNotEmpty)
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 10.w, vertical: 4.h),
+                          decoration: BoxDecoration(
+                            color: AppConstant.primaryColor
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20.r),
+                          ),
+                          child: Text(catName,
                               style: TextStyle(
-                                color: context.tText,
-                                fontSize: 14.sp,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ],
+                                  color: AppConstant.primaryColor,
+                                  fontSize: 12.sp,
+                                  fontWeight: FontWeight.w600)),
                         ),
-                      ),
-                      if (hasDesc) ...[
-                        SizedBox(height: 16.h),
+                      // Price summary: the chosen type, else the whole product
+                      if (minP != null) ...[
+                        SizedBox(height: 10.h),
                         Text(
-                          desc,
+                          'price_from'.tr(args: [minP.toString().toMoney()]),
                           style: TextStyle(
-                            color: context.tSub,
-                            fontSize: 14.sp,
-                            fontWeight: FontWeight.w300,
+                            color: AppConstant.primaryColor,
+                            fontSize: 22.sp,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
+                      ],
+                      if (itemsList.isNotEmpty) ...[
+                        SizedBox(height: 4.h),
+                        Text(
+                          shopCount > 0
+                              ? 'in_n_shops'.tr(args: ['$shopCount'])
+                              : 'no_shops'.tr(),
+                          style: TextStyle(color: context.tSub, fontSize: 12.sp),
+                        ),
+                      ],
+                      if (hasDesc) ...[
+                        SizedBox(height: 14.h),
+                        _descriptionCard(desc),
                       ],
                       // Every size/type of the product; picking one narrows
                       // the shops below to those that stock it.
@@ -288,8 +483,10 @@ class _ProductScreenState extends State<ProductScreen> {
                             if (itemsList.length > 1)
                               _variantChip('variant_all'.tr(),
                                   selected: selVar == null,
-                                  onTap: () =>
-                                      setState(() => _variantId = null)),
+                                  onTap: () => setState(() {
+                                        _variantId = null;
+                                        _descOpen = false;
+                                      })),
                             for (final it in itemsList)
                               if (it is Map)
                                 _variantChip(
@@ -305,32 +502,30 @@ class _ProductScreenState extends State<ProductScreen> {
                                             itemsList.length > 1)
                                         ? null
                                         : id;
+                                    _descOpen = false;
                                   }),
                                 ),
                           ],
                         ),
-                        // The chosen type on its own: full name + its description
+                        // The chosen type on its own: name, characteristics,
+                        // description
                         if (selTitle != null) ...[
-                          SizedBox(height: 12.h),
+                          SizedBox(height: 14.h),
                           Text(
                             selTitle,
                             style: TextStyle(
                               color: context.tText,
-                              fontSize: 15.sp,
+                              fontSize: 16.sp,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          if (selDesc.isNotEmpty &&
-                              searchKey(selDesc) != searchKey(selTitle)) ...[
-                            SizedBox(height: 6.h),
-                            Text(
-                              selDesc,
-                              style: TextStyle(
-                                color: context.tSub,
-                                fontSize: 13.sp,
-                                height: 1.4,
-                              ),
-                            ),
+                          if (specRows.isNotEmpty) ...[
+                            SizedBox(height: 10.h),
+                            _specsTable(specRows),
+                          ],
+                          if (selDesc.isNotEmpty) ...[
+                            SizedBox(height: 10.h),
+                            _descriptionCard(selDesc),
                           ],
                         ],
                       ],
@@ -362,10 +557,18 @@ class _ProductScreenState extends State<ProductScreen> {
             builder: (context, state) {
           if (state is ShopByProductSuccessState) {
             // A chosen variant narrows the list to shops that have it in stock.
-            final Map? selVar =
-                _selectedVariant(context.watch<ProductBloc>().state);
-            final Map<int, Map> offers =
-                selVar != null ? variantShopOffers(selVar) : const {};
+            final ProductState pSt = context.watch<ProductBloc>().state;
+            final Map? selVar = _selectedVariant(pSt);
+            final List allItems = pSt is ProductSuccessState &&
+                    pSt.data is Map &&
+                    (pSt.data as Map)['items'] is List
+                ? (pSt.data as Map)['items'] as List
+                : const [];
+            // Chosen type: its row per shop. No type chosen: each shop's
+            // cheapest row over all types (shown as "... dan").
+            final Map<int, Map> offers = selVar != null
+                ? variantShopOffers(selVar)
+                : _allOffers(allItems);
             final List list = selVar == null
                 ? (state.data ?? [])
                 : (state.data ?? [])
@@ -431,6 +634,25 @@ class _ProductScreenState extends State<ProductScreen> {
                 },
               );
             }
+            // Cheapest first; the first gets "Eng arzon" when there is a choice
+            num priceAt(dynamic shop) {
+              final Map? o = offers[int.tryParse('${shop is Map ? shop["id"] : ''}')];
+              return o == null
+                  ? double.infinity
+                  : (effectivePrice(o['price'], o['bonus_price']) ?? double.infinity);
+            }
+            final List sorted = [
+              for (final e in (List.of(list).asMap().entries.toList()
+                ..sort((a, b) {
+                  final c = priceAt(a.value).compareTo(priceAt(b.value));
+                  return c != 0 ? c : a.key - b.key;
+                })))
+                e.value
+            ];
+            final int? cheapestShopId =
+                sorted.length > 1 && priceAt(sorted.first).isFinite
+                    ? int.tryParse('${sorted.first["id"]}')
+                    : null;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -455,7 +677,7 @@ class _ProductScreenState extends State<ProductScreen> {
                       SizedBox(width: 10.w),
                       Expanded(
                         child: Text(
-                          "Tovar mavjud do'konlar",
+                          'shops_with_product'.tr(),
                           style: TextStyle(
                             color: context.tText,
                             fontSize: 15.sp,
@@ -484,7 +706,8 @@ class _ProductScreenState extends State<ProductScreen> {
                   ),
                 ),
                 SizedBox(height: 14.h),
-                ShopByProductScreenBody(list, offers),
+                ShopByProductScreenBody(sorted, offers,
+                    fromPrice: selVar == null, cheapestShopId: cheapestShopId),
               ],
             );
           } else if (state is ShopByProductWaitingState) {
@@ -524,8 +747,10 @@ class _ProductScreenState extends State<ProductScreen> {
     );
   }
 
-  /// [offers]: shop id -> the chosen variant's stock row there (empty = none chosen).
-  Widget ShopByProductScreenBody(List data, Map<int, Map> offers) {
+  /// [offers]: shop id -> that shop's row for the chosen variant, or its
+  /// cheapest row over all variants when [fromPrice] (shown as "... dan").
+  Widget ShopByProductScreenBody(List data, Map<int, Map> offers,
+      {bool fromPrice = false, int? cheapestShopId}) {
     return SizedBox(
       width: 1.sw,
       height: 200.h,
@@ -555,7 +780,8 @@ class _ProductScreenState extends State<ProductScreen> {
                 "shop_id": data[index]["id"],
                 "image": product?["image"],
                 "desc": product?["desc"],
-                if (offer != null) "shop_product_id": offer["id"],
+                // Preselect the variant in that shop only when one is chosen
+                if (offer != null && !fromPrice) "shop_product_id": offer["id"],
               });
             },
             child: Container(
@@ -585,17 +811,44 @@ class _ProductScreenState extends State<ProductScreen> {
                           topLeft: Radius.circular(10.r),
                           topRight: Radius.circular(10.r),
                         ),
-                        child: CachedNetworkImage(
-                          fit: BoxFit.cover,
-                          memCacheWidth: 600,
-                          imageUrl: Endpoints.img('shops', data[index]["image"]),
-                          placeholder: (ctx, url) => Shimmer.fromColors(
-                            baseColor: ctx.tInput,
-                            highlightColor: ctx.tDivider,
-                            child: Container(color: ctx.tInput),
-                          ),
-                          errorWidget: (context, url, error) =>
-                              const AppImagePlaceholder(),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            CachedNetworkImage(
+                              fit: BoxFit.cover,
+                              memCacheWidth: 600,
+                              imageUrl:
+                                  Endpoints.img('shops', data[index]["image"]),
+                              placeholder: (ctx, url) => Shimmer.fromColors(
+                                baseColor: ctx.tInput,
+                                highlightColor: ctx.tDivider,
+                                child: Container(color: ctx.tInput),
+                              ),
+                              errorWidget: (context, url, error) =>
+                                  const AppImagePlaceholder(),
+                            ),
+                            if (cheapestShopId != null &&
+                                '${data[index]["id"]}' == '$cheapestShopId')
+                              Positioned(
+                                top: 6.h,
+                                left: 6.w,
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 7.w, vertical: 3.h),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF059669),
+                                    borderRadius: BorderRadius.circular(8.r),
+                                  ),
+                                  child: Text(
+                                    'cheapest'.tr(),
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ),
@@ -633,7 +886,9 @@ class _ProductScreenState extends State<ProductScreen> {
                             ),
                             if (offerPrice != null)
                               Text(
-                                '${offerPrice.toString().toMoney()} so\'m',
+                                fromPrice
+                                    ? 'price_from'.tr(args: [offerPrice.toString().toMoney()])
+                                    : '${offerPrice.toString().toMoney()} ${context.locale.languageCode == 'ru' ? 'сум' : "so'm"}',
                                 maxLines: 1,
                                 style: TextStyle(
                                   color: AppConstant.primaryColor,

@@ -174,5 +174,18 @@
   "variants_title": "Turlari",
   "variant_all": "Hammasi",
   "variant_count": "{} turi",
-  "variant_no_shops_sub": "Bu tur hozircha hech bir do'konda yo'q. Boshqa turini tanlab ko'ring."
+  "variant_no_shops_sub": "Bu tur hozircha hech bir do'konda yo'q. Boshqa turini tanlab ko'ring.",
+  "price_from": "{} so'm dan",
+  "in_n_shops": "{} ta do'konda bor",
+  "characteristics": "Xususiyatlari",
+  "spec_color": "Rang",
+  "spec_size": "O'lchami",
+  "spec_amount": "Miqdori",
+  "spec_unit": "O'lchov birligi",
+  "spec_section": "Bo'lim",
+  "description_title": "Tavsif",
+  "read_more": "Ko'proq o'qish",
+  "read_less": "Yig'ish",
+  "cheapest": "Eng arzon",
+  "shops_with_product": "Tovar mavjud do'konlar"
 }

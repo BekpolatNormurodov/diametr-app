@@ -175,5 +175,18 @@
   "variants_title": "Виды",
   "variant_all": "Все",
   "variant_count": "Видов: {}",
-  "variant_no_shops_sub": "Этого вида пока нет ни в одном магазине. Выберите другой вид."
+  "variant_no_shops_sub": "Этого вида пока нет ни в одном магазине. Выберите другой вид.",
+  "price_from": "от {} сум",
+  "in_n_shops": "Есть в магазинах: {}",
+  "characteristics": "Характеристики",
+  "spec_color": "Цвет",
+  "spec_size": "Размер",
+  "spec_amount": "Количество",
+  "spec_unit": "Единица",
+  "spec_section": "Раздел",
+  "description_title": "Описание",
+  "read_more": "Читать полностью",
+  "read_less": "Свернуть",
+  "cheapest": "Дешевле всего",
+  "shops_with_product": "Магазины с товаром"
 }

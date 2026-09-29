@@ -856,8 +856,8 @@ export default function CategoryPage() {
           </div>
         )}
 
-        {/* Description (hidden only when it merely repeats the name) */}
-        {desc && searchKey(desc) !== searchKey(title) && renderDescription(desc)}
+        {/* Description: always shown when the admin wrote one */}
+        {desc && renderDescription(desc)}
 
         <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">
           {lang === 'uz' ? "Do'konlardagi narxlar" : 'Цены в магазинах'}
