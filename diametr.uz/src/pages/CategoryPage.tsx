@@ -118,7 +118,10 @@ export default function CategoryPage() {
   const [focusItemIds, setFocusItemIds] = useState<number[]>([])
   // Variant opened on its own inside the modal (photo, full name, description, its shops)
   const [detailItemId, setDetailItemId] = useState<number | null>(null)
-  useEffect(() => { modalRef.current?.scrollTo({ top: 0 }) }, [detailItemId])
+  // Long descriptions start collapsed; a tapped photo opens full-screen
+  const [descOpen, setDescOpen] = useState(false)
+  const [zoomSrc, setZoomSrc] = useState<string | null>(null)
+  useEffect(() => { modalRef.current?.scrollTo({ top: 0 }); setDescOpen(false); setZoomSrc(null) }, [detailItemId, selected])
   // Shop page hand-off: open this product with its variant selected
   const navHandoffRef = useRef(location.state as { openProductId?: number; itemIds?: number[] } | null)
   const [minPrice, setMinPrice] = useState('')
@@ -521,7 +524,7 @@ export default function CategoryPage() {
   type ShopRow = NonNullable<ProductItem['shop_products']>[number]
 
   // One shop's offer for a variant: shop, price/stock, map and add-to-cart
-  const renderShopRow = (sp: ShopRow, item: ProductItem) => (
+  const renderShopRow = (sp: ShopRow, item: ProductItem, cheapest = false) => (
     <div key={sp.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-primary/10 dark:border-slate-600 hover:border-primary/30 transition-colors">
       <div className="flex items-center gap-3 min-w-0">
         {sp.shop?.image ? (
@@ -543,6 +546,11 @@ export default function CategoryPage() {
           </div>
         )}
         <div className="min-w-0">
+          {cheapest && (
+            <span className="inline-block mb-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded-md">
+              {lang === 'uz' ? 'Eng arzon' : 'Дешевле всего'}
+            </span>
+          )}
           <p className="font-semibold text-slate-700 dark:text-slate-200 text-sm break-words sm:truncate">
             {sp.shop?.name || (lang === 'uz' ? "Do'kon" : 'Магазин')}
           </p>
@@ -645,53 +653,115 @@ export default function CategoryPage() {
   )
 
   const variantTitle = (item: ProductItem) => getName(item) || variantLabelOf(item) || (lang === 'uz' ? 'Turi' : 'Вид')
+  const money = (n: number) => `${n.toLocaleString()} ${lang === 'uz' ? "so'm" : 'сум'}`
+  const fromPrice = (n: number) => (lang === 'uz' ? `${n.toLocaleString()} so'm dan` : `от ${n.toLocaleString()} сум`)
+  const effPrice = (sp: ShopRow) =>
+    sp.price != null && sp.bonus_price != null && sp.bonus_price > 0 && sp.bonus_price < sp.price ? sp.bonus_price : sp.price
+  const isHexColor = (c: unknown) => /^#[0-9a-f]{3,8}$/i.test(String(c ?? '').trim())
+  // Offers a customer can act on, cheapest first (in stock before sold out)
+  const offersOf = (item: ProductItem) =>
+    (item.shop_products ?? [])
+      .filter(sp => !!sp.shop?.id)
+      .map((sp, i) => [sp.count != null && sp.count <= 0 ? 1 : 0, effPrice(sp) ?? Infinity, i, sp] as const)
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
+      .map(r => r[3])
 
-  // Variant row in the modal list: thumbnail + name; opens the variant view
-  const renderVariantHeader = (item: ProductItem) => {
+  // Paragraphs of a description; long text starts collapsed
+  const renderDescription = (text: string) => {
+    const long = text.length > 320 || text.split(/\n/).length > 6
+    const paras = text.split(/\n\s*\n|\r?\n/).map(t => t.trim()).filter(Boolean)
+    return (
+      <div className="rounded-2xl border border-slate-100 dark:border-slate-700 p-4">
+        <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide mb-2">
+          {lang === 'uz' ? 'Tavsif' : 'Описание'}
+        </h4>
+        <div className={`space-y-2 text-slate-600 dark:text-slate-300 text-sm leading-relaxed break-words ${long && !descOpen ? 'line-clamp-5' : ''}`}>
+          {paras.map((t, i) => <p key={i}>{t}</p>)}
+        </div>
+        {long && (
+          <button
+            type="button"
+            onClick={() => setDescOpen(o => !o)}
+            className="mt-2 text-sm font-semibold text-primary hover:underline"
+          >
+            {descOpen ? (lang === 'uz' ? 'Yig‘ish ↑' : 'Свернуть ↑') : (lang === 'uz' ? "Ko'proq o'qish ↓" : 'Читать полностью ↓')}
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  // One variant in the product's list: photo, name, from-price, shop count
+  const renderVariantCard = (item: ProductItem, focused: boolean) => {
     const vImg = variantImageUrl(item)
+    const offers = offersOf(item).filter(sp => sp.count == null || sp.count > 0)
+    const minP = offers.length ? Math.min(...offers.map(sp => effPrice(sp) ?? Infinity)) : Infinity
+    const shopCount = new Set(offers.map(sp => sp.shop!.id)).size
     return (
       <button
+        key={item.id}
         type="button"
         onClick={() => setDetailItemId(item.id)}
-        className="w-full flex items-center gap-3 text-left group/v"
+        className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all hover:shadow-md hover:border-primary/40 group/v ${
+          focused
+            ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/20'
+            : 'border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40'
+        }`}
       >
-        <span className="relative w-10 h-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 flex-shrink-0">
+        <span className="relative w-14 h-14 rounded-xl overflow-hidden bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 flex-shrink-0 flex items-center justify-center">
+          <svg className="w-6 h-6 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v13.5a1.5 1.5 0 0 0 1.5 1.5Z" />
+          </svg>
           {vImg && (
             <img
               src={vImg}
               alt=""
-              width={40}
-              height={40}
+              width={56}
+              height={56}
               loading="lazy"
               decoding="async"
-              className="w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover"
               onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
             />
           )}
         </span>
-        <span className="flex-1 min-w-0 text-sm font-semibold text-slate-700 dark:text-slate-200 leading-snug line-clamp-2 group-hover/v:text-primary transition-colors">
-          {/^#[0-9a-f]{3,8}$/i.test(String(item.color ?? '').trim()) && (
-            <span className="inline-block w-3 h-3 mr-1.5 rounded-full ring-1 ring-black/10 dark:ring-white/20 align-[-1px]" style={{ background: String(item.color).trim() }} />
-          )}
-          {variantTitle(item)}
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200 leading-snug line-clamp-2 group-hover/v:text-primary transition-colors">
+            {isHexColor(item.color) && (
+              <span className="inline-block w-3 h-3 mr-1.5 rounded-full ring-1 ring-black/10 dark:ring-white/20 align-[-1px]" style={{ background: String(item.color).trim() }} />
+            )}
+            {variantTitle(item)}
+          </span>
+          <span className="block mt-1 text-xs">
+            {minP !== Infinity ? (
+              <>
+                <span className="font-bold text-primary whitespace-nowrap">{fromPrice(minP)}</span>
+                <span className="block text-slate-400">{lang === 'uz' ? `${shopCount} ta do'konda bor` : `Есть в ${shopCount} магазин${shopCount === 1 ? 'е' : 'ах'}`}</span>
+              </>
+            ) : (
+              <span className="text-slate-400">{lang === 'uz' ? "Hozircha do'konlarda yo'q" : 'Пока нет в магазинах'}</span>
+            )}
+          </span>
         </span>
-        <span className="text-xs font-semibold text-primary whitespace-nowrap">
-          {lang === 'uz' ? 'Batafsil →' : 'Подробнее →'}
-        </span>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-slate-400 group-hover/v:text-primary flex-shrink-0">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+        </svg>
       </button>
     )
   }
 
-  // A variant on its own: big photo, full name, specs, description, its shops
+  // A variant on its own: photo, name, price summary, characteristics,
+  // description, and its shops cheapest first
   const renderVariantDetail = (item: ProductItem, canGoBack: boolean) => {
     const title = variantTitle(item)
     const desc = getDesc(item)
     const img = variantImageUrl(item) || (selected ? productImageUrl(selected) : null)
-    const shopRows = (item.shop_products ?? []).filter(sp => !!sp.shop?.id)
-    // Characteristics. The dashboard's colour picker stores hex ("#F97316"),
-    // so a colour is shown as a swatch, never dropped.
+    const offers = offersOf(item)
+    const inStock = offers.filter(sp => sp.count == null || sp.count > 0)
+    const minP = inStock.length ? Math.min(...inStock.map(sp => effPrice(sp) ?? Infinity)) : Infinity
+    const shopCount = new Set(inStock.map(sp => sp.shop!.id)).size
+    // The dashboard's colour picker stores hex ("#F97316"): show a swatch.
     const color = item.color ? String(item.color).trim() : ''
-    const isHex = /^#[0-9a-f]{3,8}$/i.test(color)
     const unitName = decodeEntities(
       (lang === 'ru' ? item.unit_type?.name_ru || item.unit_type?.name_uz : item.unit_type?.name_uz || item.unit_type?.name_ru)
       || item.unit_type?.name || item.unit_type?.symbol || '')
@@ -699,8 +769,8 @@ export default function CategoryPage() {
     if (color) {
       specs.push([lang === 'uz' ? 'Rang' : 'Цвет', (
         <span className="inline-flex items-center gap-2">
-          {isHex && <span className="w-5 h-5 rounded-full ring-1 ring-black/10 dark:ring-white/20" style={{ background: color }} />}
-          {!isHex && color}
+          {isHexColor(color) && <span className="w-5 h-5 rounded-full ring-1 ring-black/10 dark:ring-white/20" style={{ background: color }} />}
+          {!isHexColor(color) && color}
         </span>
       )])
     }
@@ -710,6 +780,7 @@ export default function CategoryPage() {
     } else if (unitName) {
       specs.push([lang === 'uz' ? "O'lchov birligi" : 'Единица', unitName])
     }
+    if (selected?.category) specs.push([lang === 'uz' ? "Bo'lim" : 'Раздел', getName(selected.category)])
     const n = selected?.items?.length ?? 0
     return (
       <>
@@ -725,62 +796,76 @@ export default function CategoryPage() {
             {lang === 'uz' ? `Barcha turlari (${n})` : `Все виды (${n})`}
           </button>
         )}
-        <div className="flex flex-col sm:flex-row gap-5">
-          <div className="relative w-full sm:w-52 h-60 sm:h-52 rounded-2xl overflow-hidden bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 flex-shrink-0">
-            <div className="absolute inset-0 flex items-center justify-center">
+        <div className={`flex gap-5 ${img ? 'flex-col sm:flex-row' : 'flex-row items-start'}`}>
+          <button
+            type="button"
+            onClick={() => img && setZoomSrc(img)}
+            className={`relative rounded-2xl overflow-hidden bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 flex-shrink-0 ${
+              img ? 'w-full sm:w-56 h-64 sm:h-56 cursor-zoom-in' : 'w-24 h-24 cursor-default'
+            }`}
+          >
+            <span className="absolute inset-0 flex items-center justify-center">
               <svg className="w-12 h-12 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v13.5a1.5 1.5 0 0 0 1.5 1.5Z" />
               </svg>
-            </div>
+            </span>
             {img && (
               <img
                 src={img}
                 alt={title}
                 decoding="async"
-                className="relative w-full h-full object-contain bg-white"
+                className="relative w-full h-full object-contain bg-white p-2"
                 onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
               />
             )}
-          </div>
+          </button>
           <div className="flex-1 min-w-0">
             {selected && (
               <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-1">{getName(selected)}</p>
             )}
             <h3 className="font-bold text-slate-800 dark:text-white text-lg leading-snug break-words">{title}</h3>
-            {selected?.category && (
-              <span className="inline-block mt-2 bg-primary/10 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">{getName(selected.category)}</span>
-            )}
-            {specs.length > 0 && (
-              <div className="mt-4">
-                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-1.5">
-                  {lang === 'uz' ? 'Xususiyatlari' : 'Характеристики'}
+            <div className="mt-3">
+              {minP !== Infinity ? (
+                <p className="text-xl sm:text-2xl font-extrabold text-primary leading-none whitespace-nowrap">
+                  {lang === 'uz' ? money(minP) : `от ${money(minP)}`}
+                  {lang === 'uz' && <span className="text-sm font-semibold text-slate-400"> dan</span>}
                 </p>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-                  {specs.map(([k, v]) => (
-                    <React.Fragment key={k}>
-                      <dt className="text-slate-400 dark:text-slate-500">{k}</dt>
-                      <dd className="font-semibold text-slate-700 dark:text-slate-200">{v}</dd>
-                    </React.Fragment>
-                  ))}
-                </dl>
-              </div>
-            )}
+              ) : null}
+              <p className="mt-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+                {shopCount > 0
+                  ? (lang === 'uz' ? `${shopCount} ta do'konda bor` : `Есть в ${shopCount} магазин${shopCount === 1 ? 'е' : 'ах'}`)
+                  : (lang === 'uz' ? "Hozircha do'konlarda yo'q" : 'Пока нет в магазинах')}
+              </p>
+            </div>
           </div>
         </div>
-        {/* Description (hidden only when it merely repeats the name) */}
-        {desc && searchKey(desc) !== searchKey(title) && (
-          <div>
-            <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide mb-2">
-              {lang === 'uz' ? 'Tavsif' : 'Описание'}
-            </h4>
-            <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-line break-words">{desc}</p>
+
+        {specs.length > 0 && (
+          <div className="rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+            <p className="px-4 py-2.5 bg-slate-50 dark:bg-slate-700/50 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+              {lang === 'uz' ? 'Xususiyatlari' : 'Характеристики'}
+            </p>
+            <dl className="divide-y divide-slate-100 dark:divide-slate-700">
+              {specs.map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm">
+                  <dt className="text-slate-500 dark:text-slate-400">{k}</dt>
+                  <dd className="font-semibold text-slate-700 dark:text-slate-200 text-right">{v}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
         )}
+
+        {/* Description (hidden only when it merely repeats the name) */}
+        {desc && searchKey(desc) !== searchKey(title) && renderDescription(desc)}
+
         <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">
           {lang === 'uz' ? "Do'konlardagi narxlar" : 'Цены в магазинах'}
         </h4>
-        {shopRows.length > 0 ? (
-          <div className="space-y-2">{shopRows.map(sp => renderShopRow(sp, item))}</div>
+        {offers.length > 0 ? (
+          <div className="space-y-2">
+            {offers.map((sp, i) => renderShopRow(sp, item, i === 0 && inStock.length > 1 && (sp.count == null || sp.count > 0)))}
+          </div>
         ) : (
           <div className="text-center py-6 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
             <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
@@ -1184,59 +1269,27 @@ export default function CategoryPage() {
                               {getName(selected.category)}
                             </span>
                           )}
-                          {productDesc && (
-                            <p className="text-slate-500 dark:text-slate-400 text-sm mt-2 leading-relaxed whitespace-pre-line">{productDesc}</p>
-                          )}
                         </div>
                       </div>
+                      {productDesc && renderDescription(productDesc)}
 
-                      {/* Every variant; tap one to open it on its own */}
-                      {items.length > 0 && items.some(hasShop) ? (
-                        <div className="space-y-4">
+                      {/* Every variant as a compact card; a tap opens it on its own */}
+                      {items.length > 0 ? (
+                        <div className="space-y-3">
                           <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">
-                            {lang === 'uz' ? "Do'konlardagi narxlar" : 'Цены в магазинах'}
+                            {lang === 'uz' ? `Turlari (${items.length})` : `Виды (${items.length})`}
                           </h4>
-                          {(() => {
-                            // Searched-for variants first, then variants a shop stocks, then the rest.
-                            const rank = (it: ProductItem) => focusItemIds.includes(it.id) ? 0 : hasShop(it) ? 1 : 2
-                            return items.map((it, i) => [rank(it), i, it] as const)
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {items
+                              .map((it, i) => [focusItemIds.includes(it.id) ? 0 : hasShop(it) ? 1 : 2, i, it] as const)
                               .sort((a, b) => a[0] - b[0] || a[1] - b[1])
-                              .map(r => r[2])
-                          })().map((item, idx, arr) => {
-                            // Stock rows without a real shop can't be ordered — never list them
-                            const shopRows = (item.shop_products ?? []).filter(sp => !!sp.shop?.id)
-                            const focused = focusItemIds.includes(item.id)
-                            return (
-                              <React.Fragment key={item.id}>
-                                {idx > 0 && !focused && focusItemIds.includes(arr[idx - 1].id) && (
-                                  <p className="pt-2 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide border-t border-slate-100 dark:border-slate-700">
-                                    {lang === 'uz' ? 'Boshqa turlari' : 'Другие виды'}
-                                  </p>
-                                )}
-                                <div className={`space-y-2 ${focused ? 'p-3 -mx-3 rounded-2xl bg-primary/5 ring-1 ring-primary/20' : ''}`}>
-                                  {renderVariantHeader(item)}
-                                  {shopRows.length === 0 ? (
-                                    <p className="pl-[52px] text-xs text-slate-400 dark:text-slate-500">
-                                      {lang === 'uz' ? "Hozircha do'konlarda yo'q" : 'Пока нет в магазинах'}
-                                    </p>
-                                  ) : shopRows.map(sp => renderShopRow(sp, item))}
-                                </div>
-                              </React.Fragment>
-                            )
-                          })}
-                        </div>
-                      ) : items.length > 0 ? (
-                        // Variants exist, but no shop stocks them yet — list them, then say so
-                        <div className="space-y-4">
-                          {items.map(item => <React.Fragment key={item.id}>{renderVariantHeader(item)}</React.Fragment>)}
-                          <div className="text-center py-6 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
-                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                              {lang === 'uz' ? "Hozircha do'konlarda mavjud emas" : 'Пока нет в магазинах'}
-                            </p>
-                            <p className="text-xs mt-1">
+                              .map(r => renderVariantCard(r[2], focusItemIds.includes(r[2].id)))}
+                          </div>
+                          {!items.some(hasShop) && (
+                            <p className="text-xs text-center text-slate-400 dark:text-slate-500">
                               {lang === 'uz' ? "Do'konlar bu mahsulotni qo'shgach, shu yerda narxlar ko'rinadi" : 'Когда магазины добавят этот товар, здесь появятся цены'}
                             </p>
-                          </div>
+                          )}
                         </div>
                       ) : (
                         <div className="text-center py-8 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
@@ -1255,6 +1308,25 @@ export default function CategoryPage() {
                   )
                 })()}
               </div>
+              {/* Full-screen photo; inside modalRef so a tap never closes the modal */}
+              {zoomSrc && (
+                <div
+                  className="fixed inset-0 z-[120] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+                  onClick={() => setZoomSrc(null)}
+                >
+                  <img src={zoomSrc} alt="" className="max-w-full max-h-full object-contain rounded-xl bg-white" />
+                  <button
+                    type="button"
+                    onClick={() => setZoomSrc(null)}
+                    className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center"
+                    aria-label={lang === 'uz' ? 'Yopish' : 'Закрыть'}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           ) : null}
         </div>
