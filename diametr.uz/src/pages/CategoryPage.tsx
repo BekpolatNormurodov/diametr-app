@@ -28,7 +28,7 @@ interface ProductItem {
   value?: number | string | null
   size?: string | null
   color?: string | null
-  unit_type?: { symbol?: string | null } | null
+  unit_type?: { symbol?: string | null; name?: string | null; name_uz?: string | null; name_ru?: string | null } | null
   // /product/all: how many WORKING stock rows the variant has
   _count?: { shop_products?: number }
   shop_products?: Array<{
@@ -670,6 +670,9 @@ export default function CategoryPage() {
           )}
         </span>
         <span className="flex-1 min-w-0 text-sm font-semibold text-slate-700 dark:text-slate-200 leading-snug line-clamp-2 group-hover/v:text-primary transition-colors">
+          {/^#[0-9a-f]{3,8}$/i.test(String(item.color ?? '').trim()) && (
+            <span className="inline-block w-3 h-3 mr-1.5 rounded-full ring-1 ring-black/10 dark:ring-white/20 align-[-1px]" style={{ background: String(item.color).trim() }} />
+          )}
           {variantTitle(item)}
         </span>
         <span className="text-xs font-semibold text-primary whitespace-nowrap">
@@ -685,11 +688,28 @@ export default function CategoryPage() {
     const desc = getDesc(item)
     const img = variantImageUrl(item) || (selected ? productImageUrl(selected) : null)
     const shopRows = (item.shop_products ?? []).filter(sp => !!sp.shop?.id)
-    const specs = [
-      item.value != null && String(item.value) !== '' ? `${item.value}${item.unit_type?.symbol ? ` ${item.unit_type.symbol}` : ''}` : null,
-      item.size || null,
-      item.color && !String(item.color).startsWith('#') ? item.color : null,
-    ].filter(Boolean) as string[]
+    // Characteristics. The dashboard's colour picker stores hex ("#F97316"),
+    // so a colour is shown as a swatch, never dropped.
+    const color = item.color ? String(item.color).trim() : ''
+    const isHex = /^#[0-9a-f]{3,8}$/i.test(color)
+    const unitName = decodeEntities(
+      (lang === 'ru' ? item.unit_type?.name_ru || item.unit_type?.name_uz : item.unit_type?.name_uz || item.unit_type?.name_ru)
+      || item.unit_type?.name || item.unit_type?.symbol || '')
+    const specs: Array<[string, React.ReactNode]> = []
+    if (color) {
+      specs.push([lang === 'uz' ? 'Rang' : 'Цвет', (
+        <span className="inline-flex items-center gap-2">
+          {isHex && <span className="w-5 h-5 rounded-full ring-1 ring-black/10 dark:ring-white/20" style={{ background: color }} />}
+          {!isHex && color}
+        </span>
+      )])
+    }
+    if (item.size) specs.push([lang === 'uz' ? "O'lchami" : 'Размер', item.size])
+    if (item.value != null && String(item.value) !== '') {
+      specs.push([lang === 'uz' ? 'Miqdori' : 'Количество', `${item.value}${item.unit_type?.symbol ? ` ${item.unit_type.symbol}` : ''}`])
+    } else if (unitName) {
+      specs.push([lang === 'uz' ? "O'lchov birligi" : 'Единица', unitName])
+    }
     const n = selected?.items?.length ?? 0
     return (
       <>
@@ -727,21 +747,35 @@ export default function CategoryPage() {
               <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-1">{getName(selected)}</p>
             )}
             <h3 className="font-bold text-slate-800 dark:text-white text-lg leading-snug break-words">{title}</h3>
-            {(specs.length > 0 || selected?.category) && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {selected?.category && (
-                  <span className="bg-primary/10 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">{getName(selected.category)}</span>
-                )}
-                {specs.map(sv => (
-                  <span key={sv} className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold px-2.5 py-1 rounded-full">{sv}</span>
-                ))}
-              </div>
+            {selected?.category && (
+              <span className="inline-block mt-2 bg-primary/10 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">{getName(selected.category)}</span>
             )}
-            {desc && searchKey(desc) !== searchKey(title) && (
-              <p className="text-slate-500 dark:text-slate-400 text-sm mt-3 leading-relaxed whitespace-pre-line break-words">{desc}</p>
+            {specs.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-1.5">
+                  {lang === 'uz' ? 'Xususiyatlari' : 'Характеристики'}
+                </p>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+                  {specs.map(([k, v]) => (
+                    <React.Fragment key={k}>
+                      <dt className="text-slate-400 dark:text-slate-500">{k}</dt>
+                      <dd className="font-semibold text-slate-700 dark:text-slate-200">{v}</dd>
+                    </React.Fragment>
+                  ))}
+                </dl>
+              </div>
             )}
           </div>
         </div>
+        {/* Description (hidden only when it merely repeats the name) */}
+        {desc && searchKey(desc) !== searchKey(title) && (
+          <div>
+            <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide mb-2">
+              {lang === 'uz' ? 'Tavsif' : 'Описание'}
+            </h4>
+            <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-line break-words">{desc}</p>
+          </div>
+        )}
         <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm uppercase tracking-wide">
           {lang === 'uz' ? "Do'konlardagi narxlar" : 'Цены в магазинах'}
         </h4>
