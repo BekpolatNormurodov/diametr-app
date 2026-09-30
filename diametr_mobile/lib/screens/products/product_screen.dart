@@ -157,7 +157,14 @@ class _ProductScreenState extends State<ProductScreen> {
             text,
             maxLines: clipped ? 5 : null,
             overflow: clipped ? TextOverflow.ellipsis : null,
-            style: TextStyle(color: context.tSub, fontSize: 13.sp, height: 1.45),
+            // Body text a shade darker than subtitles so it reads crisply
+            style: TextStyle(
+              color: context.isDark
+                  ? Colors.white.withValues(alpha: 0.85)
+                  : const Color(0xFF374151),
+              fontSize: 14.sp,
+              height: 1.5,
+            ),
           ),
           if (long)
             GestureDetector(
@@ -210,7 +217,11 @@ class _ProductScreenState extends State<ProductScreen> {
               child: Row(
                 children: [
                   Text(rows[i].key,
-                      style: TextStyle(color: context.tSub, fontSize: 13.sp)),
+                      style: TextStyle(
+                          color: context.isDark
+                              ? Colors.white60
+                              : const Color(0xFF6B7280),
+                          fontSize: 13.sp)),
                   SizedBox(width: 12.w),
                   Expanded(
                     child: Align(
