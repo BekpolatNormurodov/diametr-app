@@ -225,27 +225,142 @@ class _ProductScreenState extends State<ProductScreen> {
     );
   }
 
-  Widget _variantChip(String label,
-      {required bool selected, bool dimmed = false, required VoidCallback onTap}) {
+  /// One type of the product, like the website's variant card: photo,
+  /// colour dot, name, "... dan" price and how many shops have it.
+  Widget _variantTile(Map it, String lang,
+      {required bool selected, required VoidCallback onTap}) {
+    final Map<int, Map> offers = variantShopOffers(it);
+    final num? minP = _minPrice(offers);
+    final Object? rawImg = it['image'];
+    final String? img = (rawImg == null || '$rawImg'.isEmpty || '$rawImg' == 'null')
+        ? null
+        : Endpoints.img('product-items', rawImg);
+    // Colour dot: the picked colour, else one its name/description names
+    Color? dot = _hexColor(it['color']);
+    if (dot == null) {
+      final named = colorsInText(
+          [it['name_uz'], it['name_ru'], it['name'], it['desc'], it['desc_ru']]);
+      if (named.isNotEmpty) dot = Color(named.first.argb);
+    }
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 7.h),
+        margin: EdgeInsets.only(bottom: 8.h),
+        padding: EdgeInsets.all(10.w),
         decoration: BoxDecoration(
-          color: selected ? AppConstant.primaryColor : context.tInput,
-          borderRadius: BorderRadius.circular(20.r),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
+          color: selected
+              ? AppConstant.primaryColor.withValues(alpha: 0.07)
+              : context.tCard,
+          borderRadius: BorderRadius.circular(14.r),
+          border: Border.all(
             color: selected
-                ? Colors.white
-                : dimmed
-                    ? context.tSub.withValues(alpha: 0.55)
-                    : context.tText,
-            fontSize: 12.sp,
-            fontWeight: FontWeight.w600,
-            decoration: dimmed && !selected ? TextDecoration.lineThrough : null,
+                ? AppConstant.primaryColor
+                : context.tDivider.withValues(alpha: 0.7),
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10.r),
+              child: Container(
+                width: 52.w,
+                height: 52.w,
+                color: Colors.white,
+                child: img != null
+                    ? CachedNetworkImage(
+                        imageUrl: img,
+                        fit: BoxFit.contain,
+                        memCacheWidth: 200,
+                        errorWidget: (_, __, ___) => const AppImagePlaceholder(),
+                      )
+                    : const AppImagePlaceholder(),
+              ),
+            ),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (dot != null)
+                        Padding(
+                          padding: EdgeInsets.only(top: 3.h, right: 6.w),
+                          child: Container(
+                            width: 11.w,
+                            height: 11.w,
+                            decoration: BoxDecoration(
+                              color: dot,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: Colors.black.withValues(alpha: 0.15)),
+                            ),
+                          ),
+                        ),
+                      Expanded(
+                        child: Text(
+                          variantLabel(it, lang) ?? '—',
+                          maxLines: selected ? null : 2,
+                          overflow: selected ? null : TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: selected
+                                ? AppConstant.primaryColor
+                                : context.tText,
+                            fontSize: 13.sp,
+                            fontWeight: FontWeight.w600,
+                            height: 1.25,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4.h),
+                  Text(
+                    minP != null
+                        ? 'price_from'.tr(args: [minP.toString().toMoney()])
+                        : 'no_shops'.tr(),
+                    style: TextStyle(
+                      color: minP != null
+                          ? AppConstant.primaryColor
+                          : context.tSub,
+                      fontSize: 12.sp,
+                      fontWeight:
+                          minP != null ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                  if (offers.isNotEmpty)
+                    Text(
+                      'in_n_shops'.tr(args: ['${offers.length}']),
+                      style: TextStyle(color: context.tSub, fontSize: 11.sp),
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(width: 6.w),
+            Icon(
+              selected ? Icons.check_circle : Icons.chevron_right,
+              size: 20.sp,
+              color: selected ? AppConstant.primaryColor : context.tSub,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Full-screen photo with pinch-zoom; a tap closes it.
+  void _zoom(String url) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.9),
+      builder: (ctx) => GestureDetector(
+        onTap: () => Navigator.of(ctx).pop(),
+        child: InteractiveViewer(
+          maxScale: 4,
+          child: Center(
+            child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
           ),
         ),
       ),
@@ -336,7 +451,6 @@ class _ProductScreenState extends State<ProductScreen> {
                 .trim();
             final String desc = textIn(state.data as Map, 'desc');
             final bool hasDesc = desc.isNotEmpty && desc != 'null';
-            final String? selTitle = selVar != null ? variantLabel(selVar, lang) : null;
             final String selDesc = selVar != null ? textIn(selVar, 'desc') : '';
             final Map? cat = state.data["category"] is Map
                 ? state.data["category"] as Map
@@ -433,16 +547,20 @@ class _ProductScreenState extends State<ProductScreen> {
                 specRows.add(MapEntry('spec_section'.tr(), val(catName)));
               }
             }
+            final String? heroUrl = resolvedImageUrl;
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  height: 220.h,
+                GestureDetector(
+                  onTap: heroUrl != null ? () => _zoom(heroUrl) : null,
+                  child: Container(
+                  height: 250.h,
                   width: 1.sw,
-                  child: resolvedImageUrl != null
+                  color: Colors.white,
+                  child: heroUrl != null
                       ? CachedNetworkImage(
-                          fit: BoxFit.cover,
-                          imageUrl: resolvedImageUrl,
+                          fit: BoxFit.contain,
+                          imageUrl: heroUrl,
                           placeholder: (ctx, url) => Shimmer.fromColors(
                             baseColor: ctx.tInput,
                             highlightColor: ctx.tDivider,
@@ -452,6 +570,7 @@ class _ProductScreenState extends State<ProductScreen> {
                               const AppImagePlaceholder(),
                         )
                       : const AppImagePlaceholder(),
+                  ),
                 ),
                 Padding(
                   padding: EdgeInsets.all(16.w),
@@ -501,66 +620,70 @@ class _ProductScreenState extends State<ProductScreen> {
                       // Every size/type of the product; picking one narrows
                       // the shops below to those that stock it.
                       if (itemsList.isNotEmpty) ...[
-                        SizedBox(height: 16.h),
-                        Text(
-                          'variants_title'.tr(),
-                          style: TextStyle(
-                            color: context.tText,
-                            fontSize: 14.sp,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        SizedBox(height: 8.h),
-                        Wrap(
-                          spacing: 8.w,
-                          runSpacing: 8.h,
+                        SizedBox(height: 18.h),
+                        Row(
                           children: [
-                            if (itemsList.length > 1)
-                              _variantChip('variant_all'.tr(),
-                                  selected: selVar == null,
-                                  onTap: () => setState(() {
-                                        _variantId = null;
-                                        _descOpen = false;
-                                      })),
-                            for (final it in itemsList)
-                              if (it is Map)
-                                _variantChip(
-                                  variantLabel(it, lang) ?? '—',
-                                  selected: selVar != null &&
-                                      '${selVar["id"]}' == '${it["id"]}',
-                                  dimmed: variantShopOffers(it).isEmpty,
-                                  onTap: () => setState(() {
-                                    final int? id =
-                                        int.tryParse('${it["id"]}');
-                                    // Tapping the chosen one again = all
-                                    _variantId = (_variantId == id &&
-                                            itemsList.length > 1)
-                                        ? null
-                                        : id;
-                                    _descOpen = false;
-                                  }),
+                            Expanded(
+                              child: Text(
+                                '${'variants_title'.tr()} (${itemsList.length})',
+                                style: TextStyle(
+                                  color: context.tText,
+                                  fontSize: 15.sp,
+                                  fontWeight: FontWeight.w700,
                                 ),
+                              ),
+                            ),
+                            if (selVar != null && itemsList.length > 1)
+                              GestureDetector(
+                                onTap: () => setState(() {
+                                  _variantId = null;
+                                  _descOpen = false;
+                                }),
+                                child: Text(
+                                  'variant_all'.tr(),
+                                  style: TextStyle(
+                                    color: AppConstant.primaryColor,
+                                    fontSize: 13.sp,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
-                        // The chosen type on its own: name, characteristics,
-                        // description
-                        if (selTitle != null) ...[
-                          SizedBox(height: 14.h),
-                          Text(
-                            selTitle,
-                            style: TextStyle(
-                              color: context.tText,
-                              fontSize: 16.sp,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        SizedBox(height: 10.h),
+                        for (final it in [
+                          ...itemsList.where((e) =>
+                              e is Map && variantShopOffers(e).isNotEmpty),
+                          ...itemsList.where((e) =>
+                              e is Map && variantShopOffers(e).isEmpty),
+                        ]) ...[
+                          _variantTile(
+                            it as Map,
+                            lang,
+                            selected: selVar != null &&
+                                '${selVar["id"]}' == '${it["id"]}',
+                            onTap: () => setState(() {
+                              final int? id = int.tryParse('${it["id"]}');
+                              // Tapping the chosen one again = all
+                              _variantId =
+                                  (_variantId == id && itemsList.length > 1)
+                                      ? null
+                                      : id;
+                              _descOpen = false;
+                            }),
                           ),
-                          if (specRows.isNotEmpty) ...[
-                            SizedBox(height: 10.h),
-                            _specsTable(specRows),
-                          ],
-                          if (selDesc.isNotEmpty) ...[
-                            SizedBox(height: 10.h),
-                            _descriptionCard(selDesc),
+                          // The chosen type opens right under its tile:
+                          // characteristics, then description
+                          if (selVar != null &&
+                              '${selVar["id"]}' == '${it["id"]}') ...[
+                            if (specRows.isNotEmpty) ...[
+                              _specsTable(specRows),
+                              SizedBox(height: 8.h),
+                            ],
+                            if (selDesc.isNotEmpty) ...[
+                              _descriptionCard(selDesc),
+                              SizedBox(height: 8.h),
+                            ],
                           ],
                         ],
                       ],
