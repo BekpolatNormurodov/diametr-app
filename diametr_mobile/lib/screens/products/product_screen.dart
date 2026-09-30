@@ -357,23 +357,58 @@ class _ProductScreenState extends State<ProductScreen> {
                       color: context.tText,
                       fontSize: 13.sp,
                       fontWeight: FontWeight.w600));
+              // Colour: the one picked in the dashboard (hex, named by the
+              // closest palette colour), else the ones its name/description
+              // mention ("oq", "белая") — most variants only say it in text.
               final String color = '${selVar['color'] ?? ''}'.trim();
-              final Color? swatch = _hexColor(color);
-              if (color.isNotEmpty && color != 'null') {
+              final Color? picked = _hexColor(color);
+              String nameOf(NamedColor? c) =>
+                  c == null ? '' : (lang == 'ru' ? c.ru : c.uz);
+              final List<(Color?, String)> colors = picked != null
+                  ? [(picked, nameOf(nearestNamedColor(picked.toARGB32())))]
+                  : (color.isNotEmpty && color != 'null')
+                      ? [(null, color)]
+                      : [
+                          for (final c in colorsInText([
+                            selVar['name_uz'],
+                            selVar['name_ru'],
+                            selVar['name'],
+                            selVar['desc'],
+                            selVar['desc_ru'],
+                          ]))
+                            (Color(c.argb), nameOf(c))
+                        ];
+              if (colors.isNotEmpty) {
                 specRows.add(MapEntry(
                     'spec_color'.tr(),
-                    swatch != null
-                        ? Container(
-                            width: 20.w,
-                            height: 20.w,
-                            decoration: BoxDecoration(
-                              color: swatch,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                  color: Colors.black.withValues(alpha: 0.12)),
-                            ),
-                          )
-                        : val(color)));
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 10.w,
+                      runSpacing: 4.h,
+                      children: [
+                        for (final c in colors)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (c.$1 != null) ...[
+                                Container(
+                                  width: 18.w,
+                                  height: 18.w,
+                                  decoration: BoxDecoration(
+                                    color: c.$1,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.15)),
+                                  ),
+                                ),
+                                SizedBox(width: 6.w),
+                              ],
+                              if (c.$2.isNotEmpty) val(c.$2),
+                            ],
+                          ),
+                      ],
+                    )));
               }
               final String size = '${selVar['size'] ?? ''}'.trim();
               if (size.isNotEmpty && size != 'null') {

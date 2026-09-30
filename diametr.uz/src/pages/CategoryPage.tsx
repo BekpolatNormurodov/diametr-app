@@ -13,6 +13,7 @@ import { useAuthUser } from '../hooks/useAuthUser'
 import { searchKey, buildSearchKeys, searchKeyOfFields, scoreSearch } from '../utils/searchKey'
 import { productImageUrl, heroImageUrl, variantImageUrl } from '../utils/productImage'
 import { decodeEntities } from '../utils/text'
+import { colorsInText, nearestNamedColor, NamedColor } from '../utils/colors'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
@@ -658,6 +659,18 @@ export default function CategoryPage() {
   const effPrice = (sp: ShopRow) =>
     sp.price != null && sp.bonus_price != null && sp.bonus_price > 0 && sp.bonus_price < sp.price ? sp.bonus_price : sp.price
   const isHexColor = (c: unknown) => /^#[0-9a-f]{3,8}$/i.test(String(c ?? '').trim())
+  // A variant's colours: the one picked in the dashboard (hex, named by the
+  // closest palette colour), else the ones its name/description mention.
+  const colorsOf = (item: ProductItem): Array<{ hex: string; name: string }> => {
+    const picked = String(item.color ?? '').trim()
+    const label = (c: NamedColor | null) => (c ? (lang === 'uz' ? c.uz : c.ru) : '')
+    if (isHexColor(picked)) return [{ hex: picked, name: label(nearestNamedColor(picked)) }]
+    if (picked && picked !== 'null') return [{ hex: '', name: picked }]
+    return colorsInText(item.name_uz, item.name_ru, item.name, item.desc, item.desc_ru)
+      .map(c => ({ hex: c.hex, name: label(c) }))
+  }
+  const swatch = (hex: string, size = 'w-4 h-4') =>
+    hex ? <span className={`inline-block ${size} rounded-full ring-1 ring-black/15 dark:ring-white/25 flex-shrink-0`} style={{ background: hex }} /> : null
   // Offers a customer can act on, cheapest first (in stock before sold out)
   const offersOf = (item: ProductItem) =>
     (item.shop_products ?? [])
@@ -727,9 +740,10 @@ export default function CategoryPage() {
         </span>
         <span className="flex-1 min-w-0">
           <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200 leading-snug line-clamp-2 group-hover/v:text-primary transition-colors">
-            {isHexColor(item.color) && (
-              <span className="inline-block w-3 h-3 mr-1.5 rounded-full ring-1 ring-black/10 dark:ring-white/20 align-[-1px]" style={{ background: String(item.color).trim() }} />
-            )}
+            {(() => {
+              const c = colorsOf(item).find(x => x.hex)
+              return c ? <span className="inline-block w-3 h-3 mr-1.5 rounded-full ring-1 ring-black/15 dark:ring-white/25 align-[-1px]" style={{ background: c.hex }} /> : null
+            })()}
             {variantTitle(item)}
           </span>
           <span className="block mt-1 text-xs">
@@ -761,16 +775,20 @@ export default function CategoryPage() {
     const minP = inStock.length ? Math.min(...inStock.map(sp => effPrice(sp) ?? Infinity)) : Infinity
     const shopCount = new Set(inStock.map(sp => sp.shop!.id)).size
     // The dashboard's colour picker stores hex ("#F97316"): show a swatch.
-    const color = item.color ? String(item.color).trim() : ''
+    const colors = colorsOf(item)
     const unitName = decodeEntities(
       (lang === 'ru' ? item.unit_type?.name_ru || item.unit_type?.name_uz : item.unit_type?.name_uz || item.unit_type?.name_ru)
       || item.unit_type?.name || item.unit_type?.symbol || '')
     const specs: Array<[string, React.ReactNode]> = []
-    if (color) {
+    if (colors.length) {
       specs.push([lang === 'uz' ? 'Rang' : 'Цвет', (
-        <span className="inline-flex items-center gap-2">
-          {isHexColor(color) && <span className="w-5 h-5 rounded-full ring-1 ring-black/10 dark:ring-white/20" style={{ background: color }} />}
-          {!isHexColor(color) && color}
+        <span className="inline-flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+          {colors.map((c, i) => (
+            <span key={i} className="inline-flex items-center gap-1.5">
+              {swatch(c.hex, 'w-5 h-5')}
+              {c.name}
+            </span>
+          ))}
         </span>
       )])
     }
