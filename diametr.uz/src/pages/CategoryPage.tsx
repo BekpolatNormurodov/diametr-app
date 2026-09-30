@@ -11,7 +11,7 @@ import { authService } from '../service/authService'
 import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useAuthUser } from '../hooks/useAuthUser'
 import { searchKey, buildSearchKeys, searchKeyOfFields, scoreSearch } from '../utils/searchKey'
-import { productImageUrl, heroImageUrl, variantImageUrl } from '../utils/productImage'
+import { productImageUrl, productOwnImageUrl, heroImageUrl, variantImageUrl } from '../utils/productImage'
 import { decodeEntities } from '../utils/text'
 import { colorsInText, nearestNamedColor, NamedColor } from '../utils/colors'
 
@@ -769,7 +769,8 @@ export default function CategoryPage() {
   const renderVariantDetail = (item: ProductItem, canGoBack: boolean) => {
     const title = variantTitle(item)
     const desc = getDesc(item)
-    const img = variantImageUrl(item) || (selected ? productImageUrl(selected) : null)
+    // Its own photo, else the product's — never a sibling variant's photo
+    const img = variantImageUrl(item) || productOwnImageUrl(selected)
     const offers = offersOf(item)
     const inStock = offers.filter(sp => sp.count == null || sp.count > 0)
     const minP = inStock.length ? Math.min(...inStock.map(sp => effPrice(sp) ?? Infinity)) : Infinity
@@ -1103,7 +1104,11 @@ export default function CategoryPage() {
                     </svg>
                   </div>
                   {(() => {
-                    const src = matched.map(it => variantImageUrl(it)).find(Boolean) || productImageUrl(p)
+                    // A card naming a variant shows that variant's photo, else the
+                    // product's own — never a sibling variant's
+                    const src = matched.length
+                      ? matched.map(it => variantImageUrl(it)).find(Boolean) || productOwnImageUrl(p)
+                      : productImageUrl(p)
                     return src ? (
                     <img
                       src={src}

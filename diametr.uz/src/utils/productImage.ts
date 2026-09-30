@@ -57,6 +57,13 @@ export function heroImageUrl(p: unknown, selectedVariant?: unknown): string | nu
   return productImageUrl(p)
 }
 
+/** A product's own photo, then its category's — never a sibling variant's
+ *  (for a chosen variant that has no photo of its own). */
+export function productOwnImageUrl(p: unknown): string | null {
+  if (!p) return null
+  return url('products', pick(p, 'image')) || url('categories', pick(pick(p, 'category'), 'image'))
+}
+
 /** Just for a variant row (e.g. thumbnail next to the variant label). */
 export function variantImageUrl(v: unknown): string | null {
   return url('product-items', pick(v, 'image'))

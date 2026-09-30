@@ -1113,7 +1113,8 @@ class _ProductCardState extends State<_ProductCard> {
       }
     }
     final items = widget.item['items'];
-    if (imageUrl == null && items is List) {
+    // A card naming a type never borrows a sibling type's photo
+    if (imageUrl == null && matched.isEmpty && items is List) {
       for (final it in items) {
         final v = it is Map ? it['image'] : null;
         if (v != null && v.toString().isNotEmpty && v.toString() != 'null') {

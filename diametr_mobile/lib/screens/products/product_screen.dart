@@ -441,8 +441,10 @@ class _ProductScreenState extends State<ProductScreen> {
             // 0. the chosen variant's own image
             final Map? selVar = _selectedVariant(state);
             String? resolvedImageUrl = _pick('product-items', selVar?["image"]);
-            // 1. any variant that has an image
-            if (resolvedImageUrl == null) {
+            // 1. no type chosen: any variant that has an image. A chosen type
+            //    without a photo falls to the product's own photo instead —
+            //    a sibling type's photo would show the wrong item.
+            if (resolvedImageUrl == null && selVar == null) {
               for (final it in itemsList) {
                 final u = _pick('product-items', it is Map ? it["image"] : null);
                 if (u != null) { resolvedImageUrl = u; break; }
