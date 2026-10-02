@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useLang } from "../../../context/LangContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ToastType = "success" | "error" | "warning" | "info";
@@ -79,11 +80,11 @@ const ICONS: Record<ToastType, React.ReactNode> = {
   ),
 };
 
-const LABEL: Record<ToastType, string> = {
-  success: "Muvaffaqiyat",
-  error:   "Xatolik",
-  warning: "Ogohlantirish",
-  info:    "Ma'lumot",
+const LABEL: Record<ToastType, [string, string]> = {
+  success: ["Muvaffaqiyat", "Успешно"],
+  error:   ["Xatolik", "Ошибка"],
+  warning: ["Ogohlantirish", "Внимание"],
+  info:    ["Ma'lumot", "Информация"],
 };
 
 // ─── Single Toast Item ─────────────────────────────────────────────────────────
@@ -94,6 +95,7 @@ function ToastCard({
   item: ToastItem;
   onRemove: (id: number) => void;
 }) {
+  const { t } = useLang();
   const c = COLORS[item.type];
   const [progress, setProgress] = useState(100);
   const [visible, setVisible] = useState(false);
@@ -154,7 +156,7 @@ function ToastCard({
       {/* Text */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-800 dark:text-white leading-none mb-1">
-          {LABEL[item.type]}
+          {t(...LABEL[item.type])}
         </p>
         <p className="text-sm text-gray-500 dark:text-gray-400 leading-snug break-words">
           {item.message}

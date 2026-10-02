@@ -15,7 +15,7 @@ import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 import { useAutoClampPage } from "../../common/Pagination";
-import { useLang } from "../../../context/LangContext";
+import { useLang, tr } from "../../../context/LangContext";
 
 export interface PaymentItemProps {
   id: number;
@@ -30,7 +30,7 @@ export interface PaymentItemProps {
 
 const showOptions = [{ value: "10", label: "10" }, { value: "20", label: "20" }, { value: "50", label: "50" }];
 // Payment.type is the SHOP|WORKER|AD enum (what the payment is for), used only for the display label.
-const typeOptions = [{ value: "SHOP", label: "Do'kon" }, { value: "WORKER", label: "Ishchi" }, { value: "AD", label: "Reklama" }];
+const typeOptions = [{ value: "SHOP", get label() { return tr("Do'kon", "Магазин"); } }, { value: "WORKER", get label() { return tr("Ishchi", "Мастер"); } }, { value: "AD", get label() { return tr("Reklama", "Реклама"); } }];
 const emptyForm = { amount: "", type: "CARD", start_date: "", end_date: "" };
 
 export default function PaymentsTable({ data, onRefetch }: { data: PaymentItemProps[]; onRefetch?: () => void }) {
@@ -78,27 +78,27 @@ export default function PaymentsTable({ data, onRefetch }: { data: PaymentItemPr
       if (form.end_date) payload.end_date = form.end_date;
       if (editItem) {
         await axiosClient.put(`/payment/${editItem.id}`, payload);
-        toast.success("To'lov yangilandi");
+        toast.success(t("To'lov yangilandi", "Платёж обновлён"));
       }
       onRefetch?.(); closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/payment/${id}`);
-      toast.success("To'lov o'chirildi");
+      toast.success(t("To'lov o'chirildi", "Платёж удалён"));
       onRefetch?.();
-    } catch { toast.error("Xatolik yuz berdi"); }
+    } catch { toast.error(t("Xatolik yuz berdi", "Произошла ошибка")); }
   };
 
   const handleExport = () => {
     const ws = XLSX.utils.json_to_sheet(tableData.map((p) => ({
-      ID: p.id, "Do'kon": p.shop?.name ?? "", Summa: p.amount ?? 0, Turi: p.type ?? "",
-      "Boshlanish": p.start_date ? Moment(p.start_date).format("DD.MM.YYYY") : "",
-      "Tugash": p.end_date ? Moment(p.end_date).format("DD.MM.YYYY") : "",
+      ID: p.id, [t("Do'kon", "Магазин")]: p.shop?.name ?? "", Summa: p.amount ?? 0, Turi: p.type ?? "",
+      [t("Boshlanish", "Начало")]: p.start_date ? Moment(p.start_date).format("DD.MM.YYYY") : "",
+      [t("Tugash", "Окончание")]: p.end_date ? Moment(p.end_date).format("DD.MM.YYYY") : "",
       Yaratilgan: Moment(p.createdt ?? p.createdAt).format("DD.MM.YYYY"),
     })));
     const wb = XLSX.utils.book_new();
@@ -118,21 +118,21 @@ export default function PaymentsTable({ data, onRefetch }: { data: PaymentItemPr
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("shops")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("amount")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Turi</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Boshlanish</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Tugash</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Turi", "Тип")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Boshlanish", "Начало")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Tugash", "Окончание")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
           <TableBody>
             {currentItems.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">Ma'lumot yo'q</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">{t("Ma'lumot yo'q", "Нет данных")}</TableCell></TableRow>
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                 <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
                 <TableCell className="px-5 py-4 font-medium text-gray-800 dark:text-white">{item.shop?.name ?? "-"}</TableCell>
                 <TableCell className="px-5 py-4 text-sm font-semibold text-green-600 dark:text-green-400">
-                  {item.amount != null ? `${item.amount.toLocaleString()} so'm` : "-"}
+                  {item.amount != null ? t(`${item.amount.toLocaleString()} so'm`, `${item.amount.toLocaleString()} сум`) : "-"}
                 </TableCell>
                 <TableCell className="px-5 py-4 text-sm">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${item.type === "CASH" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" : item.type === "ONLINE" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"}`}>
@@ -151,33 +151,33 @@ export default function PaymentsTable({ data, onRefetch }: { data: PaymentItemPr
         <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
           <span className="text-sm text-gray-500 dark:text-gray-400">{t(`${tableData.length} ta ichidan ${Math.min((safePage - 1) * +optionValue+1,tableData.length)}–${Math.min(safePage * +optionValue,tableData.length)} ko'rsatilmoqda`, `Показано ${Math.min((safePage - 1) * +optionValue+1,tableData.length)}–${Math.min(safePage * +optionValue,tableData.length)} из ${tableData.length}`)}</span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>Keyingi</Button>
+            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>{t("Oldingi", "Назад")}</Button>
+            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>{t("Keyingi", "Далее")}</Button>
           </div>
         </div>
       </div>
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[500px] m-4">
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <div className="px-2 pr-14 mb-6">
-            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">To'lovni tahrirlash</h4>
+            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">{t("To'lovni tahrirlash", "Редактировать платёж")}</h4>
           </div>
           <div className="flex flex-col gap-4 px-2">
             <div>
-              <Label>Summa</Label>
+              <Label>{t("Summa", "Сумма")}</Label>
               <Input type="number" placeholder="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
             </div>
             <div>
-              <Label>Boshlanish sanasi</Label>
+              <Label>{t("Boshlanish sanasi", "Дата начала")}</Label>
               <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
             </div>
             <div>
-              <Label>Tugash sanasi</Label>
+              <Label>{t("Tugash sanasi", "Дата окончания")}</Label>
               <Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
             </div>
           </div>
           <div className="flex items-center gap-3 px-2 mt-6 justify-end">
-            <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saqlanmoqda..." : "Saqlash"}</Button>
+            <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}</Button>
           </div>
         </div>
       </Modal>

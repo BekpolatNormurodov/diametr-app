@@ -88,7 +88,7 @@ export default function CategorysPage() {
   const [statsExpanded, setStatsExpanded] = useState(false);
 
   const handleAdding = async () => {
-    if (!Category.name_uz?.trim()) { toast.error("Uzbekcha nomini kiriting"); return; }
+    if (!Category.name_uz?.trim()) { toast.error(t("Uzbekcha nomini kiriting", "Введите название на узбекском")); return; }
     setSaving(true);
     try {
       let imageFilename = Category.image ?? "";
@@ -114,13 +114,13 @@ export default function CategorysPage() {
         ...(Category.name_ru ? { name_ru: Category.name_ru } : {}),
         ...(imageFilename ? { image: imageFilename } : {}),
       });
-      toast.success("Kategoriya qo'shildi");
+      toast.success(t("Kategoriya qo'shildi", "Категория добавлена"));
       refetch();
       closeModal();
       setCategory(emptyCategory);
       imageResultRef.current = null;
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally {
       setSaving(false);
     }
@@ -129,7 +129,7 @@ export default function CategorysPage() {
   return (
     <>
       <PageMeta
-        title="Categorys | Diametr Dashboard"
+        title={t("Kategoriyalar | Diametr", "Категории | Diametr")}
         description="Diametr Dashboard"
       />
       <PageBreadcrumb pageTitle={t.k("categoriesTitle")} />
@@ -145,9 +145,9 @@ export default function CategorysPage() {
               aria-expanded={statsExpanded}
             >
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Kategoriyalar statistikasi
+                {t("Kategoriyalar statistikasi", "Статистика категорий")}
                 <span className="ml-2 text-xs font-normal text-gray-400">
-                  ({statsExpanded ? `barchasi · ${sortedStats.length} ta` : `top 3 / ${sortedStats.length} ta`})
+                  ({statsExpanded ? t(`barchasi · ${sortedStats.length} ta`, `все · ${sortedStats.length}`) : t(`top 3 / ${sortedStats.length} ta`, `топ 3 / ${sortedStats.length}`)})
                 </span>
               </h3>
               <svg
@@ -166,11 +166,11 @@ export default function CategorysPage() {
                 <thead>
                   <tr className="bg-gray-50 dark:bg-white/[0.02]">
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">#</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Kategoriya</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase">Tovarlar</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase">Do'konlarda</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase">Skladda</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Umumiy qiymati</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">{t("Kategoriya", "Категория")}</th>
+                    <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase">{t("Tovarlar", "Товары")}</th>
+                    <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase">{t("Do'konlarda", "В магазинах")}</th>
+                    <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase">{t("Skladda", "На складе")}</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">{t("Umumiy qiymati", "Общая стоимость")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -185,16 +185,16 @@ export default function CategorysPage() {
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
-                          {cat.shop_product_count} ta
+                          {cat.shop_product_count} {t("ta", "шт.")}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`font-semibold ${cat.total_stock > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
-                          {cat.total_stock.toLocaleString()} ta
+                          {cat.total_stock.toLocaleString()} {t("ta", "шт.")}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-right font-semibold text-gray-700 dark:text-gray-300">
-                        {fmtValue(cat.total_value)} so'm
+                        {fmtValue(cat.total_value)} {t("so'm", "сум")}
                       </td>
                     </tr>
                   ))}
@@ -206,24 +206,24 @@ export default function CategorysPage() {
                           onClick={() => setStatsExpanded(true)}
                           className="text-xs font-semibold text-brand-500 hover:text-brand-600 hover:underline"
                         >
-                          Yana {sortedStats.length - 3} ta kategoriyani ko'rish ↓
+                          {t("Yana", "Ещё")} {sortedStats.length - 3} {t("ta kategoriyani ko'rish ↓", "категорий — показать ↓")}
                         </button>
                       </td>
                     </tr>
                   )}
                   <tr className="border-t-2 border-gray-200 dark:border-white/[0.08] bg-gray-50 dark:bg-white/[0.03] font-bold">
-                    <td className="px-4 py-2.5" colSpan={2}>Jami</td>
+                    <td className="px-4 py-2.5" colSpan={2}>{t("Jami", "Всего")}</td>
                     <td className="px-4 py-2.5 text-center text-blue-600 dark:text-blue-400">
                       {catStats.reduce((s, c) => s + c.product_count, 0)} xil
                     </td>
                     <td className="px-4 py-2.5 text-center text-purple-600 dark:text-purple-400">
-                      {catStats.reduce((s, c) => s + c.shop_product_count, 0)} ta
+                      {catStats.reduce((s, c) => s + c.shop_product_count, 0)} {t("ta", "шт.")}
                     </td>
                     <td className="px-4 py-2.5 text-center text-green-600 dark:text-green-400">
-                      {catStats.reduce((s, c) => s + c.total_stock, 0).toLocaleString()} ta
+                      {catStats.reduce((s, c) => s + c.total_stock, 0).toLocaleString()} {t("ta", "шт.")}
                     </td>
                     <td className="px-4 py-2.5 text-right text-gray-800 dark:text-white">
-                      {fmtValue(catStats.reduce((s, c) => s + c.total_value, 0))} so'm
+                      {fmtValue(catStats.reduce((s, c) => s + c.total_value, 0))} {t("so'm", "сум")}
                     </td>
                   </tr>
                 </tbody>
@@ -245,7 +245,7 @@ export default function CategorysPage() {
                 openModal();
               }}
             >
-              Kategoriya qo'shish
+              {t("Kategoriya qo'shish", "Добавить категорию")}
             </Button>
           }
         >
@@ -256,10 +256,10 @@ export default function CategorysPage() {
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-11">
           <div className="px-2 pr-14">
             <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">
-              Kategoriya qo'shish
+              {t("Kategoriya qo'shish", "Добавить категорию")}
             </h4>
             <p className="mb-6 text-sm text-gray-500 dark:text-gray-400 lg:mb-7">
-              Create new Category with full details.
+              {t("Yangi kategoriyani to'liq ma'lumotlari bilan yarating.", "Создайте новую категорию со всеми данными.")}
             </p>
           </div>
           <form className="flex flex-col">
@@ -267,7 +267,7 @@ export default function CategorysPage() {
               <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <Label>Nomi (O'zbek)</Label>
+                    <Label>{t("Nomi (O'zbek)", "Название (узбекский)")}</Label>
                     <TranslateButton
                       source={Category.name_ru ?? ""}
                       direction="ru->uz"
@@ -276,7 +276,7 @@ export default function CategorysPage() {
                   </div>
                   <Input
                     type="text"
-                    placeholder="Uzbekcha nomini kiriting"
+                    placeholder={t("Uzbekcha nomini kiriting", "Введите название на узбекском")}
                     value={Category.name_uz}
                     onChange={(e) =>
                       setCategory({ ...Category, name_uz: e.target.value })
@@ -285,7 +285,7 @@ export default function CategorysPage() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <Label>Nomi (Ruscha)</Label>
+                    <Label>{t("Nomi (Ruscha)", "Название (русский)")}</Label>
                     <TranslateButton
                       source={Category.name_uz ?? ""}
                       direction="uz->ru"
@@ -294,7 +294,7 @@ export default function CategorysPage() {
                   </div>
                   <Input
                     type="text"
-                    placeholder="Ruscha nomini kiriting"
+                    placeholder={t("Ruscha nomini kiriting", "Введите название на русском")}
                     value={Category.name_ru}
                     onChange={(e) =>
                       setCategory({ ...Category, name_ru: e.target.value })
@@ -303,7 +303,7 @@ export default function CategorysPage() {
                 </div>
                 <div className="lg:col-span-2">
                   <ImageField
-                    label="Rasm"
+                    label={t("Rasm", "Фото")}
                     onChange={(result) => { imageResultRef.current = result; }}
                   />
                 </div>
@@ -314,7 +314,7 @@ export default function CategorysPage() {
                 Close
               </Button>
               <Button size="sm" onClick={handleAdding} disabled={saving}>
-                {saving ? "Saqlanmoqda..." : "Saqlash"}
+                {saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}
               </Button>
             </div>
           </form>

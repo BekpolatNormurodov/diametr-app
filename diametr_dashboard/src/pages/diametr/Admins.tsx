@@ -7,7 +7,9 @@ import { SkeletonTable } from "../../components/spinner/load-spinner";
 import { usePolling } from "../../hooks/usePolling";
 import axiosClient from "../../service/axios.service";
 
+import { useLang } from "../../context/LangContext";
 export default function AdminsPage() {
+  const { t } = useLang();
   const { data, isLoading, refetch } = useFetchWithLoader<AdminItemProps[]>({
     fetcher: () => axiosClient.get("/admin/all").then((r) => r.data),
   });
@@ -21,11 +23,11 @@ export default function AdminsPage() {
   return (
     <>
       <PageMeta
-        title="Do'kon Adminlari – Diametr"
-        description="Barcha do'kon adminlari ro'yxati"
+        title={t("Do'kon Adminlari – Diametr", "Админы магазинов – Diametr")}
+        description={t("Barcha do'kon adminlari ro'yxati", "Список всех админов магазинов")}
       />
-      <PageBreadcrumb pageTitle="Do'kon Adminlari" />
-      <ComponentCard title={`Do'kon Adminlari (${admins.length})`}>
+      <PageBreadcrumb pageTitle={t("Do'kon Adminlari", "Админы магазинов")} />
+      <ComponentCard title={t(`Do'kon Adminlari (${admins.length})`, `Админы магазинов (${admins.length})`)}>
         {isLoading ? (
           <SkeletonTable rows={8} cols={8} />
         ) : (

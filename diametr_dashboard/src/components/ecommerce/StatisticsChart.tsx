@@ -2,7 +2,9 @@ import Chart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
 import ChartTab from "../common/ChartTab";
 
+import { useLang } from "../../context/LangContext";
 export default function StatisticsChart() {
+  const { t } = useLang();
   const options: ApexOptions = {
     legend: {
       show: false, // Hide legend
@@ -62,18 +64,18 @@ export default function StatisticsChart() {
     xaxis: {
       type: "category", // Category-based x-axis
       categories: [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
+        t("Yan", "Янв"),
+        t("Fev", "Фев"),
+        t("Mar", "Мар"),
+        t("Apr", "Апр"),
+        t("May", "Май"),
+        t("Iyun", "Июн"),
+        t("Iyul", "Июл"),
+        t("Avg", "Авг"),
+        t("Sen", "Сен"),
+        t("Okt", "Окт"),
+        t("Noy", "Ноя"),
+        t("Dek", "Дек"),
       ],
       axisBorder: {
         show: false, // Hide x-axis border
@@ -103,11 +105,11 @@ export default function StatisticsChart() {
 
   const series = [
     {
-      name: "Products",
+      name: t("Mahsulotlar", "Товары"),
       data: [180, 190, 170, 160, 175, 165, 170, 205, 230, 210, 240, 235],
     },
     {
-      name: "Sale",
+      name: t("Sotuv", "Продажи"),
       data: [40, 30, 50, 40, 55, 40, 70, 100, 110, 120, 150, 140],
     },
   ];
@@ -116,10 +118,10 @@ export default function StatisticsChart() {
       <div className="flex flex-col gap-5 mb-6 sm:flex-row sm:justify-between">
         <div className="w-full">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            Statistics
+            {t("Statistika", "Статистика")}
           </h3>
           <p className="mt-1 text-gray-500 text-theme-sm dark:text-gray-400">
-            Target you’ve set for each month
+            {t("Har oy uchun belgilangan maqsad", "Цель на каждый месяц")}
           </p>
         </div>
         <div className="flex items-start w-full gap-3 sm:justify-end">

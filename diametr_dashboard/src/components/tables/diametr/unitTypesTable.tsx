@@ -64,19 +64,19 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
 
   const handleSave = async () => {
     if (!form.name_uz.trim() || !form.symbol.trim()) {
-      toast.error("Nom va belgi kiritish shart");
+      toast.error(t("Nom va belgi kiritish shart", "Укажите название и обозначение"));
       return;
     }
     setSaving(true);
     try {
       if (editItem) {
         await axiosClient.put(`/unit-type/${editItem.id}`, { ...form, name: form.name_uz });
-        toast.success("O'lchov birligi yangilandi");
+        toast.success(t("O'lchov birligi yangilandi", "Единица измерения обновлена"));
       }
       onRefetch?.();
       closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally {
       setSaving(false);
     }
@@ -85,20 +85,20 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/unit-type/${id}`);
-      toast.success("O'lchov birligi o'chirildi");
+      toast.success(t("O'lchov birligi o'chirildi", "Единица измерения удалена"));
       onRefetch?.();
     } catch {
-      toast.error("Xatolik yuz berdi");
+      toast.error(t("Xatolik yuz berdi", "Произошла ошибка"));
     }
   };
 
   const handleExport = () => {
     const ws = XLSX.utils.json_to_sheet(tableData.map((u) => ({
       ID: u.id,
-      "Nomi (UZ)": u.name_uz ?? u.name,
-      "Nomi (RU)": u.name_ru ?? "",
-      "Belgi": u.symbol,
-      "Yaratilgan": Moment(u.createdAt).format("DD.MM.YYYY"),
+      [t("Nomi (UZ)", "Название (UZ)")]: u.name_uz ?? u.name,
+      [t("Nomi (RU)", "Название (RU)")]: u.name_ru ?? "",
+      [t("Belgi", "Обозначение")]: u.symbol,
+      [t("Yaratilgan", "Создан")]: Moment(u.createdAt).format("DD.MM.YYYY"),
     })));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "UnitTypes");
@@ -123,14 +123,14 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("nameUz")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("nameRu")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("symbol")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Yaratilgan</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Yaratilgan", "Создан")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
           <TableBody>
             {currentItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-gray-400">Ma'lumot yo'q</TableCell>
+                <TableCell colSpan={6} className="py-8 text-center text-gray-400">{t("Ma'lumot yo'q", "Нет данных")}</TableCell>
               </TableRow>
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
@@ -159,8 +159,8 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
             {t(`${tableData.length} ta ichidan ${Math.min((safePage - 1) * +optionValue + 1, tableData.length)}–${Math.min(safePage * +optionValue, tableData.length)} ko'rsatilmoqda`, `Показано ${Math.min((safePage - 1) * +optionValue + 1, tableData.length)}–${Math.min(safePage * +optionValue, tableData.length)} из ${tableData.length}`)}
           </span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={() => setCurrentPage(p => p - 1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={() => setCurrentPage(p => p + 1)}>Keyingi</Button>
+            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={() => setCurrentPage(p => p - 1)}>{t("Oldingi", "Назад")}</Button>
+            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={() => setCurrentPage(p => p + 1)}>{t("Keyingi", "Далее")}</Button>
           </div>
         </div>
       </div>
@@ -168,12 +168,12 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[500px] m-4">
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <div className="px-2 pr-14 mb-6">
-            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">O'lchov birligini tahrirlash</h4>
+            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">{t("O'lchov birligini tahrirlash", "Редактировать единицу измерения")}</h4>
           </div>
           <div className="flex flex-col gap-4 px-2">
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <Label>Nomi (O'zbek)</Label>
+                <Label>{t("Nomi (O'zbek)", "Название (узбекский)")}</Label>
                 <TranslateButton
                   source={form.name_ru}
                   direction="ru->uz"
@@ -189,7 +189,7 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
             </div>
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <Label>Nomi (Ruscha)</Label>
+                <Label>{t("Nomi (Ruscha)", "Название (русский)")}</Label>
                 <TranslateButton
                   source={form.name_uz}
                   direction="uz->ru"
@@ -204,7 +204,7 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
               />
             </div>
             <div>
-              <Label>Belgi (masalan: kg)</Label>
+              <Label>{t("Belgi (masalan: kg)", "Обозначение (например: kg)")}</Label>
               <Input
                 type="text"
                 placeholder="kg"
@@ -214,8 +214,8 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
             </div>
           </div>
           <div className="flex items-center gap-3 px-2 mt-6 justify-end">
-            <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saqlanmoqda..." : "Saqlash"}</Button>
+            <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}</Button>
           </div>
         </div>
       </Modal>

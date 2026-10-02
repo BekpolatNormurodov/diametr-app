@@ -15,7 +15,7 @@ import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 import { useAutoClampPage } from "../../common/Pagination";
-import { useLang } from "../../../context/LangContext";
+import { useLang, tr } from "../../../context/LangContext";
 
 export interface ShopItemProps {
   id: number;
@@ -46,17 +46,17 @@ function formatMoney(n: number) {
 }
 
 function statusBadge(ws?: string) {
-  if (ws === "BLOCKED") return { cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800", label: "Bloklangan", dot: "bg-red-500" };
-  if (ws === "DELETED") return { cls: "bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:border-gray-700", label: "O'chirilgan", dot: "bg-gray-400" };
-  return { cls: "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800", label: "Faol", dot: "bg-emerald-500" };
+  if (ws === "BLOCKED") return { cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800", label: tr("Bloklangan", "Заблокирован"), dot: "bg-red-500" };
+  if (ws === "DELETED") return { cls: "bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:border-gray-700", label: tr("O'chirilgan", "Отключён"), dot: "bg-gray-400" };
+  return { cls: "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800", label: tr("Faol", "Активен"), dot: "bg-emerald-500" };
 }
 
 function expiryBadge(expired?: string) {
   if (!expired) return { cls: "text-gray-400", label: "—", color: "gray" };
   const days = Math.ceil((new Date(expired).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   if (days < 0) return { cls: "text-red-600 dark:text-red-400 font-semibold", label: `${Moment(expired).format("DD.MM.YY")} ⚠`, color: "red" };
-  if (days <= 3) return { cls: "text-red-500 dark:text-red-400", label: `${days} kun`, color: "red" };
-  if (days <= 7) return { cls: "text-amber-600 dark:text-amber-400", label: `${days} kun`, color: "amber" };
+  if (days <= 3) return { cls: "text-red-500 dark:text-red-400", label: tr(`${days} kun`, `${days} дн.`), color: "red" };
+  if (days <= 7) return { cls: "text-amber-600 dark:text-amber-400", label: tr(`${days} kun`, `${days} дн.`), color: "amber" };
   return { cls: "text-gray-600 dark:text-gray-300", label: Moment(expired).format("DD.MM.YY"), color: "green" };
 }
 
@@ -118,7 +118,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
     const lat = form.lat.trim();
     const lon = form.lon.trim();
     if ((lat !== "" && !Number.isFinite(Number(lat))) || (lon !== "" && !Number.isFinite(Number(lon)))) {
-      toast.error("Latitude va Longitude son bo'lishi kerak");
+      toast.error(t("Latitude va Longitude son bo'lishi kerak", "Широта и долгота должны быть числами"));
       return;
     }
     setSaving(true);
@@ -151,44 +151,44 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
             Math.abs(new Date(updated.expired).getTime() - new Date(payload.expired).getTime()) > 36 * 3600 * 1000);
         if (expiryDropped) {
           // The server ignored the subscription change — never report it as saved.
-          toast.error("Do'kon ma'lumotlari saqlandi, lekin obuna muddati o'zgarmadi. Server bu o'zgarishni qabul qilmadi.");
+          toast.error(t("Do'kon ma'lumotlari saqlandi, lekin obuna muddati o'zgarmadi. Server bu o'zgarishni qabul qilmadi.", "Данные магазина сохранены, но срок подписки не изменился. Сервер не принял это изменение."));
         } else {
-          toast.success(cancelSub ? "Do'kon yangilandi, obuna bugun tugaydi" : bonusDays > 0 ? `Do'kon yangilandi, obuna +${bonusDays} kun uzaytirildi` : "Do'kon yangilandi");
+          toast.success(cancelSub ? t("Do'kon yangilandi, obuna bugun tugaydi", "Магазин обновлён, подписка заканчивается сегодня") : bonusDays > 0 ? t(`Do'kon yangilandi, obuna +${bonusDays} kun uzaytirildi`, `Магазин обновлён, подписка продлена на +${bonusDays} дн.`) : t("Do'kon yangilandi", "Магазин обновлён"));
           if (bonusDays > 0 && updated?.work_status === "BLOCKED") {
-            toast.warning("Do'kon hali bloklangan. Kerak bo'lsa \"Blokdan chiqarish\" amalini bosing.");
+            toast.warning(t("Do'kon hali bloklangan. Kerak bo'lsa \"Blokdan chiqarish\" amalini bosing.", "Магазин всё ещё заблокирован. При необходимости нажмите «Разблокировать»."));
           }
         }
       }
       onRefetch?.(); closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/shop/${id}`);
-      toast.success("Do'kon o'chirildi");
+      toast.success(t("Do'kon o'chirildi", "Магазин удалён"));
       onRefetch?.();
-    } catch (e: any) { toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi"); }
+    } catch (e: any) { toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка")); }
   };
 
   const handleToggleBlock = async (item: ShopItemProps) => {
     try {
       await axiosClient.patch(`/shop/${item.id}/block`);
-      toast.success(item.work_status === "BLOCKED" ? "Do'kon ochildi" : "Do'kon bloklandi");
+      toast.success(item.work_status === "BLOCKED" ? t("Do'kon ochildi", "Магазин разблокирован") : t("Do'kon bloklandi", "Магазин заблокирован"));
       onRefetch?.();
-    } catch { toast.error("Xatolik yuz berdi"); }
+    } catch { toast.error(t("Xatolik yuz berdi", "Произошла ошибка")); }
   };
 
   const handleExport = () => {
     const ws = XLSX.utils.json_to_sheet(tableData.map((s) => ({
-      ID: s.id, Nomi: s.name ?? "", INN: s.inn ?? "", Manzil: s.address ?? "",
-      Region: s.region?.name ?? "", "Yetkazish narxi": s.delivery_amount ?? "",
-      "Tovarlar soni": s.product_count ?? 0, "Skladda": s.total_stock ?? 0,
-      "Umumiy qiymati": s.total_value ?? 0, "Balans": s.balance ?? 0,
-      "Holat": s.work_status ?? "", "Avto to'lov": s.auto_payment !== false ? "Ha" : "Yo'q",
-      Muddati: s.expired ? Moment(s.expired).format("DD.MM.YYYY") : "",
+      ID: s.id, [t("Nomi", "Название")]: s.name ?? "", [t("INN", "ИНН")]: s.inn ?? "", [t("Manzil", "Адрес")]: s.address ?? "",
+      [t("Region", "Регион")]: s.region?.name ?? "", [t("Yetkazish narxi", "Стоимость доставки")]: s.delivery_amount ?? "",
+      [t("Tovarlar soni", "Количество товаров")]: s.product_count ?? 0, [t("Skladda", "На складе")]: s.total_stock ?? 0,
+      [t("Umumiy qiymati", "Общая стоимость")]: s.total_value ?? 0, [t("Balans", "Баланс")]: s.balance ?? 0,
+      [t("Holat", "Статус")]: s.work_status ?? "", [t("Avto to'lov", "Автоплатёж")]: s.auto_payment !== false ? t("Ha", "Да") : t("Yo'q", "Нет"),
+      [t("Muddati", "Срок")]: s.expired ? Moment(s.expired).format("DD.MM.YYYY") : "",
       Yaratilgan: Moment(s.createdt ?? s.createdAt).format("DD.MM.YYYY"),
     })));
     const wb = XLSX.utils.book_new();
@@ -206,19 +206,19 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("photo")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("name")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Holat</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Region</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Balans</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Muddati</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Tovarlar</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Skladda</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Qiymati</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Holat", "Статус")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Region", "Регион")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Balans", "Баланс")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Muddati", "Срок")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Tovarlar", "Товары")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Skladda", "На складе")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Qiymati", "Стоимость")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
           <TableBody>
             {currentItems.length === 0 ? (
-              <TableRow><TableCell colSpan={11} className="py-8 text-center text-gray-400">Ma'lumot yo'q</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="py-8 text-center text-gray-400">{t("Ma'lumot yo'q", "Нет данных")}</TableCell></TableRow>
             ) : currentItems.map((item, idx) => {
               const st = statusBadge(item.work_status);
               const exp = expiryBadge(item.expired);
@@ -232,7 +232,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
                 </TableCell>
                 <TableCell className="px-5 py-4">
                   <div className="font-medium text-gray-800 dark:text-white">{item.name ?? "-"}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{item.inn ? `INN: ${item.inn}` : ""}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{item.inn ? t(`INN: ${item.inn}`, `ИНН: ${item.inn}`) : ""}</div>
                 </TableCell>
                 <TableCell className="px-5 py-4">
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${st.cls}`}>
@@ -247,9 +247,9 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
                   </div>
                   <div className="text-[10px] text-gray-400 mt-0.5">
                     {item.auto_payment !== false ? (
-                      <span className="text-blue-500">⚡ avto</span>
+                      <span className="text-blue-500">{t("⚡ avto", "⚡ авто")}</span>
                     ) : (
-                      <span className="text-gray-400">avto o'chiq</span>
+                      <span className="text-gray-400">{t("avto o'chiq", "авто выкл.")}</span>
                     )}
                   </div>
                 </TableCell>
@@ -279,7 +279,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
                     onDelete={() => handleDelete(item.id)}
                     extraActions={[
                       {
-                        label: item.work_status === "BLOCKED" ? "Blokdan chiqarish" : "Bloklash",
+                        label: item.work_status === "BLOCKED" ? t("Blokdan chiqarish", "Разблокировать") : t("Bloklash", "Заблокировать"),
                         color: item.work_status === "BLOCKED" ? "green" : "orange",
                         icon: item.work_status === "BLOCKED" ? (
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6-2a6 6 0 1112 0v4H4v-4z" /></svg>
@@ -299,8 +299,8 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
         <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
           <span className="text-sm text-gray-500 dark:text-gray-400">{t(`${tableData.length} ta ichidan ${Math.min((safePage - 1) * +optionValue+1,tableData.length)}–${Math.min(safePage * +optionValue,tableData.length)} ko'rsatilmoqda`, `Показано ${Math.min((safePage - 1) * +optionValue+1,tableData.length)}–${Math.min(safePage * +optionValue,tableData.length)} из ${tableData.length}`)}</span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>Keyingi</Button>
+            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>{t("Oldingi", "Назад")}</Button>
+            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>{t("Keyingi", "Далее")}</Button>
           </div>
         </div>
       </div>
@@ -316,7 +316,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
               </svg>
             </div>
             <div>
-              <h4 className="text-lg font-semibold text-gray-800 dark:text-white">Do'konni tahrirlash</h4>
+              <h4 className="text-lg font-semibold text-gray-800 dark:text-white">{t("Do'konni tahrirlash", "Редактировать магазин")}</h4>
               <p className="text-xs text-gray-400">{editItem?.name}</p>
             </div>
           </div>
@@ -326,20 +326,20 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
             <div className="mb-6 rounded-xl border border-gray-100 dark:border-white/[0.06] bg-gray-50/50 dark:bg-white/[0.02] p-4">
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <div className="text-[10px] font-medium text-gray-400 uppercase mb-1">Balans</div>
+                  <div className="text-[10px] font-medium text-gray-400 uppercase mb-1">{t("Balans", "Баланс")}</div>
                   <div className={`text-lg font-bold ${(editItem.balance ?? 0) > 0 ? "text-emerald-600" : "text-gray-400"}`}>
-                    {formatMoney(editItem.balance ?? 0)} <span className="text-xs font-normal text-gray-400">so'm</span>
+                    {formatMoney(editItem.balance ?? 0)} <span className="text-xs font-normal text-gray-400">{t("so'm", "сум")}</span>
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium text-gray-400 uppercase mb-1">Holat</div>
+                  <div className="text-[10px] font-medium text-gray-400 uppercase mb-1">{t("Holat", "Статус")}</div>
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${statusBadge(editItem.work_status).cls}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${statusBadge(editItem.work_status).dot}`} />
                     {statusBadge(editItem.work_status).label}
                   </span>
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium text-gray-400 uppercase mb-1">Muddati</div>
+                  <div className="text-[10px] font-medium text-gray-400 uppercase mb-1">{t("Muddati", "Срок")}</div>
                   <div className={`text-sm font-semibold ${expiryBadge(editItem.expired).cls}`}>
                     {editItem.expired ? Moment(editItem.expired).format("DD.MM.YYYY") : "—"}
                   </div>
@@ -352,12 +352,12 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Nomi</Label>
-                <Input type="text" placeholder="Do'kon nomi" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <Label>{t("Nomi", "Название")}</Label>
+                <Input type="text" placeholder={t("Do'kon nomi", "Название магазина")} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               {regionOptions.length > 0 && (
                 <div>
-                  <Label>Region</Label>
+                  <Label>{t("Region", "Регион")}</Label>
                   <Select options={regionOptions} defaultValue={form.region_id} onChange={(v) => setForm({ ...form, region_id: v })} />
                 </div>
               )}
@@ -365,24 +365,24 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>INN</Label>
-                <Input type="text" placeholder="INN raqami" value={form.inn} onChange={(e) => setForm({ ...form, inn: e.target.value })} />
+                <Input type="text" placeholder={t("INN raqami", "ИНН")} value={form.inn} onChange={(e) => setForm({ ...form, inn: e.target.value })} />
               </div>
               <div>
-                <Label>Yetkazish narxi (so'm)</Label>
+                <Label>{t("Yetkazish narxi (so'm)", "Стоимость доставки (сум)")}</Label>
                 <Input type="number" placeholder="0" value={form.delivery_amount} onChange={(e) => setForm({ ...form, delivery_amount: e.target.value })} />
               </div>
             </div>
             <div>
-              <Label>Manzil</Label>
-              <Input type="text" placeholder="Do'kon manzili" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              <Label>{t("Manzil", "Адрес")}</Label>
+              <Input type="text" placeholder={t("Do'kon manzili", "Адрес магазина")} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Latitude (ixtiyoriy)</Label>
+                <Label>{t("Latitude (ixtiyoriy)", "Широта (необязательно)")}</Label>
                 <Input type="text" placeholder="41.2995" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
               </div>
               <div>
-                <Label>Longitude (ixtiyoriy)</Label>
+                <Label>{t("Longitude (ixtiyoriy)", "Долгота (необязательно)")}</Label>
                 <Input type="text" placeholder="69.2401" value={form.lon} onChange={(e) => setForm({ ...form, lon: e.target.value })} />
               </div>
             </div>
@@ -390,7 +390,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
             <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-amber-50/40 to-white dark:from-amber-900/10 dark:to-transparent p-4">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
-                  <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Obuna muddati</div>
+                  <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t("Obuna muddati", "Срок подписки")}</div>
                   {(() => {
                     const baseMs = editItem?.expired ? new Date(editItem.expired).getTime() : 0;
                     const currentLabel = editItem?.expired ? Moment(editItem.expired).format("DD.MM.YYYY") : "—";
@@ -406,17 +406,17 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
                     }
                     return (
                       <div className="mt-1 flex items-center gap-2 flex-wrap">
-                        <span className="text-sm text-gray-500 dark:text-gray-400">Hozir:</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">{t("Hozir:", "Сейчас:")}</span>
                         <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{currentLabel}</span>
                         {changed && (
                           <>
                             <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                             <span className={`text-sm font-bold ${cancelSub ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>{newLabel}</span>
                             {!cancelSub && (
-                              <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[11px] font-semibold">+{bonusDays} kun</span>
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[11px] font-semibold">+{bonusDays} {t("kun", "дн.")}</span>
                             )}
                             {cancelSub && (
-                              <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 text-[11px] font-semibold">Bekor</span>
+                              <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 text-[11px] font-semibold">{t("Bekor", "Отменено")}</span>
                             )}
                           </>
                         )}
@@ -428,7 +428,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
                   <button
                     type="button"
                     onClick={() => { setBonusDays(0); setCancelSub(false); }}
-                    title="Tiklash"
+                    title={t("Tiklash", "Сбросить")}
                     className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full bg-rose-50 text-rose-500 border border-rose-200 hover:bg-rose-500 hover:text-white hover:border-rose-500 dark:bg-rose-900/20 dark:border-rose-800/40 dark:text-rose-400 dark:hover:bg-rose-500 dark:hover:text-white shadow-sm transition-all"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -436,15 +436,15 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
                 )}
               </div>
 
-              <div className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Bonus qo'shish (max 1 yil)</div>
+              <div className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">{t("Bonus qo'shish (max 1 yil)", "Добавить бонус (макс. 1 год)")}</div>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { d: 3, label: "+3 kun" },
-                  { d: 7, label: "+7 kun" },
-                  { d: 30, label: "+1 oy" },
-                  { d: 90, label: "+3 oy" },
-                  { d: 180, label: "+6 oy" },
-                  { d: 365, label: "+1 yil" },
+                  { d: 3, label: t("+3 kun", "+3 дня") },
+                  { d: 7, label: t("+7 kun", "+7 дней") },
+                  { d: 30, label: t("+1 oy", "+1 мес.") },
+                  { d: 90, label: t("+3 oy", "+3 мес.") },
+                  { d: 180, label: t("+6 oy", "+6 мес.") },
+                  { d: 365, label: t("+1 yil", "+1 год") },
                 ].map((opt) => {
                   const next = Math.min(365, bonusDays + opt.d);
                   const disabled = cancelSub || bonusDays >= 365 || next === bonusDays;
@@ -472,7 +472,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
                 if (!isActive) return null;
                 return (
                   <div className="mt-3 pt-3 border-t border-gray-200 dark:border-white/10 flex items-center justify-between gap-3">
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Obunani darhol tugatish:</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{t("Obunani darhol tugatish:", "Завершить подписку сразу:")}</span>
                     <button
                       type="button"
                       onClick={() => { setCancelSub((v) => !v); if (!cancelSub) setBonusDays(0); }}
@@ -482,7 +482,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
                           : "border-rose-200 dark:border-rose-800/40 bg-white dark:bg-white/5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20"
                       }`}
                     >
-                      {cancelSub ? "✓ Bugun tugaydi" : "Bekor qilish"}
+                      {cancelSub ? t("✓ Bugun tugaydi", "✓ Закончится сегодня") : t("Bekor qilish", "Отмена")}
                     </button>
                   </div>
                 );
@@ -491,7 +491,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
 
             <div className="grid grid-cols-1 gap-4">
               <div>
-                <Label>Avto to'lov</Label>
+                <Label>{t("Avto to'lov", "Автоплатёж")}</Label>
                 <button
                   type="button"
                   onClick={() => setForm({ ...form, auto_payment: !form.auto_payment })}
@@ -504,7 +504,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
                   <div className={`w-8 h-5 rounded-full relative transition-colors ${form.auto_payment ? "bg-emerald-500" : "bg-gray-300 dark:bg-gray-600"}`}>
                     <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${form.auto_payment ? "left-3.5" : "left-0.5"}`} />
                   </div>
-                  {form.auto_payment ? "Yoqilgan" : "O'chirilgan"}
+                  {form.auto_payment ? t("Yoqilgan", "Включён") : t("O'chirilgan", "Отключён")}
                 </button>
               </div>
             </div>
@@ -513,10 +513,10 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
           {/* Actions */}
           <div className="flex items-center gap-3 mt-6 justify-end">
             <Button size="sm" variant="outline" onClick={closeModal}>
-              Bekor qilish
+              {t("Bekor qilish", "Отмена")}
             </Button>
             <Button size="sm" onClick={handleSave} disabled={saving}>
-              {saving ? "Saqlanmoqda..." : "Saqlash"}
+              {saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}
             </Button>
           </div>
         </div>

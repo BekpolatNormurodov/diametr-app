@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDownIcon } from "../../icons";
 import { matchesSearchKey, searchKey } from "../../utils/searchKey";
 
+import { useLang } from "../../context/LangContext";
 interface Option {
   value: string;
   label: string;
@@ -24,6 +25,7 @@ const Select: React.FC<SelectProps> = ({
   defaultValue = "",
   value,
 }) => {
+  const { t } = useLang();
   const [selectedValue, setSelectedValue] = useState<string>(defaultValue);
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -76,7 +78,7 @@ const Select: React.FC<SelectProps> = ({
         }`}
       >
         <span className="truncate">
-          {selectedLabel ?? placeholder ?? "Tanlang..."}
+          {selectedLabel ?? placeholder ?? t("Tanlang...", "Выберите...")}
         </span>
         <ChevronDownIcon
           className={`w-5 h-5 text-gray-500 shrink-0 transition-transform duration-200 ${
@@ -100,7 +102,7 @@ const Select: React.FC<SelectProps> = ({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Qidirish..."
+                placeholder={t("Qidirish...", "Поиск...")}
                 className="w-full h-9 pl-8 pr-3 text-sm rounded-lg border border-gray-200 bg-gray-50 text-gray-800 placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-2 focus:ring-brand-500/10 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500"
               />
             </div>
@@ -109,7 +111,7 @@ const Select: React.FC<SelectProps> = ({
           <div className="max-h-60 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <div className="px-4 py-3 text-sm text-gray-400 text-center">
-                Topilmadi
+                {t("Topilmadi", "Не найдено")}
               </div>
             ) : (
               filtered.map((option) => (

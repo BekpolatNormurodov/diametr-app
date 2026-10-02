@@ -98,26 +98,26 @@ export default function CategorysTable({ data, onRefetch }: { data: CategoryItem
       if (imageFilename) payload.image = imageFilename;
       if (editItem) {
         await axiosClient.put(`/category/${editItem.id}`, payload);
-        toast.success("Kategoriya yangilandi");
+        toast.success(t("Kategoriya yangilandi", "Категория обновлена"));
       }
       onRefetch?.(); closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/category/${id}`);
-      toast.success("Kategoriya o'chirildi");
+      toast.success(t("Kategoriya o'chirildi", "Категория удалена"));
       onRefetch?.();
-    } catch { toast.error("Xatolik yuz berdi"); }
+    } catch { toast.error(t("Xatolik yuz berdi", "Произошла ошибка")); }
   };
 
   const handleExport = () => {
     const ws = XLSX.utils.json_to_sheet(tableData.map((c) => ({
-      ID: c.id, "Nomi (UZ)": c.name_uz ?? c.name ?? "", "Nomi (RU)": c.name_ru ?? "",
-      "Yaratilgan": Moment(c.createdt ?? c.createdAt).format("DD.MM.YYYY"),
+      ID: c.id, [t("Nomi (UZ)", "Название (UZ)")]: c.name_uz ?? c.name ?? "", [t("Nomi (RU)", "Название (RU)")]: c.name_ru ?? "",
+      [t("Yaratilgan", "Создан")]: Moment(c.createdt ?? c.createdAt).format("DD.MM.YYYY"),
     })));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Categories");
@@ -141,7 +141,7 @@ export default function CategorysTable({ data, onRefetch }: { data: CategoryItem
           </TableHeader>
           <TableBody>
             {currentItems.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-gray-400">Ma'lumot yo'q</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="py-8 text-center text-gray-400">{t("Ma'lumot yo'q", "Нет данных")}</TableCell></TableRow>
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                 <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
@@ -169,13 +169,13 @@ export default function CategorysTable({ data, onRefetch }: { data: CategoryItem
               disabled={safePage <= 1}
               onClick={() => setCurrentPage(1)}
               className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/[0.05] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-              title="Birinchi"
+              title={t("Birinchi", "Первая")}
             >«</button>
             <button
               disabled={safePage <= 1}
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/[0.05] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-              title="Oldingi"
+              title={t("Oldingi", "Назад")}
             >‹</button>
             {pageNumbers.map((p, i) =>
               p === "..." ? (
@@ -198,13 +198,13 @@ export default function CategorysTable({ data, onRefetch }: { data: CategoryItem
               disabled={safePage >= maxPage}
               onClick={() => setCurrentPage((p) => Math.min(maxPage, p + 1))}
               className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/[0.05] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-              title="Keyingi"
+              title={t("Keyingi", "Далее")}
             >›</button>
             <button
               disabled={safePage >= maxPage}
               onClick={() => setCurrentPage(maxPage)}
               className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/[0.05] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-              title="Oxirgi"
+              title={t("Oxirgi", "Последняя")}
             >»</button>
           </div>
         </div>
@@ -213,36 +213,36 @@ export default function CategorysTable({ data, onRefetch }: { data: CategoryItem
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[600px] m-4">
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <div className="px-2 pr-14 mb-6">
-            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">Kategoriyani tahrirlash</h4>
+            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">{t("Kategoriyani tahrirlash", "Редактировать категорию")}</h4>
           </div>
           <div className="flex flex-col gap-4 px-2">
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <Label>Nomi (O'zbek)</Label>
+                <Label>{t("Nomi (O'zbek)", "Название (узбекский)")}</Label>
                 <TranslateButton
                   source={form.name_ru}
                   direction="ru->uz"
                   onResult={(t) => setForm({ ...form, name_uz: t })}
                 />
               </div>
-              <Input type="text" placeholder="Uzbekcha nomi" value={form.name_uz} onChange={(e) => setForm({ ...form, name_uz: e.target.value })} />
+              <Input type="text" placeholder={t("Uzbekcha nomi", "Название на узбекском")} value={form.name_uz} onChange={(e) => setForm({ ...form, name_uz: e.target.value })} />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <Label>Nomi (Ruscha)</Label>
+                <Label>{t("Nomi (Ruscha)", "Название (русский)")}</Label>
                 <TranslateButton
                   source={form.name_uz}
                   direction="uz->ru"
                   onResult={(t) => setForm({ ...form, name_ru: t })}
                 />
               </div>
-              <Input type="text" placeholder="Ruscha nomi" value={form.name_ru} onChange={(e) => setForm({ ...form, name_ru: e.target.value })} />
+              <Input type="text" placeholder={t("Ruscha nomi", "Название на русском")} value={form.name_ru} onChange={(e) => setForm({ ...form, name_ru: e.target.value })} />
             </div>
-            <ImageField key={imgKey.current} label="Rasm (ixtiyoriy)" onChange={(r) => { imageResultRef.current = r; }} />
+            <ImageField key={imgKey.current} label={t("Rasm (ixtiyoriy)", "Фото (необязательно)")} onChange={(r) => { imageResultRef.current = r; }} />
           </div>
           <div className="flex items-center gap-3 px-2 mt-6 justify-end">
-            <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saqlanmoqda..." : "Saqlash"}</Button>
+            <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}</Button>
           </div>
         </div>
       </Modal>

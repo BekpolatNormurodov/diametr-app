@@ -9,26 +9,26 @@ import Label from "../../components/form/Label";
 import Moment from "moment";
 import { formatMoney } from "../../service/formatters/money.format";
 import { matchesSearchKey, searchKey } from "../../utils/searchKey";
-import { useLang } from "../../context/LangContext";
+import { useLang, tr } from "../../context/LangContext";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function subStatusInfo(expired?: string | null) {
-  if (!expired) return { cls: "bg-gray-100 text-gray-500 border-gray-200", dot: "bg-gray-400", label: "Belgilanmagan", days: null, color: "gray" };
+  if (!expired) return { cls: "bg-gray-100 text-gray-500 border-gray-200", dot: "bg-gray-400", label: tr("Belgilanmagan", "Не задано"), days: null, color: "gray" };
   const days = Math.ceil((new Date(expired).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (days < 0) return { cls: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500", label: "Tugagan", days, color: "red" };
-  if (days <= 3) return { cls: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500", label: `${days} kun qoldi`, days, color: "red" };
-  if (days <= 7) return { cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500", label: `${days} kun qoldi`, days, color: "amber" };
-  if (days <= 30) return { cls: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500", label: `${days} kun qoldi`, days, color: "blue" };
-  return { cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", label: "Faol", days, color: "green" };
+  if (days < 0) return { cls: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500", label: tr("Tugagan", "Истекла"), days, color: "red" };
+  if (days <= 3) return { cls: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500", label: tr(`${days} kun qoldi`, `осталось ${days} дн.`), days, color: "red" };
+  if (days <= 7) return { cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500", label: tr(`${days} kun qoldi`, `осталось ${days} дн.`), days, color: "amber" };
+  if (days <= 30) return { cls: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500", label: tr(`${days} kun qoldi`, `осталось ${days} дн.`), days, color: "blue" };
+  return { cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", label: tr("Faol", "Активен"), days, color: "green" };
 }
 
 const LOG_LABELS: Record<string, { label: string; cls: string }> = {
   TOP_UP_CLICK: { label: "Click", cls: "bg-blue-50 text-blue-600" },
   TOP_UP_PAYME: { label: "Payme", cls: "bg-cyan-50 text-cyan-600" },
   TOP_UP_UZUM: { label: "Uzum", cls: "bg-purple-50 text-purple-600" },
-  TOP_UP_MANUAL: { label: "Qolda", cls: "bg-teal-50 text-teal-600" },
-  SUBSCRIPTION_DEDUCT: { label: "Obuna", cls: "bg-red-50 text-red-600" },
-  FREE_TRIAL: { label: "Tekin", cls: "bg-violet-50 text-violet-600" },
+  TOP_UP_MANUAL: { get label() { return tr("Qolda", "Вручную"); }, cls: "bg-teal-50 text-teal-600" },
+  SUBSCRIPTION_DEDUCT: { get label() { return tr("Obuna", "Подписка"); }, cls: "bg-red-50 text-red-600" },
+  FREE_TRIAL: { get label() { return tr("Tekin", "Бесплатно"); }, cls: "bg-violet-50 text-violet-600" },
 };
 
 export default function SubscriptionsPage() {
@@ -109,23 +109,23 @@ export default function SubscriptionsPage() {
     setSavingSettings(true);
     try {
       await axiosClient.patch("/subscription/settings", settings);
-      toast.success("Sozlamalar saqlandi");
+      toast.success(t("Sozlamalar saqlandi", "Настройки сохранены"));
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik");
+      toast.error(e?.response?.data?.message ?? t("Xatolik", "Ошибка"));
     } finally { setSavingSettings(false); }
   };
 
   const handleTopUp = async () => {
-    if (!selectedShop || !topUpAmount) { toast.error("Dokon va summa tanlang"); return; }
+    if (!selectedShop || !topUpAmount) { toast.error(t("Dokon va summa tanlang", "Выберите магазин и сумму")); return; }
     setTopping(true);
     try {
       await axiosClient.post(`/subscription/top-up/${selectedShop}`, { amount: Number(topUpAmount), note: topUpNote || undefined });
-      toast.success("Balans to'ldirildi");
+      toast.success(t("Balans to'ldirildi", "Баланс пополнен"));
       setTopUpAmount(""); setTopUpNote("");
       await fetchAll();
       await fetchLogs(selectedShop);
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik");
+      toast.error(e?.response?.data?.message ?? t("Xatolik", "Ошибка"));
     } finally { setTopping(false); }
   };
 
@@ -133,28 +133,28 @@ export default function SubscriptionsPage() {
     setGivingTrial(true);
     try {
       await axiosClient.post(`/subscription/free-trial/${shopId}`, { months });
-      toast.success(`+${months} oy tekin berildi`);
+      toast.success(t(`+${months} oy tekin berildi`, `Выдано бесплатно: +${months} мес.`));
       await fetchAll();
       if (selectedShop) await fetchLogs(selectedShop);
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik");
+      toast.error(e?.response?.data?.message ?? t("Xatolik", "Ошибка"));
     } finally { setGivingTrial(false); }
   };
 
   const handleSetExpiry = async () => {
-    if (!selectedShop || !expiryDate) { toast.error("Sana tanlang"); return; }
+    if (!selectedShop || !expiryDate) { toast.error(t("Sana tanlang", "Выберите дату")); return; }
     setSettingExpiry(true);
     try {
       await axiosClient.patch(`/subscription/set-expiry/${selectedShop}`, {
         expired: expiryDate,
         note: expiryNote || undefined,
       });
-      toast.success("Muddati belgilandi");
+      toast.success(t("Muddati belgilandi", "Срок установлен"));
       setExpiryDate(""); setExpiryNote("");
       await fetchAll();
       await fetchLogs(selectedShop);
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik");
+      toast.error(e?.response?.data?.message ?? t("Xatolik", "Ошибка"));
     } finally { setSettingExpiry(false); }
   };
 
@@ -173,25 +173,25 @@ export default function SubscriptionsPage() {
 
   return (
     <>
-      <PageMeta title={t.k("subscriptionsTitle")} description="Obuna boshqaruvi" />
-      <PageBreadcrumb pageTitle="Obuna Boshqaruvi" />
+      <PageMeta title={t.k("subscriptionsTitle")} description={t("Obuna boshqaruvi", "Управление подписками")} />
+      <PageBreadcrumb pageTitle={t("Obuna Boshqaruvi", "Управление подписками")} />
 
       {/* ── Summary Cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 mb-6 sm:grid-cols-4">
         <div className="rounded-2xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-5">
-          <div className="text-xs font-medium text-gray-400 uppercase mb-1">Jami do'konlar</div>
+          <div className="text-xs font-medium text-gray-400 uppercase mb-1">{t("Jami do'konlar", "Всего магазинов")}</div>
           <div className="text-2xl font-bold text-gray-800 dark:text-white">{shops.length}</div>
         </div>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/30 dark:bg-emerald-900/10 p-5">
-          <div className="text-xs font-medium text-emerald-600 uppercase mb-1">Faol</div>
+          <div className="text-xs font-medium text-emerald-600 uppercase mb-1">{t("Faol", "Активен")}</div>
           <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{activeCount}</div>
         </div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50/50 dark:border-amber-900/30 dark:bg-amber-900/10 p-5">
-          <div className="text-xs font-medium text-amber-600 uppercase mb-1">Ogohlantirish</div>
+          <div className="text-xs font-medium text-amber-600 uppercase mb-1">{t("Ogohlantirish", "Предупреждение")}</div>
           <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{warningCount}</div>
         </div>
         <div className="rounded-2xl border border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-900/10 p-5">
-          <div className="text-xs font-medium text-red-600 uppercase mb-1">Tugagan</div>
+          <div className="text-xs font-medium text-red-600 uppercase mb-1">{t("Tugagan", "Истекла")}</div>
           <div className="text-2xl font-bold text-red-700 dark:text-red-400">{expiredCount}</div>
         </div>
       </div>
@@ -205,13 +205,13 @@ export default function SubscriptionsPage() {
           <svg className={`w-4 h-4 transition-transform ${showSettings ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          Umumiy sozlamalar
+          {t("Umumiy sozlamalar", "Общие настройки")}
         </button>
         {showSettings && settings && (
           <div className="mt-3 rounded-2xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-5">
             <div className="flex flex-wrap items-end gap-4">
               <div className="w-48">
-                <Label>Bepul sinov (oy)</Label>
+                <Label>{t("Bepul sinov (oy)", "Пробный период (мес.)")}</Label>
                 <Input
                   type="number"
                   value={String(settings.free_trial_months)}
@@ -219,7 +219,7 @@ export default function SubscriptionsPage() {
                 />
               </div>
               <div className="w-48">
-                <Label>Oylik narx (som)</Label>
+                <Label>{t("Oylik narx (som)", "Цена в месяц (сум)")}</Label>
                 <Input
                   type="number"
                   value={String(settings.subscription_price)}
@@ -227,7 +227,7 @@ export default function SubscriptionsPage() {
                 />
               </div>
               <Button onClick={handleSaveSettings} disabled={savingSettings} size="sm">
-                {savingSettings ? "..." : "Saqlash"}
+                {savingSettings ? "..." : t("Saqlash", "Сохранить")}
               </Button>
             </div>
           </div>
@@ -242,12 +242,12 @@ export default function SubscriptionsPage() {
           <div className="rounded-2xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 dark:border-white/[0.05]">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-gray-800 dark:text-white">Do'konlar</h3>
-                <span className="text-xs text-gray-400">{filteredShops.length} ta</span>
+                <h3 className="text-base font-semibold text-gray-800 dark:text-white">{t("Do'konlar", "Магазины")}</h3>
+                <span className="text-xs text-gray-400">{filteredShops.length} {t("ta", "шт.")}</span>
               </div>
               <input
                 type="text"
-                placeholder="Qidirish..."
+                placeholder={t("Qidirish...", "Поиск...")}
                 value={searchShop}
                 onChange={(e) => setSearchShop(e.target.value)}
                 className="w-full h-9 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-white px-3 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition"
@@ -277,10 +277,10 @@ export default function SubscriptionsPage() {
                       <div className="flex items-center justify-between">
                         <div className="min-w-0">
                           <div className="font-medium text-sm text-gray-800 dark:text-white truncate">
-                            {shop.name ?? `Do'kon #${shop.id}`}
+                            {shop.name ?? t(`Do'kon #${shop.id}`, `Магазин #${shop.id}`)}
                           </div>
                           <div className="text-xs text-gray-400 mt-0.5">
-                            {admin?.fullname ?? "Admin yo'q"}
+                            {admin?.fullname ?? t("Admin yo'q", "Нет админа")}
                             {admin?.chat_id && <span className="ml-1 text-green-500">• TG</span>}
                           </div>
                         </div>
@@ -298,7 +298,7 @@ export default function SubscriptionsPage() {
                   );
                 })}
                 {filteredShops.length === 0 && (
-                  <div className="py-10 text-center text-gray-400 text-sm">Do'konlar topilmadi</div>
+                  <div className="py-10 text-center text-gray-400 text-sm">{t("Do'konlar topilmadi", "Магазины не найдены")}</div>
                 )}
               </div>
             )}
@@ -312,7 +312,7 @@ export default function SubscriptionsPage() {
               <svg className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
-              <p className="text-gray-400 dark:text-gray-500 text-sm">Do'konni tanlang boshqarish uchun</p>
+              <p className="text-gray-400 dark:text-gray-500 text-sm">{t("Do'konni tanlang boshqarish uchun", "Выберите магазин для управления")}</p>
             </div>
           ) : (
             <div className="space-y-5">
@@ -322,10 +322,10 @@ export default function SubscriptionsPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <h2 className="text-xl font-bold text-gray-800 dark:text-white">
-                      {selectedShopData?.name ?? `Do'kon #${selectedShop}`}
+                      {selectedShopData?.name ?? t(`Do'kon #${selectedShop}`, `Магазин #${selectedShop}`)}
                     </h2>
                     <div className="mt-1 text-sm text-gray-400">
-                      {selectedShopData?.admins?.[0]?.fullname ?? "Admin belgilanmagan"}
+                      {selectedShopData?.admins?.[0]?.fullname ?? t("Admin belgilanmagan", "Админ не назначен")}
                       {selectedShopData?.admins?.[0]?.phone && (
                         <span className="ml-2">{selectedShopData.admins[0].phone}</span>
                       )}
@@ -339,25 +339,25 @@ export default function SubscriptionsPage() {
 
                 <div className="grid grid-cols-3 gap-4 mt-5">
                   <div className="rounded-xl bg-gray-50 dark:bg-white/[0.04] p-4 text-center">
-                    <div className="text-xs font-medium text-gray-400 uppercase mb-1">Balans</div>
+                    <div className="text-xs font-medium text-gray-400 uppercase mb-1">{t("Balans", "Баланс")}</div>
                     <div className="text-lg font-bold text-gray-800 dark:text-white">
                       {formatMoney(selectedShopData?.balance ?? 0)}
                     </div>
                     <div className="text-xs text-gray-400">som</div>
                   </div>
                   <div className="rounded-xl bg-gray-50 dark:bg-white/[0.04] p-4 text-center">
-                    <div className="text-xs font-medium text-gray-400 uppercase mb-1">Obuna muddati</div>
+                    <div className="text-xs font-medium text-gray-400 uppercase mb-1">{t("Obuna muddati", "Срок подписки")}</div>
                     <div className="text-lg font-bold text-gray-800 dark:text-white">
                       {selectedShopData?.expired ? Moment(selectedShopData.expired).format("DD.MM.YYYY") : "—"}
                     </div>
                     <div className="text-xs text-gray-400">
-                      {selectedStatus.days != null ? (selectedStatus.days < 0 ? `${Math.abs(selectedStatus.days)} kun oldin tugagan` : `${selectedStatus.days} kun qoldi`) : "belgilanmagan"}
+                      {selectedStatus.days != null ? (selectedStatus.days < 0 ? t(`${Math.abs(selectedStatus.days)} kun oldin tugagan`, `истекла ${Math.abs(selectedStatus.days)} дн. назад`) : t(`${selectedStatus.days} kun qoldi`, `осталось ${selectedStatus.days} дн.`)) : "belgilanmagan"}
                     </div>
                   </div>
                   <div className="rounded-xl bg-gray-50 dark:bg-white/[0.04] p-4 text-center">
-                    <div className="text-xs font-medium text-gray-400 uppercase mb-1">Holat</div>
+                    <div className="text-xs font-medium text-gray-400 uppercase mb-1">{t("Holat", "Статус")}</div>
                     <div className={`text-lg font-bold ${selectedShopData?.work_status === "WORKING" ? "text-emerald-600" : selectedShopData?.work_status === "BLOCKED" ? "text-red-600" : "text-gray-400"}`}>
-                      {selectedShopData?.work_status === "WORKING" ? "Ishlayapti" : selectedShopData?.work_status === "BLOCKED" ? "Bloklangan" : selectedShopData?.work_status ?? "—"}
+                      {selectedShopData?.work_status === "WORKING" ? t("Ishlayapti", "Работает") : selectedShopData?.work_status === "BLOCKED" ? t("Bloklangan", "Заблокирован") : selectedShopData?.work_status ?? "—"}
                     </div>
                   </div>
                 </div>
@@ -369,7 +369,7 @@ export default function SubscriptionsPage() {
                   <svg className="w-4 h-4 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
                   </svg>
-                  Tekin muddat berish
+                  {t("Tekin muddat berish", "Выдать бесплатный срок")}
                 </h3>
                 <div className="flex flex-wrap gap-3">
                   {[1, 2, 3, 6, 12].map((m) => (
@@ -399,11 +399,11 @@ export default function SubscriptionsPage() {
                     <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    Muddatni belgilash
+                    {t("Muddatni belgilash", "Установить срок")}
                   </h3>
                   <div className="space-y-3">
                     <div>
-                      <Label>Sana</Label>
+                      <Label>{t("Sana", "Дата")}</Label>
                       <input
                         type="date"
                         value={expiryDate}
@@ -412,16 +412,16 @@ export default function SubscriptionsPage() {
                       />
                     </div>
                     <div>
-                      <Label>Izoh (ixtiyoriy)</Label>
+                      <Label>{t("Izoh (ixtiyoriy)", "Комментарий (необязательно)")}</Label>
                       <Input
                         type="text"
-                        placeholder="Sabab..."
+                        placeholder={t("Sabab...", "Причина...")}
                         value={expiryNote}
                         onChange={(e: any) => setExpiryNote(e.target.value)}
                       />
                     </div>
                     <Button onClick={handleSetExpiry} disabled={settingExpiry || !expiryDate} className="w-full" size="sm">
-                      {settingExpiry ? "Belgilanmoqda..." : "Muddatni belgilash"}
+                      {settingExpiry ? t("Belgilanmoqda...", "Установка...") : t("Muddatni belgilash", "Установить срок")}
                     </Button>
                   </div>
                 </div>
@@ -432,11 +432,11 @@ export default function SubscriptionsPage() {
                     <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Balans to'ldirish
+                    {t("Balans to'ldirish", "Пополнение баланса")}
                   </h3>
                   <div className="space-y-3">
                     <div>
-                      <Label>Summa (som)</Label>
+                      <Label>{t("Summa (som)", "Сумма (сум)")}</Label>
                       <Input
                         type="number"
                         placeholder="50 000"
@@ -445,16 +445,16 @@ export default function SubscriptionsPage() {
                       />
                     </div>
                     <div>
-                      <Label>Izoh (ixtiyoriy)</Label>
+                      <Label>{t("Izoh (ixtiyoriy)", "Комментарий (необязательно)")}</Label>
                       <Input
                         type="text"
-                        placeholder="Sabab..."
+                        placeholder={t("Sabab...", "Причина...")}
                         value={topUpNote}
                         onChange={(e: any) => setTopUpNote(e.target.value)}
                       />
                     </div>
                     <Button onClick={handleTopUp} disabled={topping || !topUpAmount} className="w-full" size="sm">
-                      {topping ? "To'ldirilmoqda..." : "Balansni to'ldirish"}
+                      {topping ? t("To'ldirilmoqda...", "Пополнение...") : t("Balansni to'ldirish", "Пополнить баланс")}
                     </Button>
                   </div>
                 </div>
@@ -467,22 +467,22 @@ export default function SubscriptionsPage() {
                     <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                    Tranzaksiyalar jurnali
+                    {t("Tranzaksiyalar jurnali", "Журнал транзакций")}
                   </h3>
-                  <span className="text-xs text-gray-400">{logs.length} ta</span>
+                  <span className="text-xs text-gray-400">{logs.length} {t("ta", "шт.")}</span>
                 </div>
                 {logs.length === 0 ? (
-                  <div className="py-10 text-center text-gray-400 text-sm">Harakatlar topilmadi</div>
+                  <div className="py-10 text-center text-gray-400 text-sm">{t("Harakatlar topilmadi", "Операции не найдены")}</div>
                 ) : (
                   <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
                     <table className="min-w-full">
                       <thead className="sticky top-0 bg-white dark:bg-gray-900 z-10">
                         <tr className="border-b border-gray-100 dark:border-white/[0.05]">
-                          <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">Sana</th>
-                          <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">Tur</th>
-                          <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase">Summa</th>
-                          <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase">Balans</th>
-                          <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">Izoh</th>
+                          <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("Sana", "Дата")}</th>
+                          <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("Tur", "Тип")}</th>
+                          <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase">{t("Summa", "Сумма")}</th>
+                          <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase">{t("Balans", "Баланс")}</th>
+                          <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("Izoh", "Комментарий")}</th>
                         </tr>
                       </thead>
                       <tbody>

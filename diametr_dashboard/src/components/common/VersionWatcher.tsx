@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 
+import { useLang } from "../../context/LangContext";
 /*
  * Picks up a new deploy in a long-open tab without a hard refresh.
  *
@@ -37,6 +38,7 @@ function writeAttempt(v: string) {
 }
 
 export default function VersionWatcher() {
+  const { t } = useLang();
   const location = useLocation();
   const runningRef = useRef<string | null>(null);
   const latestRef = useRef<string | null>(null);
@@ -119,18 +121,18 @@ export default function VersionWatcher() {
             <path fillRule="evenodd" clipRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" />
           </svg>
         </span>
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">Yangi versiya mavjud</span>
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">{t("Yangi versiya mavjud", "Доступна новая версия")}</span>
         <button
           type="button"
           onClick={() => window.location.reload()}
           className="px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors whitespace-nowrap"
         >
-          Yangilash
+          {t("Yangilash", "Обновить")}
         </button>
         <button
           type="button"
           onClick={() => setDismissed(available)}
-          title="Yopish"
+          title={t("Yopish", "Закрыть")}
           className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 transition-colors"
         >
           <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">

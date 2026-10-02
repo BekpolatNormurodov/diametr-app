@@ -30,7 +30,7 @@ import { toast } from "../../ui/toast";
 import { formatMoney } from "../../../service/formatters/money.format";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
-import { useLang } from "../../../context/LangContext";
+import { useLang, tr } from "../../../context/LangContext";
 
 export interface PromoCodeItemProps {
   id: number;
@@ -52,8 +52,8 @@ const options = [
 ];
 
 const discountTypeOptions = [
-  { value: "PERCENT", label: "Foiz (%)" },
-  { value: "FIXED", label: "Belgilangan summa" },
+  { value: "PERCENT", get label() { return tr("Foiz (%)", "Процент (%)"); } },
+  { value: "FIXED", get label() { return tr("Belgilangan summa", "Фиксированная сумма"); } },
 ];
 
 const emptyForm = {
@@ -132,15 +132,15 @@ export default function PromoCodesTable({
       };
       if (editItem) {
         await axiosClient.patch(`/promo-code/${editItem.id}`, payload);
-        toast.success("Promo kod yangilandi");
+        toast.success(t("Promo kod yangilandi", "Промокод обновлён"));
       } else {
         await axiosClient.post("/promo-code", payload);
-        toast.success("Promo kod yaratildi");
+        toast.success(t("Promo kod yaratildi", "Промокод создан"));
       }
       onRefetch();
       closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally {
       setSaving(false);
     }
@@ -149,11 +149,11 @@ export default function PromoCodesTable({
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/promo-code/${id}`);
-      toast.success("O'chirildi");
+      toast.success(t("O'chirildi", "Отключено"));
       onRefetch();
     } catch (e: any) {
       // e.g. 400 for a code that has already been used (backend explains in Uzbek).
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     }
   };
 
@@ -162,10 +162,10 @@ export default function PromoCodesTable({
       await axiosClient.patch(`/promo-code/${item.id}`, {
         is_active: !item.is_active,
       });
-      toast.success(item.is_active ? "O'chirildi" : "Yoqildi");
+      toast.success(item.is_active ? t("O'chirildi", "Отключено") : t("Yoqildi", "Включено"));
       onRefetch();
     } catch {
-      toast.error("Xatolik");
+      toast.error(t("Xatolik", "Ошибка"));
     }
   };
 
@@ -174,14 +174,14 @@ export default function PromoCodesTable({
       tableData.map((p) => ({
         ID: p.id,
         Kod: p.code,
-        "Chegirma turi": p.discount_type,
-        "Chegirma miqdori": p.discount_value,
-        "Min buyurtma": p.min_order_amount ?? "",
-        "Maks foydalanish": p.max_uses ?? "Cheksiz",
-        "Foydalanilgan": p.used_count,
-        Holati: p.is_active ? "Faol" : "Nofaol",
-        "Muddat": p.expires_at ? Moment(p.expires_at).format("DD.MM.YYYY") : "Cheksiz",
-        "Yaratilgan": Moment(p.createdAt).format("DD.MM.YYYY HH:mm"),
+        [t("Chegirma turi", "Тип скидки")]: p.discount_type,
+        [t("Chegirma miqdori", "Размер скидки")]: p.discount_value,
+        [t("Min buyurtma", "Мин. заказ")]: p.min_order_amount ?? "",
+        [t("Maks foydalanish", "Макс. использований")]: p.max_uses ?? t("Cheksiz", "Без ограничений"),
+        [t("Foydalanilgan", "Использовано")]: p.used_count,
+        Holati: p.is_active ? t("Faol", "Активен") : t("Nofaol", "Неактивен"),
+        [t("Muddat", "Срок")]: p.expires_at ? Moment(p.expires_at).format("DD.MM.YYYY") : t("Cheksiz", "Без ограничений"),
+        [t("Yaratilgan", "Создан")]: Moment(p.createdAt).format("DD.MM.YYYY HH:mm"),
       }))
     );
     const wb = XLSX.utils.book_new();
@@ -194,18 +194,18 @@ export default function PromoCodesTable({
       <div className="max-w-full overflow-x-auto">
         <div className="px-5 py-3 flex flex-row justify-between items-center border-b border-gray-100 dark:border-white/[0.05]">
           <div className="flex flex-row items-center gap-2 text-theme-sm font-medium text-gray-500 dark:text-gray-400">
-            <span>Ko'rsatish</span>
+            <span>{t("Ko'rsatish", "Показать")}</span>
             <Select
               options={options}
               onChange={setOptionValue}
               className="dark:bg-dark-900"
               defaultValue="10"
             />
-            <span>ta</span>
+            <span>{t("ta", "шт.")}</span>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="primary" startIcon={<PlusIcon className="size-4 fill-white" />} onClick={openAdd}>
-              Qo'shish
+              {t("Qo'shish", "Добавить")}
             </Button>
             <Button size="sm" variant="outline" endIcon={<DownloadIcon className="size-4" />} onClick={handleExport}>
               Excel
@@ -215,7 +215,7 @@ export default function PromoCodesTable({
         <Table>
           <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
             <TableRow>
-              {["ID", "Kod", "Turi", "Chegirma", "Foydalanish", "Holati", "Muddat", "Yaratilgan", ""].map((h) => (
+              {["ID", t("Kod", "Код"), t("Turi", "Тип"), t("Chegirma", "Скидка"), t("Foydalanish", "Использование"), t("Holati", "Статус"), t("Muddat", "Срок"), t("Yaratilgan", "Создан"), ""].map((h) => (
                 <TableCell key={h} isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                   {h}
                 </TableCell>
@@ -233,14 +233,14 @@ export default function PromoCodesTable({
                     </code>
                     <button
                       className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                      onClick={() => { navigator.clipboard.writeText(p.code); toast.info("Nusxalandi"); }}
+                      onClick={() => { navigator.clipboard.writeText(p.code); toast.info(t("Nusxalandi", "Скопировано")); }}
                     >
                       <CopyIcon className="size-4" />
                     </button>
                   </div>
                 </TableCell>
                 <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
-                  {p.discount_type === "PERCENT" ? "Foiz" : "Belgilangan"}
+                  {p.discount_type === "PERCENT" ? t("Foiz", "Процент") : t("Belgilangan", "Фиксированная")}
                 </TableCell>
                 <TableCell className="px-5 py-4 font-medium text-gray-800 dark:text-white/90 text-theme-sm">
                   {p.discount_type === "PERCENT" ? `${p.discount_value}%` : formatMoney(p.discount_value)}
@@ -251,7 +251,7 @@ export default function PromoCodesTable({
                 <TableCell className="px-5 py-4">
                   <button onClick={() => handleToggle(p)}>
                     <Badge color={p.is_active ? "success" : "error"}>
-                      {p.is_active ? "Faol" : "Nofaol"}
+                      {p.is_active ? t("Faol", "Активен") : t("Nofaol", "Неактивен")}
                     </Badge>
                   </button>
                 </TableCell>
@@ -269,7 +269,7 @@ export default function PromoCodesTable({
             {currentItems.length === 0 && (
               <TableRow>
                 <TableCell className="px-5 py-8 text-center text-gray-400 dark:text-gray-600" colSpan={9}>
-                  Ma'lumot topilmadi
+                  {t("Ma'lumot topilmadi", "Данные не найдены")}
                 </TableCell>
               </TableRow>
             )}
@@ -279,7 +279,7 @@ export default function PromoCodesTable({
           currentPage={currentPage}
           maxPage={maxPage}
           totalItems={tableData.length}
-          totalLabel="ta promo kod"
+          totalLabel={t("ta promo kod", "промокодов")}
           onChange={setCurrentPage}
         />
       </div>
@@ -288,20 +288,20 @@ export default function PromoCodesTable({
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[560px] m-4">
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <h4 className="mb-5 text-xl font-semibold text-gray-800 dark:text-white/90">
-            {editItem ? "Promo kodni tahrirlash" : "Yangi promo kod"}
+            {editItem ? t("Promo kodni tahrirlash", "Редактировать промокод") : t("Yangi promo kod", "Новый промокод")}
           </h4>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <Label>Kod *</Label>
+              <Label>{t("Kod *", "Код *")}</Label>
               <Input
                 type="text"
-                placeholder="Masalan: SUMMER20"
+                placeholder={t("Masalan: SUMMER20", "Например: SUMMER20")}
                 value={form.code}
                 onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
               />
             </div>
             <div>
-              <Label>Chegirma turi *</Label>
+              <Label>{t("Chegirma turi *", "Тип скидки *")}</Label>
               <Select
                 options={discountTypeOptions}
                 defaultValue={form.discount_type}
@@ -309,7 +309,7 @@ export default function PromoCodesTable({
               />
             </div>
             <div>
-              <Label>Chegirma miqdori *</Label>
+              <Label>{t("Chegirma miqdori *", "Размер скидки *")}</Label>
               <Input
                 type="number"
                 placeholder={form.discount_type === "PERCENT" ? "20" : "50000"}
@@ -320,7 +320,7 @@ export default function PromoCodesTable({
               />
             </div>
             <div>
-              <Label>Min buyurtma summasi</Label>
+              <Label>{t("Min buyurtma summasi", "Мин. сумма заказа")}</Label>
               <Input
                 type="number"
                 placeholder="100000"
@@ -329,16 +329,16 @@ export default function PromoCodesTable({
               />
             </div>
             <div>
-              <Label>Maks foydalanish soni</Label>
+              <Label>{t("Maks foydalanish soni", "Макс. число использований")}</Label>
               <Input
                 type="number"
-                placeholder="Cheksiz"
+                placeholder={t("Cheksiz", "Без ограничений")}
                 value={form.max_uses}
                 onChange={(e) => setForm({ ...form, max_uses: e.target.value })}
               />
             </div>
             <div className="sm:col-span-2">
-              <Label>Amal qilish muddati</Label>
+              <Label>{t("Amal qilish muddati", "Срок действия")}</Label>
               <Input
                 type="date"
                 value={form.expires_at}
@@ -347,9 +347,9 @@ export default function PromoCodesTable({
             </div>
           </div>
           <div className="flex items-center gap-3 mt-6 justify-end">
-            <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
+            <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
             <Button size="sm" onClick={handleSave} disabled={saving || !form.code || !form.discount_value}>
-              {saving ? "Saqlanmoqda..." : "Saqlash"}
+              {saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}
             </Button>
           </div>
         </div>

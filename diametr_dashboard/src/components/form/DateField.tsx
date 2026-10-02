@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Label from "./Label";
 import { CalenderIcon } from "../../icons";
 
+import { useLang } from "../../context/LangContext";
 interface DateFieldProps {
   label?: string;
   /** Selected date as "YYYY-MM-DD" (or empty). */
@@ -15,6 +16,11 @@ const MONTHS = [
   "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
 ];
 const WEEKDAYS = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]; // Monday-first
+const MONTHS_RU = [
+  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
+];
+const WEEKDAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -24,7 +30,9 @@ const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
  * No external library (avoids flatpickr's inline-calendar height and the native
  * date-input fallback), fully controlled, and visually matched to `Select`.
  */
-export default function DateField({ label, value, placeholder = "Sanani tanlang", onChange }: DateFieldProps) {
+export default function DateField({ label, value, placeholder: placeholderProp, onChange }: DateFieldProps) {
+  const { t, lang } = useLang();
+  const placeholder = placeholderProp ?? t("Sanani tanlang", "Выберите дату");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -92,16 +100,16 @@ export default function DateField({ label, value, placeholder = "Sanani tanlang"
               type="button"
               onClick={() => setView(new Date(year, month - 1, 1))}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-              aria-label="Oldingi oy"
+              aria-label={t("Oldingi oy", "Предыдущий месяц")}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
-            <span className="text-sm font-medium text-gray-800 dark:text-white/90">{MONTHS[month]} {year}</span>
+            <span className="text-sm font-medium text-gray-800 dark:text-white/90">{(lang === "ru" ? MONTHS_RU : MONTHS)[month]} {year}</span>
             <button
               type="button"
               onClick={() => setView(new Date(year, month + 1, 1))}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-              aria-label="Keyingi oy"
+              aria-label={t("Keyingi oy", "Следующий месяц")}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
             </button>
@@ -109,7 +117,7 @@ export default function DateField({ label, value, placeholder = "Sanani tanlang"
 
           {/* Weekday row */}
           <div className="grid grid-cols-7 mb-1">
-            {WEEKDAYS.map((w) => (
+            {(lang === "ru" ? WEEKDAYS_RU : WEEKDAYS).map((w) => (
               <span key={w} className="text-center text-xs font-medium text-gray-400 py-1">{w}</span>
             ))}
           </div>
@@ -145,14 +153,14 @@ export default function DateField({ label, value, placeholder = "Sanani tanlang"
               onClick={() => { onChange(""); setOpen(false); }}
               className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400"
             >
-              Tozalash
+              {t("Tozalash", "Очистить")}
             </button>
             <button
               type="button"
               onClick={goToday}
               className="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
             >
-              Bugun
+              {t("Bugun", "Сегодня")}
             </button>
           </div>
         </div>

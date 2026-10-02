@@ -3,6 +3,7 @@ import { ApexOptions } from "apexcharts";
 import Moment from "moment";
 import { isActiveOrder, isSoldOrder } from "../../utils/orderStatus";
 
+import { useLang } from "../../context/LangContext";
 interface Props {
   orders?: any[];
   isLoading?: boolean;
@@ -15,6 +16,7 @@ function fmt(n: number) {
 }
 
 export default function MonthlyTarget({ orders = [], isLoading = false }: Props) {
+  const { t } = useLang();
   const now = Moment();
   const thisMonth = orders.filter((o) => {
     const d = Moment(o.createdt ?? o.createdAt);
@@ -50,7 +52,7 @@ export default function MonthlyTarget({ orders = [], isLoading = false }: Props)
     },
     fill: { type: "solid", colors: ["#465FFF"] },
     stroke: { lineCap: "round" },
-    labels: ["Yakunlangan"],
+    labels: [t("Yakunlangan", "Завершено")],
   };
 
   const skeleton = "animate-pulse rounded-lg h-5 bg-gray-200 dark:bg-gray-700";
@@ -66,7 +68,7 @@ export default function MonthlyTarget({ orders = [], isLoading = false }: Props)
     <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03] overflow-hidden h-full">
       {/* Header */}
       <div className="px-6 pt-6 pb-2">
-        <h3 className="text-base font-semibold text-gray-800 dark:text-white">Bu oy buyurtmalari</h3>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-white">{t("Bu oy buyurtmalari", "Заказы за этот месяц")}</h3>
         <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{now.format("MMMM YYYY")}</p>
       </div>
 
@@ -83,25 +85,25 @@ export default function MonthlyTarget({ orders = [], isLoading = false }: Props)
 
       {/* Center label inside chart */}
       <p className="text-center -mt-4 mb-2 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-        Yakunlangan
+        {t("Yakunlangan", "Завершено")}
       </p>
 
       {/* Stats row */}
       <div className="grid grid-cols-4 border-t border-gray-100 dark:border-white/[0.06] divide-x divide-gray-100 dark:divide-white/[0.06]">
         <div className="px-3 py-4 text-center">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Jami</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t("Jami", "Всего")}</p>
           {isLoading ? <div className={skeleton + " mx-auto w-10"} /> : <p className="text-sm font-bold text-gray-800 dark:text-white">{total}</p>}
         </div>
         <div className="px-3 py-4 text-center">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Faol</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t("Faol", "Активен")}</p>
           {isLoading ? <div className={skeleton + " mx-auto w-10"} /> : <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{active}</p>}
         </div>
         <div className="px-3 py-4 text-center">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Bekor</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t("Bekor", "Отменено")}</p>
           {isLoading ? <div className={skeleton + " mx-auto w-10"} /> : <p className="text-sm font-bold text-red-500 dark:text-red-400">{canceled}</p>}
         </div>
         <div className="px-3 py-4 text-center">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Daromad</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t("Daromad", "Доход")}</p>
           {isLoading ? <div className={skeleton + " mx-auto w-14"} /> : <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{fmt(revenue)}</p>}
         </div>
       </div>

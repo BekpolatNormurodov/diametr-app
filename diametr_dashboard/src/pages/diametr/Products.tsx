@@ -102,18 +102,18 @@ export default function ProductsPage() {
 
   const handleAddUnitType = async () => {
     if (!utForm.name_uz.trim() || !utForm.symbol.trim()) {
-      toast.error("Nom va belgi kiritish shart");
+      toast.error(t("Nom va belgi kiritish shart", "Укажите название и обозначение"));
       return;
     }
     setUtSaving(true);
     try {
       await axiosClient.post("/unit-type", { ...utForm, name: utForm.name_uz });
-      toast.success("O'lchov birligi qo'shildi");
+      toast.success(t("O'lchov birligi qo'shildi", "Единица измерения добавлена"));
       refetchUt();
       closeUtModal();
       setUtForm({ name_uz: "", name_ru: "", symbol: "" });
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally {
       setUtSaving(false);
     }
@@ -121,16 +121,16 @@ export default function ProductsPage() {
 
   const handleAdding = async (skipDuplicateCheck = false) => {
     if (!Product.category_id) {
-      toast.error("Kategoriya tanlash shart!");
+      toast.error(t("Kategoriya tanlash shart!", "Выберите категорию!"));
       return;
     }
     const nameUz = Product.name_uz?.trim() ?? "";
     if (!nameUz) {
-      toast.error("Mahsulot nomini kiriting!");
+      toast.error(t("Mahsulot nomini kiriting!", "Введите название товара!"));
       return;
     }
     if (nameUz.length < 2) {
-      toast.error("Mahsulot nomi kamida 2 ta belgi bo'lishi kerak");
+      toast.error(t("Mahsulot nomi kamida 2 ta belgi bo'lishi kerak", "Название товара должно содержать не менее 2 символов"));
       return;
     }
     if (!skipDuplicateCheck) {
@@ -141,7 +141,7 @@ export default function ProductsPage() {
         return cid === Product.category_id && searchKey(p.name_uz ?? p.name ?? "") === key;
       });
       if (dup) {
-        setDupConfirm(`Bu kategoriyada "${dup.name_uz ?? dup.name ?? nameUz}" nomli mahsulot allaqachon bor (#${dup.id}). Baribir yaratilsinmi?`);
+        setDupConfirm(t(`Bu kategoriyada "${dup.name_uz ?? dup.name ?? nameUz}" nomli mahsulot allaqachon bor (#${dup.id}). Baribir yaratilsinmi?`, `В этой категории уже есть товар «${dup.name_uz ?? dup.name ?? nameUz}» (#${dup.id}). Всё равно создать?`));
         return;
       }
     }
@@ -170,7 +170,7 @@ export default function ProductsPage() {
         unit_type_id: Product.unit_type_id ? Number(Product.unit_type_id) : undefined,
       });
       const newId = created.data?.id ?? created.data?.data?.id;
-      toast.success("Mahsulot qo'shildi! Endi variantlar qo'shing");
+      toast.success(t("Mahsulot qo'shildi! Endi variantlar qo'shing", "Товар добавлен! Теперь добавьте варианты"));
       refetch();
       closeModal();
       setProduct(emptyProduct);
@@ -178,7 +178,7 @@ export default function ProductsPage() {
       // Auto-expand the new product so user can add variants
       if (newId) setAutoExpandId(newId);
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally {
       setSaving(false);
     }
@@ -257,7 +257,7 @@ export default function ProductsPage() {
               </div>
               <div>
                 <h4 className="text-lg font-bold text-white">{t.k("createProduct")}</h4>
-                <p className="text-sm text-white/70">Mahsulot yarating, keyin variantlarni qo'shing</p>
+                <p className="text-sm text-white/70">{t("Mahsulot yarating, keyin variantlarni qo'shing", "Создайте товар, затем добавьте варианты")}</p>
               </div>
             </div>
           </div>
@@ -267,7 +267,7 @@ export default function ProductsPage() {
             <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label>Nomi (O'zbek) *</Label>
+                  <Label>{t("Nomi (O'zbek) *", "Название (узбекский) *")}</Label>
                   <TranslateButton
                     source={Product.name_ru ?? ""}
                     direction="ru->uz"
@@ -283,7 +283,7 @@ export default function ProductsPage() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label>Nomi (Ruscha)</Label>
+                  <Label>{t("Nomi (Ruscha)", "Название (русский)")}</Label>
                   <TranslateButton
                     source={Product.name_uz ?? ""}
                     direction="uz->ru"
@@ -292,17 +292,17 @@ export default function ProductsPage() {
                 </div>
                 <Input
                   type="text"
-                  placeholder="Ruscha nomini kiriting"
+                  placeholder={t("Ruscha nomini kiriting", "Введите название на русском")}
                   value={Product.name_ru}
                   onChange={(e) => setProduct({ ...Product, name_ru: e.target.value })}
                 />
               </div>
               <div>
-                <Label>Kategoriya *</Label>
+                <Label>{t("Kategoriya *", "Категория *")}</Label>
                 <Select
                   options={category_options}
                   className="dark:bg-dark-900"
-                  placeholder="Kategoriyani tanlang"
+                  placeholder={t("Kategoriyani tanlang", "Выберите категорию")}
                   defaultValue={Product.category_id}
                   onChange={(v) => setProduct({ ...Product, category_id: v })}
                 />
@@ -311,12 +311,12 @@ export default function ProductsPage() {
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                     </svg>
-                    Kategoriya tanlash shart
+                    {t("Kategoriya tanlash shart", "Выберите категорию")}
                   </p>
                 )}
               </div>
               <div>
-                <Label>O'lchov birligi</Label>
+                <Label>{t("O'lchov birligi", "Единица измерения")}</Label>
                 <Select
                   options={unitTypeOptions}
                   className="dark:bg-dark-900"
@@ -327,7 +327,7 @@ export default function ProductsPage() {
               </div>
               <div className="lg:col-span-2">
                 <ImageField
-                  label="Rasm"
+                  label={t("Rasm", "Фото")}
                   allowUrl={false}
                   onChange={(result) => { imageResultRef.current = result; }}
                 />
@@ -340,20 +340,20 @@ export default function ProductsPage() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
                 </svg>
-                Mahsulot yaratilgandan keyin avtomatik ravishda variantlar qo'shish oynasi ochiladi
+                {t("Mahsulot yaratilgandan keyin avtomatik ravishda variantlar qo'shish oynasi ochiladi", "После создания товара автоматически откроется окно добавления вариантов")}
               </p>
             </div>
 
             {/* Actions */}
             <div className="flex items-center gap-3 mt-6 justify-end">
-              <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
+              <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
               <Button size="sm" onClick={() => handleAdding()} disabled={saving || !Product.category_id || !Product.name_uz?.trim()}>
                 {saving ? (
                   <span className="inline-flex items-center gap-2">
                     <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                    Saqlanmoqda...
+                    {t("Saqlanmoqda...", "Сохранение...")}
                   </span>
-                ) : "Yaratish va davom etish"}
+                ) : t("Yaratish va davom etish", "Создать и продолжить")}
               </Button>
             </div>
           </div>
@@ -363,9 +363,9 @@ export default function ProductsPage() {
       {dupConfirm && (
         <ConfirmDeleteModal
           tone="primary"
-          title="Bunday mahsulot allaqachon bor"
+          title={t("Bunday mahsulot allaqachon bor", "Такой товар уже существует")}
           desc={dupConfirm}
-          confirmLabel="Baribir yaratish"
+          confirmLabel={t("Baribir yaratish", "Всё равно создать")}
           onConfirm={() => { setDupConfirm(null); handleAdding(true); }}
           onCancel={() => setDupConfirm(null)}
         />
@@ -376,16 +376,16 @@ export default function ProductsPage() {
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <div className="px-2 pr-14 mb-6">
             <h4 className="text-2xl font-semibold text-gray-800 dark:text-white/90">
-              O'lchov birligi qo'shish
+              {t("O'lchov birligi qo'shish", "Добавить единицу измерения")}
             </h4>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Masalan: Kilogramm → kg, Litr → L, Metr → m
+              {t("Masalan: Kilogramm → kg, Litr → L, Metr → m", "Например: Килограмм → kg, Литр → L, Метр → m")}
             </p>
           </div>
           <div className="flex flex-col gap-4 px-2">
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <Label>Nomi (O'zbek) *</Label>
+                <Label>{t("Nomi (O'zbek) *", "Название (узбекский) *")}</Label>
                 <TranslateButton
                   source={utForm.name_ru}
                   direction="ru->uz"
@@ -401,7 +401,7 @@ export default function ProductsPage() {
             </div>
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <Label>Nomi (Ruscha)</Label>
+                <Label>{t("Nomi (Ruscha)", "Название (русский)")}</Label>
                 <TranslateButton
                   source={utForm.name_uz}
                   direction="uz->ru"
@@ -416,7 +416,7 @@ export default function ProductsPage() {
               />
             </div>
             <div>
-              <Label>Belgi (qisqa) *</Label>
+              <Label>{t("Belgi (qisqa) *", "Обозначение (кратко) *")}</Label>
               <Input
                 type="text"
                 placeholder="kg, L, m..."
@@ -426,9 +426,9 @@ export default function ProductsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3 px-2 mt-6 justify-end">
-            <Button size="sm" variant="outline" onClick={closeUtModal}>Bekor qilish</Button>
+            <Button size="sm" variant="outline" onClick={closeUtModal}>{t("Bekor qilish", "Отмена")}</Button>
             <Button size="sm" onClick={handleAddUnitType} disabled={utSaving}>
-              {utSaving ? "Saqlanmoqda..." : "Qo'shish"}
+              {utSaving ? t("Saqlanmoqda...", "Сохранение...") : t("Qo'shish", "Добавить")}
             </Button>
           </div>
         </div>

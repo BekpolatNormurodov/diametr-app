@@ -32,7 +32,7 @@ export default function AuthLayout({
                 />
               </Link>
               <div className="mb-3 px-4 py-1.5 rounded-full bg-white/10 border border-white/20">
-                <span className="text-xs font-semibold text-white/80 uppercase tracking-widest">Super Admin Panel</span>
+                <span className="text-xs font-semibold text-white/80 uppercase tracking-widest">{t("Super Admin Panel", "Панель Супер Админа")}</span>
               </div>
               <h2 className="mb-2 text-xl font-bold text-white text-center">
                 {t("Diametr Boshqaruv Tizimi", "Система управления Diametr")}

@@ -10,7 +10,7 @@ import * as XLSX from "xlsx";
 import { DownloadIcon } from "../../icons";
 import Button from "../../components/ui/button/Button";
 import { isSoldOrder } from "../../utils/orderStatus";
-import { useLang } from "../../context/LangContext";
+import { useLang, tr } from "../../context/LangContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Interfaces
@@ -58,7 +58,7 @@ function getProductName(p: NonNullable<OrderItem["products"]>[number]): string {
     p?.shop_product?.product_item?.product?.name_uz ??
     p?.shop_product?.product_item?.product?.name ??
     p?.shop_product?.product_item?.name ??
-    "Noma'lum"
+    tr("Noma'lum", "Неизвестно")
   );
 }
 
@@ -73,8 +73,8 @@ function buildStats(orders: OrderItem[]) {
   const paymentMap: Record<string, { count: number; total: number }> = {};
 
   orders.forEach((o) => {
-    const shop = o.shop?.name ?? "Noma'lum do'kon";
-    const payType = o.payment_type ?? "Noma'lum";
+    const shop = o.shop?.name ?? tr("Noma'lum do'kon", "Неизвестный магазин");
+    const payType = o.payment_type ?? tr("Noma'lum", "Неизвестно");
     const sold = isSoldOrder(o);
     const soldAmount = sold ? o.amount ?? 0 : 0;
 
@@ -113,32 +113,32 @@ function exportOverview(orders: OrderItem[]) {
   const wb = XLSX.utils.book_new();
 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-    ["Jami buyurtmalar", orders.length],
-    ["Jami tushum", soldRevenue(orders)],
-    ["Faol do'konlar", shopStats.length],
-    ["Sanasi", Moment().format("DD.MM.YYYY HH:mm")],
-  ]), "Umumiy");
+    [tr("Jami buyurtmalar", "Всего заказов"), orders.length],
+    [tr("Jami tushum", "Общая выручка"), soldRevenue(orders)],
+    [tr("Faol do'konlar", "Активные магазины"), shopStats.length],
+    [tr("Sanasi", "Дата"), Moment().format("DD.MM.YYYY HH:mm")],
+  ]), tr("Umumiy", "Общее"));
 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-    ["Do'kon", "Buyurtmalar", "Tushum", "Asosiy to'lov"],
+    [tr("Do'kon", "Магазин"), tr("Buyurtmalar", "Заказы"), tr("Tushum", "Выручка"), tr("Asosiy to'lov", "Основной платёж")],
     ...shopStats.map((s) => {
       const topPay = Object.entries(s.payments).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "-";
       return [s.shop, s.totalOrders, s.totalRevenue, topPay];
     }),
-  ]), "Do'konlar");
+  ]), tr("Do'konlar", "Магазины"));
 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-    ["To'lov usuli", "Soni", "Jami summa"],
+    [tr("To'lov usuli", "Способ оплаты"), tr("Soni", "Количество"), tr("Jami summa", "Общая сумма")],
     ...paymentStats.map((p) => [p.type, p.count, p.total]),
-  ]), "To'lov usullari");
+  ]), tr("To'lov usullari", "Способы оплаты"));
 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-    ["ID", "Do'kon", "Summa", "To'lov", "Status", "Sana"],
+    ["ID", tr("Do'kon", "Магазин"), tr("Summa", "Сумма"), tr("To'lov", "Платёж"), tr("Holat", "Статус"), tr("Sana", "Дата")],
     ...orders.map((o) => [
       o.id, o.shop?.name ?? "-", o.amount ?? 0, o.payment_type ?? "-",
       o.status ?? "-", Moment(o.createdt ?? o.createdAt).format("DD.MM.YYYY HH:mm"),
     ]),
-  ]), "Buyurtmalar");
+  ]), tr("Buyurtmalar", "Заказы"));
 
   XLSX.writeFile(wb, `diametr-analytics-${Moment().format("YYYY-MM-DD")}.xlsx`);
 }
@@ -174,28 +174,28 @@ export default function AnalyticsPage() {
   const { shopStats, paymentStats } = buildStats(filtered);
 
   const statusConfig: Record<string, string> = {
-    STARTED: "Yangi", CONFIRMED: "Tasdiqlangan", FINISHED: "Yakunlangan", CANCELED: "Bekor qilingan",
+    STARTED: "Yangi", CONFIRMED: "Tasdiqlangan", FINISHED: "Yakunlangan", CANCELED: t("Bekor qilingan", "Отменён"),
   };
 
   return (
     <>
       <PageMeta title={`${t.k("analytics")} | Diametr Dashboard`} description="Diametr Dashboard" />
-      <PageBreadcrumb pageTitle="Analitika & Statistika" />
+      <PageBreadcrumb pageTitle={t("Analitika & Statistika", "Аналитика и статистика")} />
 
       {/* Date filter */}
       <div className="flex flex-wrap gap-4 mb-6 items-end">
         <div>
-          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Dan</label>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t("Dan", "С")}</label>
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
             className="border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-900 text-gray-800 dark:text-white" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Gacha</label>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t("Gacha", "По")}</label>
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
             className="border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-900 text-gray-800 dark:text-white" />
         </div>
         <Button size="sm" variant="primary" endIcon={<DownloadIcon className="size-4 fill-white" />} onClick={() => exportOverview(filtered)}>
-          Excel eksport
+          {t("Excel eksport", "Экспорт в Excel")}
         </Button>
       </div>
 
@@ -206,10 +206,10 @@ export default function AnalyticsPage() {
           {/* KPI cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: "Jami buyurtmalar", value: filtered.length },
-              { label: "Jami tushum", value: formatMoney(totalRevenue) },
-              { label: "Faol do'konlar", value: shopStats.length },
-              { label: "To'lov usullari", value: paymentStats.length },
+              { label: t("Jami buyurtmalar", "Всего заказов"), value: filtered.length },
+              { label: t("Jami tushum", "Общая выручка"), value: formatMoney(totalRevenue) },
+              { label: t("Faol do'konlar", "Активные магазины"), value: shopStats.length },
+              { label: t("To'lov usullari", "Способы оплаты"), value: paymentStats.length },
             ].map((c, i) => (
               <div key={i} className="rounded-2xl border border-gray-100 dark:border-white/[0.05] bg-white dark:bg-white/[0.03] p-5">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{c.label}</p>
@@ -220,15 +220,15 @@ export default function AnalyticsPage() {
 
           {/* Payment methods */}
           <div className="rounded-2xl border border-gray-100 dark:border-white/[0.05] bg-white dark:bg-white/[0.03] p-5">
-            <h3 className="font-semibold text-gray-800 dark:text-white mb-4">To'lov usullari bo'yicha</h3>
+            <h3 className="font-semibold text-gray-800 dark:text-white mb-4">{t("To'lov usullari bo'yicha", "По способам оплаты")}</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-white/[0.05]">
-                    <th className="pb-2 pr-4">To'lov usuli</th>
-                    <th className="pb-2 pr-4">Soni</th>
-                    <th className="pb-2 pr-4">Jami summa</th>
-                    <th className="pb-2">Ulush</th>
+                    <th className="pb-2 pr-4">{t("To'lov usuli", "Способ оплаты")}</th>
+                    <th className="pb-2 pr-4">{t("Soni", "Количество")}</th>
+                    <th className="pb-2 pr-4">{t("Jami summa", "Общая сумма")}</th>
+                    <th className="pb-2">{t("Ulush", "Доля")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-white/[0.03]">
@@ -249,16 +249,16 @@ export default function AnalyticsPage() {
 
           {/* Shop stats */}
           <div className="rounded-2xl border border-gray-100 dark:border-white/[0.05] bg-white dark:bg-white/[0.03] p-5">
-            <h3 className="font-semibold text-gray-800 dark:text-white mb-4">Do'konlar bo'yicha hisobot</h3>
+            <h3 className="font-semibold text-gray-800 dark:text-white mb-4">{t("Do'konlar bo'yicha hisobot", "Отчёт по магазинам")}</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-white/[0.05]">
-                    <th className="pb-2 pr-4">Do'kon</th>
-                    <th className="pb-2 pr-4">Buyurtmalar</th>
-                    <th className="pb-2 pr-4">Tushum</th>
-                    <th className="pb-2 pr-4">Mahsulotlar</th>
-                    <th className="pb-2">Asosiy to'lov</th>
+                    <th className="pb-2 pr-4">{t("Do'kon", "Магазин")}</th>
+                    <th className="pb-2 pr-4">{t("Buyurtmalar", "Заказы")}</th>
+                    <th className="pb-2 pr-4">{t("Tushum", "Выручка")}</th>
+                    <th className="pb-2 pr-4">{t("Mahsulotlar", "Товары")}</th>
+                    <th className="pb-2">{t("Asosiy to'lov", "Основной платёж")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-white/[0.03]">
@@ -282,14 +282,14 @@ export default function AnalyticsPage() {
           {/* Per-shop product breakdown (sold orders only; shops with no sales are skipped) */}
           {shopStats.filter((s) => Object.keys(s.products).length > 0).map((s, si) => (
             <div key={si} className="rounded-2xl border border-gray-100 dark:border-white/[0.05] bg-white dark:bg-white/[0.03] p-5">
-              <h3 className="font-semibold text-gray-800 dark:text-white mb-3">{s.shop} – mahsulotlar bo'yicha</h3>
+              <h3 className="font-semibold text-gray-800 dark:text-white mb-3">{s.shop} {t("– mahsulotlar bo'yicha", "– по товарам")}</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-white/[0.05]">
-                      <th className="pb-2 pr-4">Mahsulot</th>
-                      <th className="pb-2 pr-4">Soni</th>
-                      <th className="pb-2">Tushum</th>
+                      <th className="pb-2 pr-4">{t("Mahsulot", "Товар")}</th>
+                      <th className="pb-2 pr-4">{t("Soni", "Количество")}</th>
+                      <th className="pb-2">{t("Tushum", "Выручка")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-white/[0.03]">

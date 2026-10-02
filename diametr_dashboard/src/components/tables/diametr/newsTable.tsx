@@ -90,7 +90,7 @@ const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch
 
     const handleSave = async () => {
       if (!form.title || !form.subtitle || !form.expired) {
-        toast.error("Sarlavha, tavsif va muddat kiritish shart");
+        toast.error(t("Sarlavha, tavsif va muddat kiritish shart", "Укажите заголовок, описание и срок"));
         return;
       }
       setSaving(true);
@@ -113,23 +113,23 @@ const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch
 
         if (editItem) {
           await axiosClient.put(`/new/${editItem.id}`, payload);
-          toast.success("Yangilik yangilandi");
+          toast.success(t("Yangilik yangilandi", "Новость обновлена"));
         } else {
           await axiosClient.post(`/new`, payload);
-          toast.success("Yangilik qo'shildi");
+          toast.success(t("Yangilik qo'shildi", "Новость добавлена"));
         }
         onRefetch?.(); closeModal();
       } catch (e: any) {
-        toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+        toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
       } finally { setSaving(false); }
     };
 
     const handleDelete = async (id: number) => {
       try {
         await axiosClient.delete(`/new/${id}`);
-        toast.success("Yangilik o'chirildi");
+        toast.success(t("Yangilik o'chirildi", "Новость удалена"));
         onRefetch?.();
-      } catch { toast.error("Xatolik yuz berdi"); }
+      } catch { toast.error(t("Xatolik yuz berdi", "Произошла ошибка")); }
     };
 
     const handleExport = () => {
@@ -161,7 +161,7 @@ const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch
             </TableHeader>
             <TableBody>
               {currentItems.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">Ma'lumot yo'q</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">{t("Ma'lumot yo'q", "Нет данных")}</TableCell></TableRow>
               ) : currentItems.map((item, idx) => (
                 <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                   <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
@@ -184,8 +184,8 @@ const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch
           <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
             <span className="text-sm text-gray-500 dark:text-gray-400">{t(`${tableData.length} ta ichidan ${Math.min((safePage - 1) * +optionValue+1,tableData.length)}–${Math.min(safePage * +optionValue,tableData.length)} ko'rsatilmoqda`, `Показано ${Math.min((safePage - 1) * +optionValue+1,tableData.length)}–${Math.min(safePage * +optionValue,tableData.length)} из ${tableData.length}`)}</span>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>Oldingi</Button>
-              <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>Keyingi</Button>
+              <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>{t("Oldingi", "Назад")}</Button>
+              <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>{t("Keyingi", "Далее")}</Button>
             </div>
           </div>
         </div>
@@ -193,31 +193,31 @@ const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch
         <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[640px] m-4">
           <div className="relative w-full max-h-[85vh] p-5 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
             <div className="pr-14 mb-6">
-              <h4 className="text-xl font-semibold text-gray-800 dark:text-white">{editItem ? "Yangilikni tahrirlash" : "Yangilik qo'shish"}</h4>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Sarlavha, tavsif, muddat va rasm kiriting.</p>
+              <h4 className="text-xl font-semibold text-gray-800 dark:text-white">{editItem ? t("Yangilikni tahrirlash", "Редактировать новость") : t("Yangilik qo'shish", "Добавить новость")}</h4>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("Sarlavha, tavsif, muddat va rasm kiriting.", "Укажите заголовок, описание, срок и фото.")}</p>
             </div>
 
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
               <div>
-                <Label>Sarlavha (UZ)</Label>
-                <Input type="text" placeholder="Yangilik sarlavhasi" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                <Label>{t("Sarlavha (UZ)", "Заголовок (UZ)")}</Label>
+                <Input type="text" placeholder={t("Yangilik sarlavhasi", "Заголовок новости")} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
               <div>
-                <Label>Sarlavha (RU)</Label>
+                <Label>{t("Sarlavha (RU)", "Заголовок (RU)")}</Label>
                 <Input type="text" placeholder="Заголовок новости" value={form.title_ru} onChange={(e) => setForm({ ...form, title_ru: e.target.value })} />
               </div>
               <div>
-                <Label>Tavsif (UZ)</Label>
-                <Input type="text" placeholder="Qisqacha tavsif" value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
+                <Label>{t("Tavsif (UZ)", "Описание (UZ)")}</Label>
+                <Input type="text" placeholder={t("Qisqacha tavsif", "Краткое описание")} value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
               </div>
               <div>
-                <Label>Tavsif (RU)</Label>
+                <Label>{t("Tavsif (RU)", "Описание (RU)")}</Label>
                 <Input type="text" placeholder="Краткое описание" value={form.subtitle_ru} onChange={(e) => setForm({ ...form, subtitle_ru: e.target.value })} />
               </div>
               <DateField
-                label="Muddat"
+                label={t("Muddat", "Срок")}
                 value={form.expired}
-                placeholder="Sanani tanlang"
+                placeholder={t("Sanani tanlang", "Выберите дату")}
                 onChange={(v) => setForm((f) => ({ ...f, expired: v }))}
               />
             </div>
@@ -225,7 +225,7 @@ const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch
             <div className="mt-4">
               <ImageField
                 key={imgKey.current}
-                label="Yangilik rasmi"
+                label={t("Yangilik rasmi", "Фото новости")}
                 allowUrl={false}
                 existingUrl={editItem?.image ? `${staticUrl}/static/news/${editItem.image}` : undefined}
                 onChange={(r) => { imageResultRef.current = r; setImgPreview(r.previewUrl ?? null); }}
@@ -235,13 +235,13 @@ const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch
             {/* Live preview — capped so it doesn't dominate the modal (was
                 aspect-[16/6] full width ≈240px tall). */}
             <div className="mt-5">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">Ko'rinishi</p>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">{t("Ko'rinishi", "Предпросмотр")}</p>
               <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/[0.03] aspect-[16/6] max-w-md max-h-40">
                 {imgPreview ? (
-                  <img src={imgPreview} alt="Rasm" className="absolute inset-0 h-full w-full object-cover" onError={() => setImgPreview(null)} />
+                  <img src={imgPreview} alt={t("Rasm", "Фото")} className="absolute inset-0 h-full w-full object-cover" onError={() => setImgPreview(null)} />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-500">
-                    <span className="text-sm">Rasm tanlansa, bu yerda ko'rinadi</span>
+                    <span className="text-sm">{t("Rasm tanlansa, bu yerda ko'rinadi", "Выбранное фото появится здесь")}</span>
                   </div>
                 )}
                 {(form.title || form.subtitle) && (
@@ -254,8 +254,8 @@ const NewsTable = forwardRef<NewsTableHandle, { data: NewsItemProps[]; onRefetch
             </div>
 
             <div className="flex items-center gap-3 mt-7 justify-end">
-              <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
-              <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saqlanmoqda..." : "Saqlash"}</Button>
+              <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
+              <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}</Button>
             </div>
           </div>
         </Modal>

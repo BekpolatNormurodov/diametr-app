@@ -37,7 +37,7 @@ export default function AdsPage() {
 
   return (
     <>
-      <PageMeta title="Reklamalar | Diametr" description="Diametr boshqaruv paneli" />
+      <PageMeta title={t("Reklamalar | Diametr", "Реклама | Diametr")} description={t("Diametr boshqaruv paneli", "Панель управления Diametr")} />
       <PageBreadcrumb pageTitle={t.k("ads")} />
 
       <div className="space-y-6">
@@ -50,7 +50,7 @@ export default function AdsPage() {
               startIcon={<PlusIcon className="size-5 fill-white" />}
               onClick={() => adsRef.current?.openCreate()}
             >
-              Reklama qo'shish
+              {t("Reklama qo'shish", "Добавить рекламу")}
             </Button>
           }
         >

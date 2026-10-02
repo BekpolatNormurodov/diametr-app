@@ -14,7 +14,3 @@ export const formatPhoneNumber = (phone: string | null | undefined): string => {
 
   return `+${code} (${operator}) ${part1} ${part2} ${part3}`;
 };
-
-// Foydalanish:
-const phone = "+998990201617";
-console.log(formatPhoneNumber(phone)); // +998 (99) 020 16 17

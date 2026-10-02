@@ -20,7 +20,7 @@ import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 import Pagination, { useAutoClampPage } from "../../common/Pagination";
-import { useLang } from "../../../context/LangContext";
+import { useLang, tr } from "../../../context/LangContext";
 
 export interface AdItemProps {
   id: number;
@@ -41,10 +41,10 @@ const showOptions = [
   { value: "50", label: "50" },
 ];
 const typeOptions = [
-  { value: "SHOP", label: "Do'kon (SHOP)" },
-  { value: "WORKER", label: "Ishchi (WORKER)" },
-  { value: "REGION", label: "Region (REGION)" },
-  { value: "PRODUCT", label: "Mahsulot (PRODUCT)" },
+  { value: "SHOP", get label() { return tr("Do'kon (SHOP)", "Магазин (SHOP)"); } },
+  { value: "WORKER", get label() { return tr("Ishchi (WORKER)", "Мастер (WORKER)"); } },
+  { value: "REGION", get label() { return tr("Region (REGION)", "Регион (REGION)"); } },
+  { value: "PRODUCT", get label() { return tr("Mahsulot (PRODUCT)", "Товар (PRODUCT)"); } },
 ];
 // targetId = the id of the object the banner links to (its meaning depends on
 // `type`: SHOP→shop, PRODUCT→product, WORKER→worker, REGION→region).
@@ -52,10 +52,10 @@ const emptyForm = { title: "", subtitle: "", title_ru: "", subtitle_ru: "", expi
 
 // Which type links to which endpoint + how to label each option.
 const TARGET_CONFIG: Record<string, { endpoint: string; label: (o: any) => string; heading: string }> = {
-  SHOP: { endpoint: "/shop/all", heading: "Do'kon", label: (o) => o.name ?? o.name_uz ?? `#${o.id}` },
-  PRODUCT: { endpoint: "/product/all", heading: "Mahsulot", label: (o) => o.name_uz ?? o.name_ru ?? o.name ?? `#${o.id}` },
-  WORKER: { endpoint: "/worker/all", heading: "Ishchi", label: (o) => o.name ?? o.fullname ?? o.phone ?? `#${o.id}` },
-  REGION: { endpoint: "/region/all", heading: "Hudud", label: (o) => o.name_uz ?? o.name_ru ?? o.name ?? `#${o.id}` },
+  SHOP: { endpoint: "/shop/all", get heading() { return tr("Do'kon", "Магазин"); }, label: (o) => o.name ?? o.name_uz ?? `#${o.id}` },
+  PRODUCT: { endpoint: "/product/all", get heading() { return tr("Mahsulot", "Товар"); }, label: (o) => o.name_uz ?? o.name_ru ?? o.name ?? `#${o.id}` },
+  WORKER: { endpoint: "/worker/all", get heading() { return tr("Ishchi", "Мастер"); }, label: (o) => o.name ?? o.fullname ?? o.phone ?? `#${o.id}` },
+  REGION: { endpoint: "/region/all", get heading() { return tr("Hudud", "Регион"); }, label: (o) => o.name_uz ?? o.name_ru ?? o.name ?? `#${o.id}` },
 };
 
 export interface AdsTableHandle {
@@ -162,7 +162,7 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
   };
 
   const handleSave = async () => {
-    if (!form.title || !form.expired) { toast.error("Sarlavha va muddat kiritish shart"); return; }
+    if (!form.title || !form.expired) { toast.error(t("Sarlavha va muddat kiritish shart", "Укажите заголовок и срок")); return; }
     setSaving(true);
     try {
       // Upload the banner image first (if a new one was picked), then send its
@@ -192,29 +192,29 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
       payload.region_id = form.type === "REGION" ? idNum : null;
       if (editItem) {
         await axiosClient.put(`/ad/${editItem.id}`, payload);
-        toast.success("Reklama yangilandi");
+        toast.success(t("Reklama yangilandi", "Реклама обновлена"));
       } else {
         await axiosClient.post(`/ad`, payload);
-        toast.success("Reklama qo'shildi");
+        toast.success(t("Reklama qo'shildi", "Реклама добавлена"));
       }
       onRefetch(); closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/ad/${id}`);
-      toast.success("Reklama o'chirildi");
+      toast.success(t("Reklama o'chirildi", "Реклама удалена"));
       onRefetch();
-    } catch { toast.error("Xatolik yuz berdi"); }
+    } catch { toast.error(t("Xatolik yuz berdi", "Произошла ошибка")); }
   };
 
   const handleExport = () => {
     const ws = XLSX.utils.json_to_sheet(tableData.map((a) => ({
       ID: a.id, Sarlavha: a.title, Tavsif: a.subtitle ?? "", Tur: a.type ?? "",
-      "Yaratilgan": Moment(a.createdt ?? a.createdAt).format("DD.MM.YYYY"),
+      [t("Yaratilgan", "Создан")]: Moment(a.createdt ?? a.createdAt).format("DD.MM.YYYY"),
     })));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Ads");
@@ -226,7 +226,7 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
   // Options for the link-target dropdown (pro searchable Select), with a
   // "static banner" default at the top.
   const targetOpts = [
-    { value: "", label: "— Tanlanmagan (statik banner) —" },
+    { value: "", label: t("— Tanlanmagan (statik banner) —", "— Не выбрано (статичный баннер) —") },
     ...(targetOptions[form.type] ?? []).map((o) => ({
       value: String(o.id),
       label: TARGET_CONFIG[form.type]?.label(o) ?? `#${o.id}`,
@@ -251,7 +251,7 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
           </TableHeader>
           <TableBody>
             {currentItems.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">Ma'lumot yo'q</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">{t("Ma'lumot yo'q", "Нет данных")}</TableCell></TableRow>
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                 <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
@@ -279,7 +279,7 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
           currentPage={currentPage}
           maxPage={maxPage}
           totalItems={tableData.length}
-          totalLabel="ta reklama"
+          totalLabel={t("ta reklama", "реклам")}
           onChange={setCurrentPage}
           scrollTargetRef={tableTopRef}
         />
@@ -288,59 +288,59 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[640px] m-4">
         <div className="relative w-full max-h-[85vh] p-5 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <div className="pr-14 mb-6">
-            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">{editItem ? "Reklamani tahrirlash" : "Reklama qo'shish"}</h4>
+            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">{editItem ? t("Reklamani tahrirlash", "Редактировать рекламу") : t("Reklama qo'shish", "Добавить рекламу")}</h4>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Banner rasmini yuklang va bosilganda ochiladigan manzilni tanlang.
+              {t("Banner rasmini yuklang va bosilganda ochiladigan manzilni tanlang.", "Загрузите баннер и выберите, что откроется при нажатии.")}
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
             <div>
-              <Label>Sarlavha (UZ)</Label>
-              <Input type="text" placeholder="Reklama sarlavhasi" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+              <Label>{t("Sarlavha (UZ)", "Заголовок (UZ)")}</Label>
+              <Input type="text" placeholder={t("Reklama sarlavhasi", "Заголовок рекламы")} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </div>
             <div>
-              <Label>Sarlavha (RU)</Label>
+              <Label>{t("Sarlavha (RU)", "Заголовок (RU)")}</Label>
               <Input type="text" placeholder="Заголовок рекламы" value={form.title_ru} onChange={(e) => setForm({ ...form, title_ru: e.target.value })} />
             </div>
             <div>
-              <Label>Tavsif (UZ)</Label>
-              <Input type="text" placeholder="Qisqacha tavsif" value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
+              <Label>{t("Tavsif (UZ)", "Описание (UZ)")}</Label>
+              <Input type="text" placeholder={t("Qisqacha tavsif", "Краткое описание")} value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
             </div>
             <div>
-              <Label>Tavsif (RU)</Label>
+              <Label>{t("Tavsif (RU)", "Описание (RU)")}</Label>
               <Input type="text" placeholder="Краткое описание" value={form.subtitle_ru} onChange={(e) => setForm({ ...form, subtitle_ru: e.target.value })} />
             </div>
             <DateField
-              label="Muddat"
+              label={t("Muddat", "Срок")}
               value={form.expired}
-              placeholder="Sanani tanlang"
+              placeholder={t("Sanani tanlang", "Выберите дату")}
               onChange={(v) => setForm((f) => ({ ...f, expired: v }))}
             />
             <div>
-              <Label>Tur</Label>
+              <Label>{t("Tur", "Тип")}</Label>
               <Select options={typeOptions} defaultValue={form.type} onChange={onTypeChange} />
             </div>
           </div>
 
           {/* Link target — full width, pro searchable dropdown */}
           <div className="mt-4">
-            <Label>{TARGET_CONFIG[form.type]?.heading ?? "Manzil"} — banner bosilganda ochiladi</Label>
+            <Label>{TARGET_CONFIG[form.type]?.heading ?? t("Manzil", "Адрес")} {t("— banner bosilganda ochiladi", "— откроется при нажатии на баннер")}</Label>
             <Select
               key={form.type}
               options={targetOpts}
               value={form.targetId}
-              placeholder={targetLoading ? "Yuklanmoqda…" : "Tanlang..."}
+              placeholder={targetLoading ? t("Yuklanmoqda…", "Загрузка…") : t("Tanlang...", "Выберите...")}
               onChange={(v) => setForm({ ...form, targetId: v })}
             />
-            <p className="mt-1.5 text-xs text-gray-400">Bo'sh qoldirsangiz — statik banner (hech qayerga o'tmaydi).</p>
+            <p className="mt-1.5 text-xs text-gray-400">{t("Bo'sh qoldirsangiz — statik banner (hech qayerga o'tmaydi).", "Если оставить пустым — статичный баннер (никуда не ведёт).")}</p>
           </div>
 
           {/* Banner image — full width */}
           <div className="mt-4">
             <ImageField
               key={imgKey.current}
-              label="Banner rasmi"
+              label={t("Banner rasmi", "Изображение баннера")}
               allowUrl={false}
               existingUrl={editItem?.image ? `${staticUrl}/static/ads/${editItem.image}` : undefined}
               onChange={(r) => { imageResultRef.current = r; setImgPreview(r.previewUrl ?? null); }}
@@ -351,13 +351,13 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
               doesn't dominate the modal (was aspect-[16/6] full width ≈240px
               tall — visually overpowered the form fields above). */}
           <div className="mt-5">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">Ko'rinishi</p>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">{t("Ko'rinishi", "Предпросмотр")}</p>
             <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/[0.03] aspect-[16/6] max-w-md max-h-40">
               {imgPreview ? (
-                <img src={imgPreview} alt="Banner" className="absolute inset-0 h-full w-full object-cover" onError={() => setImgPreview(null)} />
+                <img src={imgPreview} alt={t("Banner", "Баннер")} className="absolute inset-0 h-full w-full object-cover" onError={() => setImgPreview(null)} />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-500">
-                  <span className="text-sm">Rasm tanlansa, bu yerda ko'rinadi</span>
+                  <span className="text-sm">{t("Rasm tanlansa, bu yerda ko'rinadi", "Выбранное фото появится здесь")}</span>
                 </div>
               )}
               {(form.title || form.subtitle) && (
@@ -370,8 +370,8 @@ const AdsTable = forwardRef<AdsTableHandle, { data: AdItemProps[]; onRefetch: ()
           </div>
 
           <div className="flex items-center gap-3 mt-7 justify-end">
-            <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saqlanmoqda..." : "Saqlash"}</Button>
+            <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}</Button>
           </div>
         </div>
       </Modal>

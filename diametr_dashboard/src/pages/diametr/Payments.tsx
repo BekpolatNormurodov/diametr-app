@@ -16,7 +16,7 @@ import PaymentsTable, { PaymentItemProps } from "../../components/tables/diametr
 import { usePolling } from "../../hooks/usePolling";
 import { toast } from "../../components/ui/toast";
 import Moment from "moment";
-import { useLang } from "../../context/LangContext";
+import { useLang, tr } from "../../context/LangContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Subscription Plans
@@ -30,11 +30,11 @@ interface Plan {
 }
 
 const PLANS: Plan[] = [
-  { months: 1,  label: "1 oy",   basePrice: 100_000,   finalPrice: 100_000,   discount: 0  },
-  { months: 2,  label: "2 oy",   basePrice: 200_000,   finalPrice: 190_000,   discount: 5  },
-  { months: 3,  label: "3 oy",   basePrice: 300_000,   finalPrice: 255_000,   discount: 15 },
-  { months: 6,  label: "6 oy",   basePrice: 600_000,   finalPrice: 450_000,   discount: 25 },
-  { months: 12, label: "1 yil",  basePrice: 1_200_000, finalPrice: 840_000,   discount: 30 },
+  { months: 1,  get label() { return tr("1 oy", "1 мес."); },   basePrice: 100_000,   finalPrice: 100_000,   discount: 0  },
+  { months: 2,  get label() { return tr("2 oy", "2 мес."); },   basePrice: 200_000,   finalPrice: 190_000,   discount: 5  },
+  { months: 3,  get label() { return tr("3 oy", "3 мес."); },   basePrice: 300_000,   finalPrice: 255_000,   discount: 15 },
+  { months: 6,  get label() { return tr("6 oy", "6 мес."); },   basePrice: 600_000,   finalPrice: 450_000,   discount: 25 },
+  { months: 12, get label() { return tr("1 yil", "1 год"); },  basePrice: 1_200_000, finalPrice: 840_000,   discount: 30 },
 ];
 
 type PayMethod = "payme" | "click" | "uzum" | "manual" | "free";
@@ -43,8 +43,8 @@ const PAY_METHODS: { id: PayMethod; label: string; color: string }[] = [
   { id: "payme", label: "Payme",   color: "bg-blue-500" },
   { id: "click", label: "Click",   color: "bg-green-500" },
   { id: "uzum",  label: "Uzum",    color: "bg-orange-500" },
-  { id: "manual",label: "Ruchnoy", color: "bg-purple-500" },
-  { id: "free",  label: "Bepul",   color: "bg-gray-500" },
+  { id: "manual",get label() { return tr("Ruchnoy", "Вручную"); }, color: "bg-purple-500" },
+  { id: "free",  get label() { return tr("Bepul", "Бесплатно"); },   color: "bg-gray-500" },
 ];
 
 // Payme / Click merchant config (replace with real IDs)
@@ -111,7 +111,7 @@ export default function PaymentsPage() {
   const endDate   = Moment().add(effectiveMonths, "months").format("YYYY-MM-DD");
 
   const handleOpenPayLink = () => {
-    if (!shopId) return toast.error("Avval do'konni tanlang");
+    if (!shopId) return toast.error(t("Avval do'konni tanlang", "Сначала выберите магазин"));
     const orderId = `shop-${shopId}-${Date.now()}`;
     const amount  = effectiveAmount;
     let link = "";
@@ -124,8 +124,8 @@ export default function PaymentsPage() {
   };
 
   const handleSave = async () => {
-    if (!shopId) return toast.error("Do'konni tanlang");
-    if ((payMethod === "manual") && !manualAmount) return toast.error("Summani kiriting");
+    if (!shopId) return toast.error(t("Do'konni tanlang", "Выберите магазин"));
+    if ((payMethod === "manual") && !manualAmount) return toast.error(t("Summani kiriting", "Введите сумму"));
     setSaving(true);
     try {
       await axiosClient.post("/payment", {
@@ -135,12 +135,12 @@ export default function PaymentsPage() {
         start_date: startDate,
         end_date: endDate,
       });
-      toast.success("Obuna muvaffaqiyatli qo'shildi");
+      toast.success(t("Obuna muvaffaqiyatli qo'shildi", "Подписка успешно добавлена"));
       refetch();
       closeModal();
       resetForm();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally { setSaving(false); }
   };
 
@@ -152,7 +152,7 @@ export default function PaymentsPage() {
   return (
     <>
       <PageMeta title={`${t.k("payments")} | Diametr Dashboard`} description="Diametr Dashboard" />
-      <PageBreadcrumb pageTitle="Obunalar & To'lovlar" />
+      <PageBreadcrumb pageTitle={t("Obunalar & To'lovlar", "Подписки и платежи")} />
 
       {/* Plan overview cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
@@ -168,17 +168,17 @@ export default function PaymentsPage() {
             {p.discount > 0 && (
               <p className="text-xs text-gray-400 line-through">{(p.basePrice / 1000).toLocaleString()}K</p>
             )}
-            <p className="text-xs text-gray-400 mt-0.5">so'm</p>
+            <p className="text-xs text-gray-400 mt-0.5">{t("so'm", "сум")}</p>
           </div>
         ))}
       </div>
 
       <div className="space-y-6">
         <ComponentCard
-          title="Obunalar tarixi"
+          title={t("Obunalar tarixi", "История подписок")}
           action={
             <Button size="sm" variant="primary" startIcon={<PlusIcon className="size-5 fill-white" />} onClick={() => { loadShops(); openModal(); }}>
-              Obuna qo'shish
+              {t("Obuna qo'shish", "Добавить подписку")}
             </Button>
           }
         >
@@ -189,21 +189,21 @@ export default function PaymentsPage() {
       {/* ── Add subscription modal ── */}
       <Modal isOpen={isOpen} onClose={() => { closeModal(); resetForm(); }} className="max-w-[720px] m-4">
         <div className="relative w-full p-6 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 max-h-[90vh]">
-          <h4 className="text-xl font-semibold text-gray-800 dark:text-white mb-5">Obuna qo'shish</h4>
+          <h4 className="text-xl font-semibold text-gray-800 dark:text-white mb-5">{t("Obuna qo'shish", "Добавить подписку")}</h4>
 
           {/* Shop selector */}
           <div className="mb-5">
-            <Label>Do'kon</Label>
+            <Label>{t("Do'kon", "Магазин")}</Label>
             <Select
               options={shopOptions}
-              placeholder="Do'konni tanlang"
+              placeholder={t("Do'konni tanlang", "Выберите магазин")}
               onChange={(v) => setShopId(v)}
             />
           </div>
 
           {/* Plan cards */}
           <div className="mb-5">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Tarif rejasi</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{t("Tarif rejasi", "Тарифный план")}</p>
             <div className="grid grid-cols-5 gap-2">
               {PLANS.map((p) => (
                 <button
@@ -230,7 +230,7 @@ export default function PaymentsPage() {
 
           {/* Payment method */}
           <div className="mb-5">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">To'lov usuli</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{t("To'lov usuli", "Способ оплаты")}</p>
             <div className="flex flex-wrap gap-2">
               {PAY_METHODS.map((m) => (
                 <button
@@ -251,7 +251,7 @@ export default function PaymentsPage() {
           {/* Conditional fields */}
           {payMethod === "manual" && (
             <div className="mb-5">
-              <Label>Summa (so'm)</Label>
+              <Label>{t("Summa (so'm)", "Сумма (сум)")}</Label>
               <Input
                 type="number"
                 placeholder="100000"
@@ -262,31 +262,31 @@ export default function PaymentsPage() {
           )}
           {payMethod === "free" && (
             <div className="mb-5">
-              <Label>Muddati (oy)</Label>
+              <Label>{t("Muddati (oy)", "Срок (мес.)")}</Label>
               <Input
                 type="number"
                 placeholder="1"
                 value={freeMonths}
                 onChange={(e) => setFreeMonths(e.target.value)}
               />
-              <p className="text-xs text-gray-400 mt-1">0 so'm evaziga {freeMonths} oy bepul obuna</p>
+              <p className="text-xs text-gray-400 mt-1">{t("0 so'm evaziga", "за 0 сум")} {freeMonths} {t("oy bepul obuna", "мес. бесплатной подписки")}</p>
             </div>
           )}
 
           {/* Summary */}
           <div className="bg-gray-50 dark:bg-white/[0.03] rounded-xl p-4 mb-5 grid grid-cols-3 gap-3 text-center">
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Summa</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("Summa", "Сумма")}</p>
               <p className="text-base font-bold text-gray-900 dark:text-white mt-0.5">
-                {effectiveAmount === 0 ? "Bepul" : `${effectiveAmount.toLocaleString()} so'm`}
+                {effectiveAmount === 0 ? t("Bepul", "Бесплатно") : t(`${effectiveAmount.toLocaleString()} so'm`, `${effectiveAmount.toLocaleString()} сум`)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Boshlanish</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("Boshlanish", "Начало")}</p>
               <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-0.5">{Moment(startDate).format("DD.MM.YYYY")}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Tugash</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("Tugash", "Окончание")}</p>
               <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-0.5">{Moment(endDate).format("DD.MM.YYYY")}</p>
             </div>
           </div>
@@ -294,15 +294,15 @@ export default function PaymentsPage() {
           {/* Action buttons */}
           <div className="flex items-center gap-3 justify-end flex-wrap">
             <Button size="sm" variant="outline" onClick={() => { closeModal(); resetForm(); }}>
-              Bekor qilish
+              {t("Bekor qilish", "Отмена")}
             </Button>
             {(payMethod === "payme" || payMethod === "click" || payMethod === "uzum") && (
               <Button size="sm" variant="outline" onClick={handleOpenPayLink} disabled={!shopId}>
-                {PAY_METHODS.find((m) => m.id === payMethod)?.label} havolasini ko'rish
+                {PAY_METHODS.find((m) => m.id === payMethod)?.label} {t("havolasini ko'rish", "посмотреть ссылку")}
               </Button>
             )}
             <Button size="sm" onClick={handleSave} disabled={saving}>
-              {saving ? "Saqlanmoqda..." : "Obunani saqlash"}
+              {saving ? t("Saqlanmoqda...", "Сохранение...") : t("Obunani saqlash", "Сохранить подписку")}
             </Button>
           </div>
         </div>
@@ -311,19 +311,19 @@ export default function PaymentsPage() {
       {/* ── Payment link modal ── */}
       <Modal isOpen={payLinkModal} onClose={() => setPayLinkModal(false)} className="max-w-[500px] m-4">
         <div className="relative w-full p-6 bg-white no-scrollbar rounded-3xl dark:bg-gray-900">
-          <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">{payLinkLabel} to'lov havolasi</h4>
+          <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">{payLinkLabel} {t("to'lov havolasi", "ссылка на оплату")}</h4>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Quyidagi havolani do'kon egasiga yuboring yoki to'g'ridan to'g'ri oching:
+            {t("Quyidagi havolani do'kon egasiga yuboring yoki to'g'ridan to'g'ri oching:", "Отправьте эту ссылку владельцу магазина или откройте её напрямую:")}
           </p>
           <div className="bg-gray-50 dark:bg-white/[0.05] rounded-lg p-3 break-all text-xs text-gray-700 dark:text-gray-300 mb-4 font-mono">
             {payLink}
           </div>
           <div className="flex gap-3">
-            <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(payLink); toast.success("Nusxalandi"); }}>
-              Nusxalash
+            <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(payLink); toast.success(t("Nusxalandi", "Скопировано")); }}>
+              {t("Nusxalash", "Копировать")}
             </Button>
             <Button size="sm" variant="primary" onClick={() => window.open(payLink, "_blank")}>
-              Ochish
+              {t("Ochish", "Открыть")}
             </Button>
           </div>
         </div>

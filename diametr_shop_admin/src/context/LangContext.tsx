@@ -202,6 +202,22 @@ const DICT = {
 
 const LangContext = createContext<LangContextValue | null>(null);
 
+// Language for code outside components (helpers, Excel export, error texts).
+// The provider sets it while it renders, so it is already current when the
+// children re-render after a switch (localStorage is written only afterwards).
+let currentLang: Lang = (() => {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "ru" ? "ru" : "uz";
+  } catch {
+    return "uz";
+  }
+})();
+
+/** Non-hook `t(uz, ru)` for helpers; prefer `useLang().t` inside components. */
+export function tr(uz: string, ru: string): string {
+  return currentLang === "ru" ? ru : uz;
+}
+
 export function LangProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
     try {
@@ -218,6 +234,8 @@ export function LangProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.setAttribute("lang", lang);
     } catch { /* private mode etc. */ }
   }, [lang]);
+
+  currentLang = lang;
 
   const t = useMemo(() => {
     const fn = ((uz: string, ru: string) => (lang === "ru" ? ru : uz)) as TFn;

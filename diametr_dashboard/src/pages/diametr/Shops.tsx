@@ -110,13 +110,13 @@ export default function ShopsPage() {
         // NOTE: mfo / hisob_raqam / director / director_phone are not columns on
         // the shop model (stripped by the whitelist), so they are not sent.
       });
-      toast.success("Do'kon qo'shildi");
+      toast.success(t("Do'kon qo'shildi", "Магазин добавлен"));
       refetch();
       closeModal();
       setShopForm(emptyShop);
       imageResultRef.current = null;
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally {
       setSaving(false);
     }
@@ -127,7 +127,7 @@ export default function ShopsPage() {
 
   return (
     <>
-      <PageMeta title="Shops | Diametr Dashboard" description="Diametr Dashboard" />
+      <PageMeta title={t("Do'konlar | Diametr", "Магазины | Diametr")} description="Diametr Dashboard" />
       <PageBreadcrumb pageTitle={t.k("shops")} />
 
       <div className="space-y-6">
@@ -140,7 +140,7 @@ export default function ShopsPage() {
               startIcon={<PlusIcon className="size-5 fill-white" />}
               onClick={() => { setShopForm(emptyShop); imageResultRef.current = null; setTrialMonths(2); loadRegions(); openModal(); }}
             >
-              Do'kon qo'shish
+              {t("Do'kon qo'shish", "Добавить магазин")}
             </Button>
           }
         >
@@ -152,18 +152,18 @@ export default function ShopsPage() {
           <div className="px-2 pr-14">
             <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">{t.k("addShop")}</h4>
             <p className="mb-6 text-sm text-gray-500 dark:text-gray-400 lg:mb-7">
-              Create new Shop with full details.
+              {t("Yangi do'konni to'liq ma'lumotlari bilan yarating.", "Создайте новый магазин со всеми данными.")}
             </p>
           </div>
           <form className="flex flex-col" onSubmit={(e) => { e.preventDefault(); handleAdding(); }}>
             <div className="px-2 overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
                 <div>
-                  <Label>Nomi *</Label>
-                  <Input type="text" value={shopForm.name} onChange={f("name")} placeholder="Do'kon nomi" />
+                  <Label>{t("Nomi *", "Название *")}</Label>
+                  <Input type="text" value={shopForm.name} onChange={f("name")} placeholder={t("Do'kon nomi", "Название магазина")} />
                 </div>
                 <div>
-                  <Label>Region</Label>
+                  <Label>{t("Region", "Регион")}</Label>
                   <Select
                     options={regionOptions}
                     className="dark:bg-dark-900"
@@ -171,15 +171,15 @@ export default function ShopsPage() {
                   />
                 </div>
                 <div className="lg:col-span-2">
-                  <Label>Manzil</Label>
-                  <Input type="text" value={shopForm.address} onChange={f("address")} placeholder="To'liq manzil" />
+                  <Label>{t("Manzil", "Адрес")}</Label>
+                  <Input type="text" value={shopForm.address} onChange={f("address")} placeholder={t("To'liq manzil", "Полный адрес")} />
                 </div>
                 <div>
-                  <Label>Latitude (ixtiyoriy)</Label>
+                  <Label>{t("Latitude (ixtiyoriy)", "Широта (необязательно)")}</Label>
                   <Input type="text" value={shopForm.lat} onChange={f("lat")} placeholder="41.2995" />
                 </div>
                 <div>
-                  <Label>Longitude (ixtiyoriy)</Label>
+                  <Label>{t("Longitude (ixtiyoriy)", "Долгота (необязательно)")}</Label>
                   <Input type="text" value={shopForm.lon} onChange={f("lon")} placeholder="69.2401" />
                 </div>
                 <div>
@@ -191,27 +191,27 @@ export default function ShopsPage() {
                   <Input type="text" value={shopForm.inn} onChange={f("inn")} />
                 </div>
                 <div>
-                  <Label>Hisob raqam</Label>
+                  <Label>{t("Hisob raqam", "Расчётный счёт")}</Label>
                   <Input type="text" value={shopForm.hisob_raqam} onChange={f("hisob_raqam")} />
                 </div>
                 <div>
-                  <Label>Direktor ismi</Label>
+                  <Label>{t("Direktor ismi", "Имя директора")}</Label>
                   <Input type="text" value={shopForm.director_name} onChange={f("director_name")} />
                 </div>
                 <div>
-                  <Label>Direktor telefoni</Label>
+                  <Label>{t("Direktor telefoni", "Телефон директора")}</Label>
                   <Input type="tel" value={shopForm.director_phone} onChange={f("director_phone")} placeholder="+998..." />
                 </div>
                 <div className="lg:col-span-2">
                   <ImageField
-                    label="Do'kon rasmi"
+                    label={t("Do'kon rasmi", "Фото магазина")}
                     onChange={(result) => { imageResultRef.current = result; }}
                   />
                 </div>
 
                 {/* Trial months selector */}
                 <div className="lg:col-span-2">
-                  <Label>Bepul sinov muddati</Label>
+                  <Label>{t("Bepul sinov muddati", "Бесплатный пробный период")}</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {[0, 1, 2, 3, 6, 12].map((m) => (
                       <button
@@ -228,19 +228,19 @@ export default function ShopsPage() {
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        {m === 0 ? "Yo'q" : `${m} oy`}
+                        {m === 0 ? t("Yo'q", "Нет") : t(`${m} oy`, `${m} мес.`)}
                         {m === 2 && <span className="text-xs text-brand-500 dark:text-brand-400">(default)</span>}
                       </button>
                     ))}
                   </div>
-                  <p className="mt-1.5 text-xs text-gray-400">{trialMonths === 0 ? "Bepul sinov berilmaydi — do'kon darhol obuna sotib olishi kerak" : `Do'kon yaratilganda ${trialMonths} oy bepul sinov beriladi`}</p>
+                  <p className="mt-1.5 text-xs text-gray-400">{trialMonths === 0 ? t("Bepul sinov berilmaydi — do'kon darhol obuna sotib olishi kerak", "Без пробного периода — магазин сразу должен купить подписку") : t(`Do'kon yaratilganda ${trialMonths} oy bepul sinov beriladi`, `При создании магазина даётся ${trialMonths} мес. бесплатно`)}</p>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-3 px-2 mt-6 lg:justify-end">
-              <Button size="sm" variant="outline" onClick={closeModal} type="button">Yopish</Button>
+              <Button size="sm" variant="outline" onClick={closeModal} type="button">{t("Yopish", "Закрыть")}</Button>
               <Button size="sm" type="submit" disabled={saving}>
-                {saving ? "Saqlanmoqda..." : "Saqlash"}
+                {saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}
               </Button>
             </div>
           </form>

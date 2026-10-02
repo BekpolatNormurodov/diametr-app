@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { EditIcon, DeleteIcon } from "../../../icons";
 
+import { useLang } from "../../../context/LangContext";
 interface TableActionsProps {
   onEdit: () => void;
   onDelete: () => void;
@@ -23,7 +24,7 @@ export function ConfirmDeleteModal({
   desc,
   onConfirm,
   onCancel,
-  confirmLabel = "O'chirish",
+  confirmLabel: confirmLabelProp,
   tone = "danger",
 }: {
   title: string;
@@ -34,6 +35,8 @@ export function ConfirmDeleteModal({
   /** "primary" = non-destructive confirmation (brand colours, no trash icon). */
   tone?: "danger" | "primary";
 }) {
+  const { t } = useLang();
+  const confirmLabel = confirmLabelProp ?? t("O'chirish", "Удалить");
   const primary = tone === "primary";
   useEffect(() => {
     // Capture on window + stopPropagation: Escape closes only this confirm, never a form
@@ -98,7 +101,7 @@ export function ConfirmDeleteModal({
                        hover:bg-gray-50 dark:hover:bg-gray-700
                        transition-colors"
           >
-            Bekor qilish
+            {t("Bekor qilish", "Отмена")}
           </button>
           <button
             onClick={onConfirm}
@@ -133,12 +136,17 @@ export function ConfirmDeleteModal({
 export default function TableActions({
   onEdit,
   onDelete,
-  editLabel = "Tahrirlash",
-  deleteLabel = "O'chirish",
-  confirmTitle = "O'chirishni tasdiqlaysizmi?",
-  confirmDesc = "Bu amalni qaytarib bo'lmaydi.",
+  editLabel: editLabelProp,
+  deleteLabel: deleteLabelProp,
+  confirmTitle: confirmTitleProp,
+  confirmDesc: confirmDescProp,
   extraActions = [],
 }: TableActionsProps) {
+  const { t } = useLang();
+  const editLabel = editLabelProp ?? t("Tahrirlash", "Редактировать");
+  const deleteLabel = deleteLabelProp ?? t("O'chirish", "Удалить");
+  const confirmTitle = confirmTitleProp ?? t("O'chirishni tasdiqlaysizmi?", "Подтвердить удаление?");
+  const confirmDesc = confirmDescProp ?? t("Bu amalni qaytarib bo'lmaydi.", "Это действие нельзя отменить.");
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -169,7 +177,7 @@ export default function TableActions({
               ? "bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/30 scale-105"
               : "bg-gray-50 text-gray-400 border border-gray-200 hover:bg-white hover:text-brand-600 hover:border-brand-300 hover:shadow-md hover:shadow-brand-500/10 dark:bg-white/[0.04] dark:text-gray-400 dark:border-white/[0.06] dark:hover:bg-white/[0.08] dark:hover:text-white dark:hover:border-white/[0.12]"
             }`}
-          aria-label="Amallar"
+          aria-label={t("Amallar", "Действия")}
         >
           <svg width="4" height="16" viewBox="0 0 4 16" fill="currentColor" className="transition-transform duration-200 group-hover:scale-125">
             <circle cx="2" cy="2"  r="1.6" />

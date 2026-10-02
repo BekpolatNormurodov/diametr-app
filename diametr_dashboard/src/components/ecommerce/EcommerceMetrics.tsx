@@ -7,6 +7,7 @@ import {
 } from "../../icons";
 import Badge from "../ui/badge/Badge";
 
+import { useLang } from "../../context/LangContext";
 interface EcommerceMetricsProps {
   clientsCount?: number;
   productsCount?: number;
@@ -38,6 +39,7 @@ export default function EcommerceMetrics({
   isLoading = false,
   lastUpdated = null,
 }: EcommerceMetricsProps) {
+  const { t } = useLang();
   const skeleton =
     "animate-pulse bg-gray-200 dark:bg-gray-700 rounded h-7 w-24";
 
@@ -45,7 +47,7 @@ export default function EcommerceMetrics({
     <div className="space-y-2">
       {lastUpdated && (
         <p className="text-xs text-gray-400 dark:text-gray-500 text-right pr-1">
-          Oxirgi yangilanish: {fmtTime(lastUpdated)}
+          {t("Oxirgi yangilanish:", "Последнее обновление:")} {fmtTime(lastUpdated)}
         </p>
       )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6">
@@ -56,7 +58,7 @@ export default function EcommerceMetrics({
           </div>
           <div className="flex items-end justify-between mt-5">
             <div>
-              <span className="text-sm text-gray-500 dark:text-gray-400">Clients</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">{t("Mijozlar", "Клиенты")}</span>
               {isLoading ? (
                 <div className={skeleton + " mt-2"} />
               ) : (
@@ -65,7 +67,7 @@ export default function EcommerceMetrics({
                 </h4>
               )}
             </div>
-            <Badge color="success"><ArrowUpIcon />Live</Badge>
+            <Badge color="success"><ArrowUpIcon />{t("Jonli", "Онлайн")}</Badge>
           </div>
         </div>
 
@@ -76,7 +78,7 @@ export default function EcommerceMetrics({
           </div>
           <div className="flex items-end justify-between mt-5">
             <div>
-              <span className="text-sm text-gray-500 dark:text-gray-400">Products</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">{t("Mahsulotlar", "Товары")}</span>
               {isLoading ? (
                 <div className={skeleton + " mt-2"} />
               ) : (
@@ -85,7 +87,7 @@ export default function EcommerceMetrics({
                 </h4>
               )}
             </div>
-            <Badge color="success"><ArrowUpIcon />Live</Badge>
+            <Badge color="success"><ArrowUpIcon />{t("Jonli", "Онлайн")}</Badge>
           </div>
         </div>
 
@@ -96,7 +98,7 @@ export default function EcommerceMetrics({
           </div>
           <div className="flex items-end justify-between mt-5">
             <div>
-              <span className="text-sm text-gray-500 dark:text-gray-400">Delivery</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">{t("Yetkazish", "Доставка")}</span>
               {isLoading ? (
                 <div className={skeleton + " mt-2"} />
               ) : (
@@ -105,7 +107,7 @@ export default function EcommerceMetrics({
                 </h4>
               )}
             </div>
-            <Badge color="success"><ArrowUpIcon />Live</Badge>
+            <Badge color="success"><ArrowUpIcon />{t("Jonli", "Онлайн")}</Badge>
           </div>
         </div>
 
@@ -116,7 +118,7 @@ export default function EcommerceMetrics({
           </div>
           <div className="flex items-end justify-between mt-5">
             <div>
-              <span className="text-sm text-gray-500 dark:text-gray-400">All Sales</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">{t("Barcha sotuvlar", "Все продажи")}</span>
               {isLoading ? (
                 <div className={skeleton + " mt-2"} />
               ) : (
@@ -125,7 +127,7 @@ export default function EcommerceMetrics({
                 </h4>
               )}
             </div>
-            <Badge color="success"><ArrowUpIcon />Live</Badge>
+            <Badge color="success"><ArrowUpIcon />{t("Jonli", "Онлайн")}</Badge>
           </div>
         </div>
       </div>

@@ -58,20 +58,20 @@ export default function RegionsTable({ data, onRefetch }: { data: RegionItemProp
     try {
       if (editItem) {
         await axiosClient.put(`/region/${editItem.id}`, { name: formName });
-        toast.success("Region yangilandi");
+        toast.success(t("Region yangilandi", "Регион обновлён"));
       }
       onRefetch?.(); closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/region/${id}`);
-      toast.success("Region o'chirildi");
+      toast.success(t("Region o'chirildi", "Регион удалён"));
       onRefetch?.();
-    } catch { toast.error("Xatolik yuz berdi"); }
+    } catch { toast.error(t("Xatolik yuz berdi", "Произошла ошибка")); }
   };
 
   const handleExport = () => {
@@ -89,14 +89,14 @@ export default function RegionsTable({ data, onRefetch }: { data: RegionItemProp
           <TableHeader>
             <TableRow>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Region nomi</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Yaratilgan</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Region nomi", "Название региона")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Yaratilgan", "Создан")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
           <TableBody>
             {currentItems.length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="py-8 text-center text-gray-400">Ma'lumot yo'q</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="py-8 text-center text-gray-400">{t("Ma'lumot yo'q", "Нет данных")}</TableCell></TableRow>
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                 <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
@@ -112,23 +112,23 @@ export default function RegionsTable({ data, onRefetch }: { data: RegionItemProp
         <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
           <span className="text-sm text-gray-500 dark:text-gray-400">{t(`${tableData.length} ta ichidan ${Math.min((safePage - 1) * +optionValue+1,tableData.length)}–${Math.min(safePage * +optionValue,tableData.length)} ko'rsatilmoqda`, `Показано ${Math.min((safePage - 1) * +optionValue+1,tableData.length)}–${Math.min(safePage * +optionValue,tableData.length)} из ${tableData.length}`)}</span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>Keyingi</Button>
+            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>{t("Oldingi", "Назад")}</Button>
+            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>{t("Keyingi", "Далее")}</Button>
           </div>
         </div>
       </div>
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[500px] m-4">
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <div className="px-2 pr-14 mb-6">
-            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">Regionni tahrirlash</h4>
+            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">{t("Regionni tahrirlash", "Редактировать регион")}</h4>
           </div>
           <div className="px-2">
-            <Label>Region nomi</Label>
-            <Input type="text" placeholder="Region nomi" value={formName} onChange={(e) => setFormName(e.target.value)} />
+            <Label>{t("Region nomi", "Название региона")}</Label>
+            <Input type="text" placeholder={t("Region nomi", "Название региона")} value={formName} onChange={(e) => setFormName(e.target.value)} />
           </div>
           <div className="flex items-center gap-3 px-2 mt-6 justify-end">
-            <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saqlanmoqda..." : "Saqlash"}</Button>
+            <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}</Button>
           </div>
         </div>
       </Modal>

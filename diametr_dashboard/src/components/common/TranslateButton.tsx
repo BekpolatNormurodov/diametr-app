@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "../ui/toast";
 import { decodeEntities } from "../../utils/text";
 
+import { useLang, tr } from "../../context/LangContext";
 /**
  * Free MyMemory translate API (no key required, ~5000 words/day per IP —
  * roughly three 10 000-character descriptions).
@@ -14,7 +15,7 @@ const MAX_CHUNK = 480;
 async function translateChunk(text: string, langPair: "uz|ru" | "ru|uz"): Promise<string> {
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langPair}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error("Tarjima xizmati javob bermadi");
+  if (!res.ok) throw new Error(tr("Tarjima xizmati javob bermadi", "Сервис перевода не ответил"));
   const data = await res.json();
   const out: string = decodeEntities(data?.responseData?.translatedText ?? "").trim();
   // Errors come back as "translated text" (e.g. the length / daily-quota
@@ -23,11 +24,11 @@ async function translateChunk(text: string, langPair: "uz|ru" | "ru|uz"): Promis
   if (status !== 200 || data?.quotaFinished || /^MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(out)) {
     throw new Error(
       data?.quotaFinished || /MYMEMORY WARNING/i.test(out)
-        ? "Bugungi bepul tarjima limiti tugadi, ertaga qayta urinib ko'ring"
-        : String(data?.responseDetails || out || "Tarjima xatosi"),
+        ? tr("Bugungi bepul tarjima limiti tugadi, ertaga qayta urinib ko'ring", "Бесплатный лимит перевода на сегодня исчерпан, попробуйте завтра")
+        : String(data?.responseDetails || out || tr("Tarjima xatosi", "Ошибка перевода")),
     );
   }
-  if (!out) throw new Error("Bo'sh tarjima");
+  if (!out) throw new Error(tr("Bo'sh tarjima", "Пустой перевод"));
   return out;
 }
 
@@ -88,16 +89,17 @@ export default function TranslateButton({
   onResult: (translated: string) => void;
   className?: string;
 }) {
+  const { t } = useLang();
   const [loading, setLoading] = useState(false);
 
   const handle = async () => {
     const text = source.trim();
     if (!text) {
-      toast.error("Avval matnni kiriting");
+      toast.error(t("Avval matnni kiriting", "Сначала введите текст"));
       return;
     }
     if (text.length > MAX_TOTAL) {
-      toast.error(`Matn juda uzun: ${text.length} belgi (tarjima uchun ko'pi bilan ${MAX_TOTAL})`);
+      toast.error(t(`Matn juda uzun: ${text.length} belgi (tarjima uchun ko'pi bilan ${MAX_TOTAL})`, `Текст слишком длинный: ${text.length} символов (для перевода не более ${MAX_TOTAL})`));
       return;
     }
     setLoading(true);
@@ -106,7 +108,7 @@ export default function TranslateButton({
       const translated = await translateText(text, pair);
       onResult(translated);
     } catch (e: any) {
-      toast.error("Tarjima xatoligi: " + (e?.message ?? ""));
+      toast.error(t("Tarjima xatoligi: ", "Ошибка перевода: ") + (e?.message ?? ""));
     } finally {
       setLoading(false);
     }
@@ -119,7 +121,7 @@ export default function TranslateButton({
       type="button"
       onClick={handle}
       disabled={loading}
-      title={`Avtomatik tarjima qilish (${label})`}
+      title={t(`Avtomatik tarjima qilish (${label})`, `Автоматический перевод (${label})`)}
       className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide
         bg-gradient-to-r from-amber-400 to-orange-500 text-white
         hover:from-amber-500 hover:to-orange-600

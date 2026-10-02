@@ -55,11 +55,11 @@ export default function UsersTable({
         fullname: form.fullname || undefined,
         phone: form.phone || undefined,
       });
-      toast.success("Foydalanuvchi yangilandi");
+      toast.success(t("Foydalanuvchi yangilandi", "Пользователь обновлён"));
       onRefetch?.();
       closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally {
       setSaving(false);
     }
@@ -82,10 +82,10 @@ export default function UsersTable({
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/user/${id}`);
-      toast.success("Foydalanuvchi o'chirildi");
+      toast.success(t("Foydalanuvchi o'chirildi", "Пользователь удалён"));
       onRefetch?.();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     }
   };
 
@@ -93,7 +93,7 @@ export default function UsersTable({
     const ws = XLSX.utils.json_to_sheet(
       data.map((u) => ({
         ID: u.id,
-        "To'liq ism": u.fullname ?? "",
+        [t("To'liq ism", "Полное имя")]: u.fullname ?? "",
         Telefon: u.phone ?? "",
         Rol: u.role ?? "USER",
         Yaratilgan: Moment(u.createdt ?? u.createdAt).format("DD.MM.YYYY"),
@@ -111,7 +111,7 @@ export default function UsersTable({
       <TableToolbar
         search={search}
         onSearch={handleSearch}
-        searchPlaceholder="Ism yoki telefon..."
+        searchPlaceholder={t("Ism yoki telefon...", "Имя или телефон...")}
         showValue={showValue}
         onShowChange={handleShow}
         onExport={handleExport}
@@ -121,10 +121,10 @@ export default function UsersTable({
           <TableHeader>
             <TableRow>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Foydalanuvchi</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Foydalanuvchi", "Пользователь")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("phone")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Rol</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Sana</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Rol", "Роль")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Sana", "Дата")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
@@ -132,7 +132,7 @@ export default function UsersTable({
             {current.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="py-10 text-center text-gray-400 dark:text-gray-500">
-                  {search ? "Qidiruv natijasi topilmadi" : "Ma'lumot yo'q"}
+                  {search ? t("Qidiruv natijasi topilmadi", "Ничего не найдено") : t("Ma'lumot yo'q", "Нет данных")}
                 </TableCell>
               </TableRow>
             ) : current.map((item, idx) => (
@@ -155,7 +155,7 @@ export default function UsersTable({
                       </div>
                     )}
                     <span className="text-sm font-medium text-gray-800 dark:text-white">
-                      {item.fullname ?? <span className="text-gray-400 italic">Ism yo'q</span>}
+                      {item.fullname ?? <span className="text-gray-400 italic">{t("Ism yo'q", "Без имени")}</span>}
                     </span>
                   </div>
                 </TableCell>
@@ -172,10 +172,10 @@ export default function UsersTable({
                   <TableActions
                     onEdit={() => openView(item)}
                     onDelete={() => handleDelete(item.id)}
-                    editLabel="Ko'rish / Tahrirlash"
-                    deleteLabel="O'chirish"
-                    confirmTitle="Foydalanuvchini o'chirasizmi?"
-                    confirmDesc="Barcha buyurtmalari bilan o'chib ketadi."
+                    editLabel={t("Ko'rish / Tahrirlash", "Просмотр / Редактирование")}
+                    deleteLabel={t("O'chirish", "Удалить")}
+                    confirmTitle={t("Foydalanuvchini o'chirasizmi?", "Удалить пользователя?")}
+                    confirmDesc={t("Barcha buyurtmalari bilan o'chib ketadi.", "Будет удалён вместе со всеми заказами.")}
                   />
                 </TableCell>
               </TableRow>
@@ -188,7 +188,7 @@ export default function UsersTable({
         currentPage={currentPage}
         maxPage={maxPage}
         totalItems={filtered.length}
-        totalLabel="ta foydalanuvchi"
+        totalLabel={t("ta foydalanuvchi", "пользователей")}
         onChange={setCurrentPage}
       />
 
@@ -196,7 +196,7 @@ export default function UsersTable({
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[480px] m-4">
         <div className="relative w-full p-6 bg-white rounded-3xl dark:bg-gray-900 lg:p-8">
           <h4 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">
-            Foydalanuvchini tahrirlash
+            {t("Foydalanuvchini tahrirlash", "Редактировать пользователя")}
           </h4>
           {viewItem && (
             <div className="flex flex-col gap-4">
@@ -212,16 +212,16 @@ export default function UsersTable({
                 </div>
               </div>
               <div>
-                <Label>To'liq ism</Label>
+                <Label>{t("To'liq ism", "Полное имя")}</Label>
                 <Input
                   type="text"
-                  placeholder="Foydalanuvchi ismi"
+                  placeholder={t("Foydalanuvchi ismi", "Имя пользователя")}
                   value={form.fullname}
                   onChange={(e) => setForm({ ...form, fullname: e.target.value })}
                 />
               </div>
               <div>
-                <Label>Telefon</Label>
+                <Label>{t("Telefon", "Телефон")}</Label>
                 <Input
                   type="text"
                   placeholder="+998..."
@@ -230,16 +230,16 @@ export default function UsersTable({
                 />
               </div>
               <div className="text-xs text-gray-400 dark:text-gray-500">
-                Ro'yxatdan o'tgan: {Moment(viewItem.createdt ?? viewItem.createdAt).format("DD.MM.YYYY HH:mm")}
+                {t("Ro'yxatdan o'tgan:", "Зарегистрирован:")} {Moment(viewItem.createdt ?? viewItem.createdAt).format("DD.MM.YYYY HH:mm")}
               </div>
             </div>
           )}
           <div className="flex justify-end gap-3 mt-6">
             <button onClick={closeModal} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-white/[0.08] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/[0.05] transition-colors">
-              Bekor qilish
+              {t("Bekor qilish", "Отмена")}
             </button>
             <button onClick={handleSaveUser} disabled={saving} className="px-4 py-2 text-sm rounded-lg bg-brand-500 text-white font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors">
-              {saving ? "Saqlanmoqda..." : "Saqlash"}
+              {saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}
             </button>
           </div>
         </div>

@@ -30,13 +30,14 @@ const SHOW_OPTIONS = [
 export default function TableToolbar({
   search,
   onSearch,
-  searchPlaceholder = "Qidirish...",
+  searchPlaceholder: searchPlaceholderProp,
   showValue,
   onShowChange,
   onExport,
   action,
 }: TableToolbarProps) {
   const { t } = useLang();
+  const searchPlaceholder = searchPlaceholderProp ?? t("Qidirish...", "Поиск...");
   return (
     <div className="px-4 py-3 flex flex-wrap gap-3 items-center justify-between border-b border-gray-100 dark:border-white/[0.05] bg-white dark:bg-transparent">
       {/* Left: search */}

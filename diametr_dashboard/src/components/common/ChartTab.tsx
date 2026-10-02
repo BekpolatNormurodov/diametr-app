@@ -1,6 +1,8 @@
 import { useState } from "react";
 
+import { useLang } from "../../context/LangContext";
 const ChartTab: React.FC = () => {
+  const { t } = useLang();
   const [selected, setSelected] = useState<
     "optionOne" | "optionTwo" | "optionThree"
   >("optionOne");
@@ -18,7 +20,7 @@ const ChartTab: React.FC = () => {
           "optionOne"
         )}`}
       >
-        Monthly
+        {t("Oylik", "Месяц")}
       </button>
 
       <button
@@ -27,7 +29,7 @@ const ChartTab: React.FC = () => {
           "optionTwo"
         )}`}
       >
-        Quarterly
+        {t("Choraklik", "Квартал")}
       </button>
 
       <button
@@ -36,7 +38,7 @@ const ChartTab: React.FC = () => {
           "optionThree"
         )}`}
       >
-        Annually
+        {t("Yillik", "Год")}
       </button>
     </div>
   );

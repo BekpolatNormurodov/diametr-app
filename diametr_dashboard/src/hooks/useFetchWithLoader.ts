@@ -2,6 +2,7 @@ import axios from "axios";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "../components/ui/toast";
 
+import { tr } from "../context/LangContext";
 interface FetchOptions<T> {
   fetcher: () => Promise<T>;
   onSuccess?: (data: T) => void;
@@ -52,7 +53,7 @@ export function useFetchWithLoader<T>({
       if (axios.isAxiosError(err)) {
         toast.error(err.response?.data?.message || err.message);
       } else {
-        toast.error("Xatolik yuz berdi");
+        toast.error(tr("Xatolik yuz berdi", "Произошла ошибка"));
       }
       onErrorRef.current?.(err);
     } finally {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Label from "../form/Label";
-import { useLang } from "../../context/LangContext";
+import { useLang, tr } from "../../context/LangContext";
 import { COLOR_PALETTE } from "./colorPaletteData";
 
 interface ColorPaletteProps {
@@ -19,17 +19,17 @@ const COLOR_GROUPS: { label: string; colors: typeof COLOR_PALETTE }[] = (() => {
   const allHexes = COLOR_PALETTE.map(c => c.hex);
   // Pre-defined groups based on the palette data
   const groupDefs = [
-    { label: "Qizillar", from: 0, to: 5 },
-    { label: "Pushtilar", from: 5, to: 8 },
-    { label: "Zangorilar", from: 8, to: 11 },
-    { label: "Sariqlar", from: 11, to: 16 },
-    { label: "Yashillar", from: 16, to: 22 },
-    { label: "Havoranglar", from: 22, to: 25 },
-    { label: "Ko'klar", from: 25, to: 32 },
-    { label: "Binafshalar", from: 32, to: 36 },
-    { label: "Jigarranglar", from: 36, to: 40 },
-    { label: "Kulranglar", from: 40, to: 44 },
-    { label: "Asosiylar", from: 44, to: COLOR_PALETTE.length },
+    { label: tr("Qizillar", "Красные"), from: 0, to: 5 },
+    { label: tr("Pushtilar", "Розовые"), from: 5, to: 8 },
+    { label: tr("Zangorilar", "Голубые"), from: 8, to: 11 },
+    { label: tr("Sariqlar", "Жёлтые"), from: 11, to: 16 },
+    { label: tr("Yashillar", "Зелёные"), from: 16, to: 22 },
+    { label: tr("Havoranglar", "Бирюзовые"), from: 22, to: 25 },
+    { label: tr("Ko'klar", "Синие"), from: 25, to: 32 },
+    { label: tr("Binafshalar", "Фиолетовые"), from: 32, to: 36 },
+    { label: tr("Jigarranglar", "Коричневые"), from: 36, to: 40 },
+    { label: tr("Kulranglar", "Серые"), from: 40, to: 44 },
+    { label: tr("Asosiylar", "Основные"), from: 44, to: COLOR_PALETTE.length },
   ];
   return groupDefs.map(g => ({
     label: g.label,

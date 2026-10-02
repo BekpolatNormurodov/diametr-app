@@ -83,25 +83,25 @@ export default function WorkersTable({ data, onRefetch }: { data: WorkerItemProp
       if (form.expired) payload.expired = form.expired;
       if (editItem) {
         await axiosClient.put(`/worker/${editItem.id}`, payload);
-        toast.success("Usta yangilandi");
+        toast.success(t("Usta yangilandi", "Мастер обновлён"));
       }
       onRefetch?.(); closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/worker/${id}`);
-      toast.success("Usta o'chirildi");
+      toast.success(t("Usta o'chirildi", "Мастер удалён"));
       onRefetch?.();
-    } catch { toast.error("Xatolik yuz berdi"); }
+    } catch { toast.error(t("Xatolik yuz berdi", "Произошла ошибка")); }
   };
 
   const handleExport = () => {
     const ws = XLSX.utils.json_to_sheet(tableData.map((w) => ({
-      ID: w.id, "To'liq ismi": w.fullname ?? "", Telefon: w.phone ?? "",
+      ID: w.id, [t("To'liq ismi", "Полное имя")]: w.fullname ?? "", Telefon: w.phone ?? "",
       Xizmat: w.service?.name ?? "", Muddati: w.expired ? Moment(w.expired).format("DD.MM.YYYY") : "",
       Yaratilgan: Moment(w.createdt ?? w.createdAt).format("DD.MM.YYYY"),
     })));
@@ -118,17 +118,17 @@ export default function WorkersTable({ data, onRefetch }: { data: WorkerItemProp
           <TableHeader>
             <TableRow>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Rasm</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">To'liq ismi</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Rasm", "Фото")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("To'liq ismi", "Полное имя")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("phone")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("services")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Muddati</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Muddati", "Срок")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
           <TableBody>
             {currentItems.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">Ma'lumot yo'q</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">{t("Ma'lumot yo'q", "Нет данных")}</TableCell></TableRow>
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                 <TableCell className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{(safePage - 1) * +optionValue + idx + 1}</TableCell>
@@ -151,39 +151,39 @@ export default function WorkersTable({ data, onRefetch }: { data: WorkerItemProp
         <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
           <span className="text-sm text-gray-500 dark:text-gray-400">{t(`${tableData.length} ta ichidan ${Math.min((safePage - 1) * +optionValue+1,tableData.length)}–${Math.min(safePage * +optionValue,tableData.length)} ko'rsatilmoqda`, `Показано ${Math.min((safePage - 1) * +optionValue+1,tableData.length)}–${Math.min(safePage * +optionValue,tableData.length)} из ${tableData.length}`)}</span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>Keyingi</Button>
+            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>{t("Oldingi", "Назад")}</Button>
+            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>{t("Keyingi", "Далее")}</Button>
           </div>
         </div>
       </div>
       <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[600px] m-4">
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <div className="px-2 pr-14 mb-6">
-            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">Ustani tahrirlash</h4>
+            <h4 className="text-xl font-semibold text-gray-800 dark:text-white">{t("Ustani tahrirlash", "Редактировать мастера")}</h4>
           </div>
           <div className="flex flex-col gap-4 px-2">
             <div>
-              <Label>To'liq ismi</Label>
-              <Input type="text" placeholder="To'liq ismi" value={form.fullname} onChange={(e) => setForm({ ...form, fullname: e.target.value })} />
+              <Label>{t("To'liq ismi", "Полное имя")}</Label>
+              <Input type="text" placeholder={t("To'liq ismi", "Полное имя")} value={form.fullname} onChange={(e) => setForm({ ...form, fullname: e.target.value })} />
             </div>
             <div>
-              <Label>Telefon</Label>
+              <Label>{t("Telefon", "Телефон")}</Label>
               <Input type="text" placeholder="+998 XX XXX XX XX" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </div>
             {serviceOptions.length > 0 && (
               <div>
-                <Label>Xizmat turi</Label>
+                <Label>{t("Xizmat turi", "Вид услуги")}</Label>
                 <Select options={serviceOptions} defaultValue={form.service_id} onChange={(v) => setForm({ ...form, service_id: v })} />
               </div>
             )}
             <div>
-              <Label>Muddati</Label>
+              <Label>{t("Muddati", "Срок")}</Label>
               <Input type="date" value={form.expired} onChange={(e) => setForm({ ...form, expired: e.target.value })} />
             </div>
           </div>
           <div className="flex items-center gap-3 px-2 mt-6 justify-end">
-            <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saqlanmoqda..." : "Saqlash"}</Button>
+            <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}</Button>
           </div>
         </div>
       </Modal>

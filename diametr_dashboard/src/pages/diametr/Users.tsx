@@ -22,11 +22,11 @@ export default function UsersPage() {
   return (
     <>
       <PageMeta
-        title="Foydalanuvchilar – Diametr"
-        description="Barcha ro'yxatdan o'tgan foydalanuvchilar"
+        title={t("Foydalanuvchilar – Diametr", "Пользователи – Diametr")}
+        description={t("Barcha ro'yxatdan o'tgan foydalanuvchilar", "Все зарегистрированные пользователи")}
       />
       <PageBreadcrumb pageTitle={t.k("usersTitle")} />
-      <ComponentCard title={`Foydalanuvchilar (${users.length})`}>
+      <ComponentCard title={t(`Foydalanuvchilar (${users.length})`, `Пользователи (${users.length})`)}>
         {isLoading ? (
           <SkeletonTable rows={8} cols={6} />
         ) : (

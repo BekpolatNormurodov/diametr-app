@@ -2,12 +2,13 @@ import React, { useRef, useState } from "react";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import { toast } from "../ui/toast";
-import { useLang } from "../../context/LangContext";
+import { useLang, tr } from "../../context/LangContext";
 
 // SVG is not accepted: the backend rejects it (an SVG can carry script and is
 // served from the API origin). Keep in sync with _utils/image-upload.ts.
 const ACCEPTED_FORMATS = "image/jpeg,image/png,image/webp,image/gif,image/bmp";
-const SVG_REJECTED = "SVG formatidagi rasm qabul qilinmaydi. JPG, PNG, WebP, GIF yoki BMP rasm tanlang.";
+const svgRejected = () =>
+  tr("SVG formatidagi rasm qabul qilinmaydi. JPG, PNG, WebP, GIF yoki BMP rasm tanlang.", "Изображения в формате SVG не принимаются. Выберите JPG, PNG, WebP, GIF или BMP.");
 
 const isSvgFile = (file: File) =>
   file.type.toLowerCase() === "image/svg+xml" || /\.svgz?$/i.test(file.name);
@@ -48,7 +49,7 @@ export default function ImageField({ label, existingUrl, onChange, allowUrl = tr
     // The picker's "All files" option and drag-and-drop bypass `accept`.
     if (isSvgFile(file)) {
       if (fileRef.current) fileRef.current.value = "";
-      toast.error(SVG_REJECTED);
+      toast.error(svgRejected());
       return;
     }
     const objectUrl = URL.createObjectURL(file);
@@ -127,22 +128,22 @@ export default function ImageField({ label, existingUrl, onChange, allowUrl = tr
           <div className="flex items-center gap-4 p-3 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03]">
             <img
               src={preview}
-              alt="Preview"
+              alt={t("Ko'rinish", "Предпросмотр")}
               className="h-20 w-20 shrink-0 object-cover rounded-xl border border-gray-200 dark:border-white/10"
               onError={() => setPreview(null)}
             />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-gray-800 dark:text-white/90">
-                {fileName ?? "Tanlangan rasm"}
+                {fileName ?? t("Tanlangan rasm", "Выбранное фото")}
               </p>
-              <p className="text-xs text-gray-400 mt-0.5">Rasm tayyor</p>
+              <p className="text-xs text-gray-400 mt-0.5">{t("Rasm tayyor", "Фото готово")}</p>
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
                 >
-                  O'zgartirish
+                  {t("O'zgartirish", "Изменить")}
                 </button>
                 <span className="text-gray-300 dark:text-white/20">•</span>
                 <button
@@ -150,7 +151,7 @@ export default function ImageField({ label, existingUrl, onChange, allowUrl = tr
                   onClick={clearImage}
                   className="text-xs font-medium text-red-500 hover:underline"
                 >
-                  O'chirish
+                  {t("O'chirish", "Удалить")}
                 </button>
               </div>
             </div>
@@ -197,7 +198,7 @@ export default function ImageField({ label, existingUrl, onChange, allowUrl = tr
             <div className="mt-3">
               <img
                 src={preview}
-                alt="Preview"
+                alt={t("Ko'rinish", "Предпросмотр")}
                 className="h-24 w-24 object-cover rounded-xl border border-gray-200 dark:border-white/10"
                 onError={() => setPreview(null)}
               />

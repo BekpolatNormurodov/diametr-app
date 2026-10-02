@@ -10,7 +10,7 @@ import { toast } from "../../ui/toast";
 import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 import { useAutoClampPage } from "../../common/Pagination";
-import { useLang } from "../../../context/LangContext";
+import { useLang, tr } from "../../../context/LangContext";
 
 export interface SaleItemProps {
   id: number;
@@ -34,10 +34,10 @@ const customerName = (o: SaleItemProps) => o.user?.fullname?.trim() || "";
 const customerPhone = (o: SaleItemProps) => o.user?.phone || o.phone || "";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
-  STARTED:   { label: "Yangi",         className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
-  CONFIRMED: { label: "Tasdiqlangan",  className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  FINISHED:  { label: "Bajarilgan",    className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-  CANCELED:  { label: "Bekor qilingan", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  STARTED:   { get label() { return tr("Yangi", "Новый"); },         className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
+  CONFIRMED: { get label() { return tr("Tasdiqlangan", "Подтверждён"); },  className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  FINISHED:  { get label() { return tr("Bajarilgan", "Выполнен"); },    className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  CANCELED:  { get label() { return tr("Bekor qilingan", "Отменён"); }, className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
 };
 
 export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[]; onRefetch?: () => void }) {
@@ -64,25 +64,25 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
     setLoadingId(id);
     try {
       await axiosClient.put(`/order/${action}/${id}`);
-      const label = action === "confirm" ? "Tasdiqlandi" : action === "cancel" ? "Bekor qilindi" : "Bajarildi";
+      const label = action === "confirm" ? t("Tasdiqlandi", "Подтверждено") : action === "cancel" ? t("Bekor qilindi", "Отменено") : t("Bajarildi", "Выполнено");
       toast.success(label);
       onRefetch?.();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally { setLoadingId(null); }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/order/${id}`);
-      toast.success("Buyurtma o'chirildi");
+      toast.success(t("Buyurtma o'chirildi", "Заказ удалён"));
       onRefetch?.();
-    } catch { toast.error("Xatolik yuz berdi"); }
+    } catch { toast.error(t("Xatolik yuz berdi", "Произошла ошибка")); }
   };
 
   const handleExport = () => {
     const ws = XLSX.utils.json_to_sheet(tableData.map((o) => ({
-      ID: o.id, "Do'kon": o.shop?.name ?? "", Mijoz: customerName(o) || customerPhone(o),
+      ID: o.id, [t("Do'kon", "Магазин")]: o.shop?.name ?? "", Mijoz: customerName(o) || customerPhone(o),
       Telefon: customerPhone(o), Manzil: o.address ?? "",
       Summa: (o.amount ?? 0).toLocaleString(),
       Status: statusConfig[o.status ?? ""]?.label ?? o.status ?? "",
@@ -102,16 +102,16 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
             <TableRow>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("shops")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Mijoz</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Mijoz", "Клиент")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("amount")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Status</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Holat", "Статус")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("createdAt")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
           <TableBody>
             {currentItems.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">Buyurtmalar yo'q</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-gray-400">{t("Buyurtmalar yo'q", "Заказов нет")}</TableCell></TableRow>
             ) : currentItems.map((item, idx) => {
               const cfg = statusConfig[item.status ?? ""] ?? { label: item.status ?? "-", className: "bg-gray-100 text-gray-600" };
               const busy = loadingId === item.id;
@@ -126,7 +126,7 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
                     )}
                   </TableCell>
                   <TableCell className="px-5 py-4 text-sm font-semibold text-green-600 dark:text-green-400">
-                    {item.amount != null ? `${item.amount.toLocaleString()} so'm` : "-"}
+                    {item.amount != null ? t(`${item.amount.toLocaleString()} so'm`, `${item.amount.toLocaleString()} сум`) : "-"}
                   </TableCell>
                   <TableCell className="px-5 py-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${cfg.className}`}>{cfg.label}</span>
@@ -147,7 +147,7 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
                             hover:bg-emerald-500/20 disabled:opacity-40 transition-all"
                         >
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                          {busy ? "..." : "Yakunlash"}
+                          {busy ? "..." : t("Yakunlash", "Завершить")}
                         </button>
                       )}
                       {(item.status === "STARTED" || item.status === "CONFIRMED") && (
@@ -159,7 +159,7 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
                             hover:bg-red-500/20 disabled:opacity-40 transition-all"
                         >
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                          {busy ? "..." : "Bekor"}
+                          {busy ? "..." : t("Bekor", "Отменено")}
                         </button>
                       )}
                       <button
@@ -181,15 +181,15 @@ export default function SalesTable({ data, onRefetch }: { data: SaleItemProps[];
         <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
           <span className="text-sm text-gray-500 dark:text-gray-400">{t(`${filteredData.length} ta ichidan ${Math.min((safePage - 1) * +optionValue+1,filteredData.length)}–${Math.min(safePage * +optionValue,filteredData.length)} ko'rsatilmoqda`, `Показано ${Math.min((safePage - 1) * +optionValue+1,filteredData.length)}–${Math.min(safePage * +optionValue,filteredData.length)} из ${filteredData.length}`)}</span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>Oldingi</Button>
-            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>Keyingi</Button>
+            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={()=>setCurrentPage(p=>p-1)}>{t("Oldingi", "Назад")}</Button>
+            <Button size="sm" variant="outline" disabled={safePage >= maxPage} onClick={()=>setCurrentPage(p=>p+1)}>{t("Keyingi", "Далее")}</Button>
           </div>
         </div>
       </div>
       {confirmId !== null && (
         <ConfirmDeleteModal
-          title="Buyurtmani o'chirasizmi?"
-          desc="Bu amalni qaytarib bo'lmaydi."
+          title={t("Buyurtmani o'chirasizmi?", "Удалить заказ?")}
+          desc={t("Bu amalni qaytarib bo'lmaydi.", "Это действие нельзя отменить.")}
           onConfirm={() => { handleDelete(confirmId); setConfirmId(null); }}
           onCancel={() => setConfirmId(null)}
         />

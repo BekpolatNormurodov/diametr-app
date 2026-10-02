@@ -36,7 +36,7 @@ export default function NewsPage() {
 
   return (
     <>
-      <PageMeta title="Yangiliklar | Diametr" description="Diametr boshqaruv paneli" />
+      <PageMeta title={t("Yangiliklar | Diametr", "Новости | Diametr")} description={t("Diametr boshqaruv paneli", "Панель управления Diametr")} />
       <PageBreadcrumb pageTitle={t.k("news")} />
 
       <div className="space-y-6">
@@ -49,7 +49,7 @@ export default function NewsPage() {
               startIcon={<PlusIcon className="size-5 fill-white" />}
               onClick={() => newsRef.current?.openCreate()}
             >
-              Yangilik qo'shish
+              {t("Yangilik qo'shish", "Добавить новость")}
             </Button>
           }
         >

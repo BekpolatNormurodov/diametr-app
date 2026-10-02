@@ -51,6 +51,7 @@ const gradientFor = (seed: string | number) => {
 
 // Password cell — yashirin/ko'rsatish + copy
 function PasswordCell({ value }: { value?: string }) {
+  const { t } = useLang();
 
   const [shown, setShown] = useState(false);
   if (!value) return <span className="text-gray-400 text-sm">-</span>;
@@ -62,7 +63,7 @@ function PasswordCell({ value }: { value?: string }) {
       <button
         type="button"
         onClick={() => setShown((s) => !s)}
-        title={shown ? "Yashirish" : "Ko'rsatish"}
+        title={shown ? t("Yashirish", "Скрыть") : t("Ko'rsatish", "Показать")}
         className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:text-brand-500 hover:bg-white dark:hover:bg-white/[0.06] transition-colors"
       >
         {shown ? (
@@ -150,9 +151,9 @@ export default function AdminsTable({
   };
 
   const handleSave = async () => {
-    if (!form.fullname.trim()) { toast.error("To'liq ism kiritilishi shart"); return; }
-    if (!form.phone.trim())    { toast.error("Telefon raqam kiritilishi shart"); return; }
-    if (!form.shop_id)         { toast.error("Do'kon tanlanishi shart"); return; }
+    if (!form.fullname.trim()) { toast.error(t("To'liq ism kiritilishi shart", "Введите полное имя")); return; }
+    if (!form.phone.trim())    { toast.error(t("Telefon raqam kiritilishi shart", "Введите номер телефона")); return; }
+    if (!form.shop_id)         { toast.error(t("Do'kon tanlanishi shart", "Выберите магазин")); return; }
 
     setSaving(true);
     try {
@@ -165,15 +166,15 @@ export default function AdminsTable({
 
       if (editItem) {
         await axiosClient.put(`/admin/${editItem.id}`, payload);
-        toast.success("Admin yangilandi");
+        toast.success(t("Admin yangilandi", "Админ обновлён"));
       } else {
         await axiosClient.post(`/admin`, payload);
-        toast.success("Admin yaratildi. Parol avtomatik yuborildi.");
+        toast.success(t("Admin yaratildi. Parol avtomatik yuborildi.", "Админ создан. Пароль отправлен автоматически."));
       }
       onRefetch?.();
       closeModal();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally {
       setSaving(false);
     }
@@ -182,10 +183,10 @@ export default function AdminsTable({
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/admin/${id}`);
-      toast.success("Admin o'chirildi");
+      toast.success(t("Admin o'chirildi", "Админ удалён"));
       onRefetch?.();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     }
   };
 
@@ -193,10 +194,10 @@ export default function AdminsTable({
     const ws = XLSX.utils.json_to_sheet(
       data.map((a) => ({
         ID: a.id,
-        "To'liq ism": a.fullname ?? "",
+        [t("To'liq ism", "Полное имя")]: a.fullname ?? "",
         Telefon: a.phone ?? "",
         Parol: a.password ?? "",
-        "Do'kon": a.shop?.name ?? "",
+        [t("Do'kon", "Магазин")]: a.shop?.name ?? "",
         "Telegram Chat ID": a.chatid ?? a.chat_id ?? "",
         Yaratilgan: Moment(a.createdt ?? a.createdAt).format("DD.MM.YYYY"),
       }))
@@ -213,13 +214,13 @@ export default function AdminsTable({
       <TableToolbar
         search={search}
         onSearch={handleSearch}
-        searchPlaceholder="Ism, telefon yoki do'kon..."
+        searchPlaceholder={t("Ism, telefon yoki do'kon...", "Имя, телефон или магазин...")}
         showValue={showValue}
         onShowChange={handleShow}
         onExport={handleExport}
         action={
           <Button size="sm" onClick={openCreate}>
-            + Yangi admin
+            {t("+ Yangi admin", "+ Новый админ")}
           </Button>
         }
       />
@@ -231,10 +232,10 @@ export default function AdminsTable({
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Admin</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("phone")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Parol</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Parol", "Пароль")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("shops")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Chat ID</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Sana</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Sana", "Дата")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
@@ -242,7 +243,7 @@ export default function AdminsTable({
             {current.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="py-10 text-center text-gray-400 dark:text-gray-500">
-                  {search ? "Qidiruv natijasi topilmadi" : "Ma'lumot yo'q"}
+                  {search ? t("Qidiruv natijasi topilmadi", "Ничего не найдено") : t("Ma'lumot yo'q", "Нет данных")}
                 </TableCell>
               </TableRow>
             ) : current.map((item, idx) => (
@@ -272,7 +273,7 @@ export default function AdminsTable({
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className="text-sm font-semibold text-gray-800 dark:text-white truncate">
-                        {item.fullname ?? <span className="text-gray-400 italic font-normal">Ism yo'q</span>}
+                        {item.fullname ?? <span className="text-gray-400 italic font-normal">{t("Ism yo'q", "Без имени")}</span>}
                       </span>
                       <span className="text-xs text-gray-400 dark:text-gray-500">ID: {item.id}</span>
                     </div>
@@ -293,22 +294,22 @@ export default function AdminsTable({
                         type="button"
                         onClick={async (e) => {
                           e.stopPropagation();
-                          const text = `Login: ${item.phone}\nParol: ${item.password}`;
+                          const text = t(`Login: ${item.phone}\nParol: ${item.password}`, `Логин: ${item.phone}\nПароль: ${item.password}`);
                           try {
                             await navigator.clipboard.writeText(text);
-                            toast.success("Login va parol nusxalandi");
+                            toast.success(t("Login va parol nusxalandi", "Логин и пароль скопированы"));
                           } catch {
-                            toast.error("Nusxalab bo'lmadi");
+                            toast.error(t("Nusxalab bo'lmadi", "Не удалось скопировать"));
                           }
                         }}
-                        title="Login + parolni birga nusxalash"
+                        title={t("Login + parolni birga nusxalash", "Скопировать логин и пароль вместе")}
                         className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10 px-2 py-1 rounded-md transition-colors whitespace-nowrap"
                       >
                         <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
                           <path d="M7 3a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V8.414A2 2 0 0014.414 7L11 3.586A2 2 0 009.586 3H7z" />
                           <path d="M3 7a2 2 0 012-2v10a2 2 0 002 2h6a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
                         </svg>
-                        Login + parol
+                        {t("Login + parol", "Логин + пароль")}
                       </button>
                     )}
                   </div>
@@ -342,8 +343,8 @@ export default function AdminsTable({
                   <TableActions
                     onEdit={() => openEdit(item)}
                     onDelete={() => handleDelete(item.id)}
-                    confirmTitle="Adminni o'chirasizmi?"
-                    confirmDesc="Admin tizimga kira olmaydi."
+                    confirmTitle={t("Adminni o'chirasizmi?", "Удалить админа?")}
+                    confirmDesc={t("Admin tizimga kira olmaydi.", "Админ не сможет войти в систему.")}
                   />
                 </TableCell>
               </TableRow>
@@ -356,7 +357,7 @@ export default function AdminsTable({
         currentPage={currentPage}
         maxPage={maxPage}
         totalItems={filtered.length}
-        totalLabel="ta admin"
+        totalLabel={t("ta admin", "админов")}
         onChange={setCurrentPage}
       />
 
@@ -365,18 +366,18 @@ export default function AdminsTable({
         <div className="relative w-full p-6 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <div className="pr-12 mb-6">
             <h4 className="text-xl font-semibold text-gray-800 dark:text-white">
-              {editItem ? "Adminni tahrirlash" : "Yangi admin yaratish"}
+              {editItem ? t("Adminni tahrirlash", "Редактировать админа") : t("Yangi admin yaratish", "Создать нового админа")}
             </h4>
             {!editItem && (
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Parol avtomatik ravishda generatsiya qilinadi.
+                {t("Parol avtomatik ravishda generatsiya qilinadi.", "Пароль генерируется автоматически.")}
               </p>
             )}
           </div>
 
           <div className="flex flex-col gap-4">
             <div>
-              <Label>To'liq ism *</Label>
+              <Label>{t("To'liq ism *", "Полное имя *")}</Label>
               <Input
                 type="text"
                 placeholder="Alisher Toshmatov"
@@ -385,7 +386,7 @@ export default function AdminsTable({
               />
             </div>
             <div>
-              <Label>Telefon raqam *</Label>
+              <Label>{t("Telefon raqam *", "Номер телефона *")}</Label>
               <Input
                 type="text"
                 placeholder="+998901234567"
@@ -394,16 +395,16 @@ export default function AdminsTable({
               />
             </div>
             <div>
-              <Label>Do'kon *</Label>
+              <Label>{t("Do'kon *", "Магазин *")}</Label>
               <Select
                 options={shopOptions}
                 defaultValue={form.shop_id}
                 onChange={(v) => setForm({ ...form, shop_id: v })}
-                placeholder="Do'konni tanlang"
+                placeholder={t("Do'konni tanlang", "Выберите магазин")}
               />
             </div>
             <div>
-              <Label>Telegram Chat ID (ixtiyoriy)</Label>
+              <Label>{t("Telegram Chat ID (ixtiyoriy)", "Telegram Chat ID (необязательно)")}</Label>
               <Input
                 type="text"
                 placeholder="123456789"
@@ -411,17 +412,17 @@ export default function AdminsTable({
                 onChange={(e) => setForm({ ...form, chatid: e.target.value })}
               />
               <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                Admin Telegram botni /start bosib chat ID olishi mumkin
+                {t("Admin Telegram botni /start bosib chat ID olishi mumkin", "Админ может получить chat ID, нажав /start в Telegram-боте")}
               </p>
             </div>
           </div>
 
           <div className="flex items-center justify-end gap-3 mt-6">
             <Button size="sm" variant="outline" onClick={closeModal}>
-              Bekor qilish
+              {t("Bekor qilish", "Отмена")}
             </Button>
             <Button size="sm" onClick={handleSave} disabled={saving}>
-              {saving ? "Saqlanmoqda..." : editItem ? "Saqlash" : "Yaratish"}
+              {saving ? t("Saqlanmoqda...", "Сохранение...") : editItem ? t("Saqlash", "Сохранить") : t("Yaratish", "Создать")}
             </Button>
           </div>
         </div>
