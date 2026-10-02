@@ -1,3 +1,4 @@
+import { decodeEntities } from "../../utils/text";
 import TableActions from "./TableActions";
 import TableToolbar from "./TableToolbar";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "../ui/table";
@@ -201,10 +202,12 @@ function getVariantInfo(sp: ShopProductItemProps) {
   if (!pi) return { label: "", color: "" };
   const unitSymbol = pi.product?.unit_type?.symbol ?? pi.unit_type?.symbol;
   const isDona = unitSymbol === "dona";
+  // Size shows for every unit type: "dona" variants (e.g. sinks) carry
+  // their dimensions there too, and they are what tells two apart.
   const parts = [
-    pi.name ?? "",
+    decodeEntities(pi.name ?? (pi as any).name_uz ?? (pi as any).name_ru ?? ""),
     !isDona && pi.value != null && unitSymbol ? `${pi.value} ${unitSymbol}` : "",
-    !isDona && pi.size ? pi.size : "",
+    pi.size ? pi.size : "",
   ].filter(Boolean).join(" · ");
   return { label: parts || (pi.color ?? ""), color: pi.color ?? "" };
 }
@@ -213,9 +216,9 @@ function getVariantInfoRaw(pi: ProductItemRaw, unitType?: { symbol?: string }) {
   const unitSymbol = unitType?.symbol ?? pi.unit_type?.symbol;
   const isDona = unitSymbol === "dona";
   const parts = [
-    pi.name ?? "",
+    decodeEntities(pi.name ?? (pi as any).name_uz ?? (pi as any).name_ru ?? ""),
     !isDona && pi.value != null && unitSymbol ? `${pi.value} ${unitSymbol}` : "",
-    !isDona && pi.size ? pi.size : "",
+    pi.size ? pi.size : "",
   ].filter(Boolean).join(" · ");
   return { label: parts || (pi.color ?? `ID:${pi.id}`), color: pi.color ?? "" };
 }

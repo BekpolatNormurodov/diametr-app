@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { authService, BASE_URL } from '../../service/authService'
 import { useLang } from '../../context/AppContext'
+import { variantLabelOf } from '../../context/CartContext'
+import { decodeEntities } from '../../utils/text'
 
 interface OrderProduct {
   id: number
@@ -8,8 +10,11 @@ interface OrderProduct {
   amount: number
   shop_product?: {
     product_item?: {
-      product?: { name: string }
-      name: string
+      product?: { name?: string | null; name_uz?: string | null; name_ru?: string | null }
+      name?: string | null
+      name_uz?: string | null
+      name_ru?: string | null
+      size?: string | null
     }
   }
 }
@@ -235,8 +240,16 @@ export default function OrdersDrawer({ open, onClose }: Props) {
                           </div>
                         )}
                         {order.products.map((p, i) => {
-                          const name = p.shop_product?.product_item?.product?.name ?? '—'
-                          const itemName = p.shop_product?.product_item?.name ?? ''
+                          // Product names live in name_uz/name_ru (plain `name` is
+                          // often NULL, which showed "—"); variant label + its size.
+                          const pi = p.shop_product?.product_item
+                          const prod = pi?.product
+                          const name = decodeEntities(
+                            (lang === 'ru' ? prod?.name_ru || prod?.name_uz : prod?.name_uz || prod?.name_ru) || prod?.name || '') || '—'
+                          const variant = decodeEntities(
+                            (lang === 'ru' ? pi?.name_ru || pi?.name_uz : pi?.name_uz || pi?.name_ru) || variantLabelOf(pi) || '')
+                          const size = (pi?.size ?? '').trim()
+                          const itemName = [variant, size && !variant.includes(size) ? size : ''].filter(Boolean).join(', ')
                           return (
                             <div key={p.id ?? i} className="flex items-center justify-between text-xs">
                               <span className="text-slate-600 dark:text-slate-300 truncate mr-2">

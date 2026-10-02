@@ -5,6 +5,7 @@ import { toast } from 'react-toastify'
 import { useLang } from '../context/AppContext'
 import { useCart, variantLabelOf } from '../context/CartContext'
 import { decodeEntities } from '../utils/text'
+import { colorsInText, nearestNamedColor } from '../utils/colors'
 import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useAuthUser } from '../hooks/useAuthUser'
 import Navbar from '../components/home/sections/navbar'
@@ -742,6 +743,13 @@ export default function ShopDetailPage() {
                 // must not both read "Lavabolar va lavabolar".
                 const variantName = decodeEntities(sp.variant_name ?? '').trim()
                 const name = variantName || productName || (lang === 'uz' ? 'Mahsulot' : 'Товар')
+                // Colour chip: the picked colour (hex, named by the closest
+                // palette colour), else one the variant name mentions
+                const picked = (sp.color ?? '').trim()
+                const namedFromText = picked ? null : colorsInText(sp.variant_name)[0] ?? null
+                const swatch = picked.startsWith('#') ? picked : namedFromText?.hex ?? (picked ? '#94a3b8' : '')
+                const colorRef = picked.startsWith('#') ? nearestNamedColor(picked) : namedFromText
+                const colorName = colorRef ? (lang === 'uz' ? colorRef.uz : colorRef.ru) : picked
                 // Open the full product view (photo, description, every shop's
                 // price) with this variant selected.
                 const openProduct = () => {
@@ -809,7 +817,7 @@ export default function ShopDetailPage() {
                         <p className="text-slate-400 dark:text-slate-500 text-xs line-clamp-1 mb-2">{sp.desc}</p>
                       )}
                       {/* Variant badges: unit/value, color, size */}
-                      {(sp.unit_type || sp.color || sp.size) && (
+                      {(sp.unit_type || swatch || sp.size) && (
                         <div className="flex flex-wrap gap-1 mb-2">
                           {sp.unit_type && sp.value != null && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-400 border border-brand-200 dark:border-brand-500/20">
@@ -821,10 +829,10 @@ export default function ShopDetailPage() {
                               {sp.unit_type.symbol}
                             </span>
                           )}
-                          {sp.color && (
+                          {swatch && (
                             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                              <span className="w-4 h-4 rounded-full border-2 border-white dark:border-slate-600 shadow-sm flex-shrink-0 ring-1 ring-slate-200 dark:ring-slate-500" style={{ background: sp.color.startsWith('#') ? sp.color : '#94a3b8' }} />
-                              {!sp.color.startsWith('#') && sp.color}
+                              <span className="w-4 h-4 rounded-full border-2 border-white dark:border-slate-600 shadow-sm flex-shrink-0 ring-1 ring-slate-200 dark:ring-slate-500" style={{ background: swatch }} />
+                              {colorName}
                             </span>
                           )}
                           {sp.size && (
