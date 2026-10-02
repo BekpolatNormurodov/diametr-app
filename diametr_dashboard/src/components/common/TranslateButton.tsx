@@ -1,28 +1,77 @@
 import { useState } from "react";
 import { toast } from "../ui/toast";
+import { decodeEntities } from "../../utils/text";
 
 /**
- * Free MyMemory translate API (no key required, has daily limit ~5000 words/day per IP).
- * Pair examples: "uz|ru", "ru|uz".
+ * Free MyMemory translate API (no key required, ~5000 words/day per IP —
+ * roughly three 10 000-character descriptions).
+ * One request takes at most 500 characters ("QUERY LENGTH LIMIT EXCEEDED"),
+ * so longer text is translated in sentence-sized pieces and joined back.
  */
-async function translateText(text: string, langPair: "uz|ru" | "ru|uz"): Promise<string> {
+const MAX_TOTAL = 10000;
+const MAX_CHUNK = 480;
+
+async function translateChunk(text: string, langPair: "uz|ru" | "ru|uz"): Promise<string> {
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langPair}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error("Translate failed");
+  if (!res.ok) throw new Error("Tarjima xizmati javob bermadi");
   const data = await res.json();
-  const out: string = decodeEntities(data?.responseData?.translatedText ?? "");
-  if (!out) throw new Error("Empty translation");
+  const out: string = decodeEntities(data?.responseData?.translatedText ?? "").trim();
+  // Errors come back as "translated text" (e.g. the length / daily-quota
+  // messages): never let them land in the field.
+  const status = Number(data?.responseStatus ?? 200);
+  if (status !== 200 || data?.quotaFinished || /^MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(out)) {
+    throw new Error(
+      data?.quotaFinished || /MYMEMORY WARNING/i.test(out)
+        ? "Bugungi bepul tarjima limiti tugadi, ertaga qayta urinib ko'ring"
+        : String(data?.responseDetails || out || "Tarjima xatosi"),
+    );
+  }
+  if (!out) throw new Error("Bo'sh tarjima");
   return out;
 }
 
-// MyMemory returns HTML-escaped text ("jo&#39;mrakli"); saved as-is it showed
-// the entity on the site. Uzbek is full of apostrophes, so always decode.
-function decodeEntities(s: string): string {
-  const named: Record<string, string> = { quot: '"', apos: "'", lt: "<", gt: ">", nbsp: " ", amp: "&" };
-  return s
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&(quot|apos|lt|gt|nbsp|amp);/g, (_, e) => named[e]);
+/** Splits one line into pieces of at most MAX_CHUNK chars, at sentence,
+ *  then comma, then word boundaries. */
+function piecesOf(line: string): string[] {
+  const units = line.match(/[^.!?…]+[.!?…]*\s*/g) ?? [line];
+  const small: string[] = [];
+  for (const u of units) {
+    if (u.length <= MAX_CHUNK) { small.push(u); continue; }
+    for (const part of u.split(/(?<=,)\s*/)) {
+      if (part.length <= MAX_CHUNK) { small.push(part + " "); continue; }
+      let cur = "";
+      for (const w of part.split(/\s+/)) {
+        if ((cur + " " + w).trim().length > MAX_CHUNK) { if (cur) small.push(cur + " "); cur = w; }
+        else cur = (cur + " " + w).trim();
+      }
+      if (cur) small.push(cur + " ");
+    }
+  }
+  const out: string[] = [];
+  let cur = "";
+  for (const u of small) {
+    if ((cur + u).length > MAX_CHUNK && cur) { out.push(cur.trim()); cur = ""; }
+    cur += u;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+async function translateText(text: string, langPair: "uz|ru" | "ru|uz"): Promise<string> {
+  // Line by line so paragraph breaks survive; 3 requests at a time.
+  const lines = text.split(/\r?\n/);
+  const jobs: Array<{ line: number; text: string }> = [];
+  lines.forEach((l, i) => piecesOf(l).forEach((t) => t && jobs.push({ line: i, text: t })));
+  const done: string[] = new Array(jobs.length);
+  for (let i = 0; i < jobs.length; i += 3) {
+    const batch = jobs.slice(i, i + 3);
+    const res = await Promise.all(batch.map((j) => translateChunk(j.text, langPair)));
+    res.forEach((r, k) => { done[i + k] = r; });
+  }
+  return lines
+    .map((_, i) => jobs.map((j, k) => (j.line === i ? done[k] : null)).filter(Boolean).join(" "))
+    .join("\n");
 }
 
 export default function TranslateButton({
@@ -45,6 +94,10 @@ export default function TranslateButton({
     const text = source.trim();
     if (!text) {
       toast.error("Avval matnni kiriting");
+      return;
+    }
+    if (text.length > MAX_TOTAL) {
+      toast.error(`Matn juda uzun: ${text.length} belgi (tarjima uchun ko'pi bilan ${MAX_TOTAL})`);
       return;
     }
     setLoading(true);

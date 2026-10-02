@@ -1,4 +1,5 @@
 ﻿import TableActions, { ConfirmDeleteModal } from "./TableActions";
+import { decodeEntities } from "../../../utils/text";
 import TableToolbar from "./TableToolbar";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "../../ui/table";
 import Moment from "moment";
@@ -68,6 +69,7 @@ const defaultVariantPayload = (p: ProductItemProps) => ({
 });
 // ProductItem.value is Decimal(10,3)
 const MAX_VARIANT_VALUE = 9_999_999;
+const MAX_VARIANT_SIZE = 60; // product_item.size is a short text column
 
 export default function ProductsTable({
   data,
@@ -455,12 +457,13 @@ export default function ProductsTable({
       size_z = parts[2] ?? "";
     }
     setVForm({
-      name: v.name ?? "",
+      // Decoded so saving also repairs text stored with "&#39;" entities
+      name: decodeEntities(v.name),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      name_ru: (v as any).name_ru ?? "",
-      desc: v.desc ?? "",
+      name_ru: decodeEntities((v as any).name_ru),
+      desc: decodeEntities(v.desc),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      desc_ru: (v as any).desc_ru ?? "",
+      desc_ru: decodeEntities((v as any).desc_ru),
       color: v.color ?? "",
       size: v.size ?? "",
       value: v.value != null ? String(v.value) : "",
@@ -503,7 +506,10 @@ export default function ProductsTable({
         }
         size = nums.join("x");
       }
-    } else if (isValue && vForm.value.trim()) {
+    } else {
+      size = vForm.size.trim() || null;
+    }
+    if (isValue && vForm.value.trim()) {
       const n = Number(vForm.value);
       if (!Number.isFinite(n) || n <= 0 || n > MAX_VARIANT_VALUE) {
         toast.error("Miqdor musbat son bo'lishi kerak");
@@ -964,7 +970,7 @@ export default function ProductsTable({
                                                 </svg>
                                               </div>
                                             )}
-                                            <span>{v.name ?? "-"}</span>
+                                            <span>{decodeEntities(v.name) || "-"}</span>
                                           </div>
                                         </td>
                                         <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
@@ -1275,6 +1281,18 @@ export default function ProductsTable({
                   <Input type="number" placeholder={`Masalan: 1.5 ${varUnitSymbol}`} value={vForm.value} onChange={(e) => setVForm({ ...vForm, value: e.target.value })} />
                 </div>
               ) : null}
+              {/* Any unit type (dona too): an optional size, e.g. a sink's dimensions */}
+              {varUnitSymbol !== "x*y" && varUnitSymbol !== "x*y*z" && (
+                <div>
+                  <Label>O'lcham <span className="text-xs text-gray-400">ixtiyoriy</span></Label>
+                  <Input
+                    type="text"
+                    placeholder="Masalan: 600x395x220 sm"
+                    value={vForm.size}
+                    onChange={(e) => setVForm({ ...vForm, size: e.target.value.slice(0, MAX_VARIANT_SIZE) })}
+                  />
+                </div>
+              )}
 
               <ColorPalette
                 value={vForm.color}
