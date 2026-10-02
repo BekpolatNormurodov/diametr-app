@@ -425,10 +425,10 @@ class _ProductScreenState extends State<ProductScreen> {
                     "Bu mahsulot olib tashlangan yoki vaqtincha sotuvda yo'q.",
               );
             }
-            // Image priority (ideal): variant with own image → product image →
-            // category image → nothing (placeholder). A variant image is more
-            // specific than a generic product photo (e.g. "Xavfsizlik tizimlari"
-            // has a store-interior shot while "Seyf" would want a safe).
+            // Hero photo: the chosen type's own photo; otherwise the
+            // product's own photo (admins upload one per product), then any
+            // type's photo, then the category's. A chosen type without a
+            // photo shows the product's — never a sibling type's.
             String? _pick(String kind, dynamic v) {
               if (v == null) return null;
               final s = v.toString();
@@ -438,12 +438,9 @@ class _ProductScreenState extends State<ProductScreen> {
             final List itemsList = (state.data["items"] is List)
                 ? state.data["items"] as List
                 : const [];
-            // 0. the chosen variant's own image
             final Map? selVar = _selectedVariant(state);
             String? resolvedImageUrl = _pick('product-items', selVar?["image"]);
-            // 1. no type chosen: any variant that has an image. A chosen type
-            //    without a photo falls to the product's own photo instead —
-            //    a sibling type's photo would show the wrong item.
+            resolvedImageUrl ??= _pick('products', state.data["image"]);
             if (resolvedImageUrl == null && selVar == null) {
               for (final it in itemsList) {
                 final u = _pick('product-items', it is Map ? it["image"] : null);
@@ -451,8 +448,6 @@ class _ProductScreenState extends State<ProductScreen> {
               }
             }
             final String lang = context.locale.languageCode;
-            // 2. product's own image
-            resolvedImageUrl ??= _pick('products', state.data["image"]);
             // 3. category image
             final catImg = (state.data["category"] is Map)
                 ? (state.data["category"] as Map)["image"]

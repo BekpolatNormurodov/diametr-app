@@ -91,7 +91,10 @@ export default function ProductsTable({
   /** Re-fetch category / unit type option lists (called when the edit modal opens). */
   onOptionsRefresh?: () => void;
 }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  // Name in the panel's language (UZ/RU), entity-decoded
+  const nm = (o: any): string =>
+    decodeEntities((lang === "ru" ? o?.name_ru || o?.name_uz : o?.name_uz || o?.name_ru) || o?.name || "");
   const [tableData, setTableData] = useState(data);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -234,7 +237,7 @@ export default function ProductsTable({
     const groups = new Map<string, { label: string; items: ProductItemProps[] }>();
     filteredData.forEach((p) => {
       const id = p.category?.id ? String(p.category.id) : (p.categoryId ? String(p.categoryId) : "none");
-      const label = p.category?.name_uz ?? p.category?.name ?? "Kategoriyasiz";
+      const label = nm(p.category) || t("Kategoriyasiz", "Без категории");
       if (!groups.has(id)) groups.set(id, { label, items: [] });
       groups.get(id)!.items.push(p);
     });
@@ -290,7 +293,7 @@ export default function ProductsTable({
   const saveProduct = async (skipDuplicateCheck = false) => {
     const nameUz = pForm.name_uz.trim();
     if (nameUz.length < 2) {
-      toast.error("Mahsulot nomini kiriting (kamida 2 ta belgi)");
+      toast.error(t("Mahsulot nomini kiriting (kamida 2 ta belgi)", "Введите название товара (не менее 2 символов)"));
       return;
     }
     if (editItem && !skipDuplicateCheck) {
@@ -332,7 +335,7 @@ export default function ProductsTable({
       if (imageFilename) payload.image = imageFilename;
       if (editItem) {
         await axiosClient.put(`/product/${editItem.id}`, payload);
-        toast.success("Mahsulot yangilandi");
+        toast.success(t("Mahsulot yangilandi", "Товар обновлён"));
       }
       onRefetch?.();
       closeEdit();
@@ -346,7 +349,7 @@ export default function ProductsTable({
   const deleteProduct = async (id: number) => {
     try {
       await axiosClient.delete(`/product/${id}`);
-      toast.success("Mahsulot o'chirildi");
+      toast.success(t("Mahsulot o'chirildi", "Товар удалён"));
       onRefetch?.();
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
@@ -357,11 +360,14 @@ export default function ProductsTable({
   const productDeleteDesc = (item: ProductItemProps) => {
     const variants = variantsOf(item);
     if (variants.length === 0) {
-      return "Mahsulot o'chiriladi va mijozlarga boshqa ko'rinmaydi. Bu amalni qaytarib bo'lmaydi.";
+      return t("Mahsulot o'chiriladi va mijozlarga boshqa ko'rinmaydi. Bu amalni qaytarib bo'lmaydi.", "Товар будет удалён и больше не будет виден покупателям. Это действие нельзя отменить.");
     }
     // `stock` counts live offers only; stock of blocked shops is archived too but not counted.
     const stock = variants.reduce((sum, v) => sum + (v._count?.shop_products ?? 0), 0);
-    return `Mahsulot bilan birga uning ${variants.length} ta varianti va do'konlardagi barcha zaxiralari ham o'chiriladi${stock > 0 ? ` (hozir ${stock} ta sotuvda)` : ""}. Mijozlar uni endi ko'rmaydi va buyurtma bera olmaydi. Bu amalni qaytarib bo'lmaydi.`;
+    return t(
+      `Mahsulot bilan birga uning ${variants.length} ta varianti va do'konlardagi barcha zaxiralari ham o'chiriladi${stock > 0 ? ` (hozir ${stock} ta sotuvda)` : ""}. Mijozlar uni endi ko'rmaydi va buyurtma bera olmaydi. Bu amalni qaytarib bo'lmaydi.`,
+      `Вместе с товаром удалятся его варианты (${variants.length}) и все запасы в магазинах${stock > 0 ? ` (сейчас в продаже: ${stock})` : ""}. Покупатели больше не увидят его и не смогут заказать. Это действие нельзя отменить.`,
+    );
   };
 
   /* ─── Default ("Standart") variant ────────────────────── */
@@ -377,7 +383,7 @@ export default function ProductsTable({
     try {
       await axiosClient.post("/product-item", defaultVariantPayload(item));
       markDefaultAdded(item.id);
-      toast.success(`"${productLabel(item)}" uchun standart variant qo'shildi`);
+      toast.success(t(`"${productLabel(item)}" uchun standart variant qo'shildi`, `Для «${productLabel(item)}» добавлен стандартный вариант`));
       onRefetch?.();
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
@@ -480,7 +486,7 @@ export default function ProductsTable({
   const saveVariant = async () => {
     const name = vForm.name.trim();
     if (!name) {
-      toast.error("Variant nomi kiritish shart");
+      toast.error(t("Variant nomi kiritish shart", "Укажите название варианта"));
       return;
     }
     // Miqdor / o'lcham depend on the product's unit type (same rule as the inputs shown).
@@ -495,13 +501,13 @@ export default function ProductsTable({
       ).map((d) => d.trim());
       const filled = dims.filter(Boolean).length;
       if (filled > 0 && filled < dims.length) {
-        toast.error("O'lchamlarni to'liq kiriting");
+        toast.error(t("O'lchamlarni to'liq kiriting", "Заполните все размеры"));
         return;
       }
       if (filled === dims.length) {
         const nums = dims.map(Number);
         if (nums.some((n) => !Number.isFinite(n) || n <= 0)) {
-          toast.error("O'lchamlar musbat son bo'lishi kerak");
+          toast.error(t("O'lchamlar musbat son bo'lishi kerak", "Размеры должны быть положительными числами"));
           return;
         }
         size = nums.join("x");
@@ -512,7 +518,7 @@ export default function ProductsTable({
     if (isValue && vForm.value.trim()) {
       const n = Number(vForm.value);
       if (!Number.isFinite(n) || n <= 0 || n > MAX_VARIANT_VALUE) {
-        toast.error("Miqdor musbat son bo'lishi kerak");
+        toast.error(t("Miqdor musbat son bo'lishi kerak", "Количество должно быть положительным числом"));
         return;
       }
       value = n;
@@ -560,10 +566,10 @@ export default function ProductsTable({
 
       if (editVariant) {
         await axiosClient.put(`/product-item/${editVariant.id}`, payload);
-        toast.success("Variant yangilandi");
+        toast.success(t("Variant yangilandi", "Вариант обновлён"));
       } else {
         await axiosClient.post("/product-item", payload);
-        toast.success("Variant qo'shildi");
+        toast.success(t("Variant qo'shildi", "Вариант добавлен"));
       }
       onRefetch?.();
       closeVar();
@@ -582,10 +588,11 @@ export default function ProductsTable({
   const variantDeleteDesc = ({ v, isLast }: { v: VariantProps; isLast: boolean }) => {
     const stock = v._count?.shop_products ?? 0;
     const base = stock > 0
-      ? `Diqqat! Bu variant ${stock} ta do'konda sotuvda. O'chirilsa, do'konlardagi bu variant zaxiralari ham o'chiriladi va mijozlar uni buyurtma qila olmaydi.`
-      : "Variant o'chiriladi. Hozir hech bir do'kon uni sotmayapti.";
-    const last = isLast ? " Bu mahsulotning oxirgi varianti — o'chirilgach mahsulot mijozlarga \"Tovar turlari qo'shilmoqda\" deb ko'rinadi." : "";
-    return `${base}${last} Bu amalni qaytarib bo'lmaydi.`;
+      ? t(`Diqqat! Bu variant ${stock} ta do'konda sotuvda. O'chirilsa, do'konlardagi bu variant zaxiralari ham o'chiriladi va mijozlar uni buyurtma qila olmaydi.`,
+          `Внимание! Этот вариант продаётся в ${stock} магазин(ах). При удалении его запасы в магазинах тоже удалятся и покупатели не смогут его заказать.`)
+      : t("Variant o'chiriladi. Hozir hech bir do'kon uni sotmayapti.", "Вариант будет удалён. Сейчас ни один магазин его не продаёт.");
+    const last = isLast ? t(" Bu mahsulotning oxirgi varianti — o'chirilgach mahsulot mijozlarga \"Tovar turlari qo'shilmoqda\" deb ko'rinadi.", " Это последний вариант товара — после удаления покупатели увидят «Виды товара добавляются».") : "";
+    return `${base}${last} ${t("Bu amalni qaytarib bo'lmaydi.", "Это действие нельзя отменить.")}`;
   };
 
   const confirmDeleteVariant = async () => {
@@ -594,7 +601,7 @@ export default function ProductsTable({
     setVariantToDelete(null);
     try {
       await axiosClient.delete(`/product-item/${id}`);
-      toast.success("Variant o'chirildi");
+      toast.success(t("Variant o'chirildi", "Вариант удалён"));
       onRefetch?.();
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
@@ -811,20 +818,20 @@ export default function ProductsTable({
                         <span>{item.name_uz ?? item.name ?? "-"}</span>
                         {variants.length === 0 && (
                           <span
-                            title={`Mijozlarga "Tovar turlari qo'shilmoqda" deb ko'rsatiladi, lekin savatga qo'shib bo'lmaydi va do'konlar uni sotuvga qo'sha olmaydi. Mahsulotni ochib variant qo'shing yoki "Standart" tugmasini bosing.`}
+                            title={t(`Mijozlarga "Tovar turlari qo'shilmoqda" deb ko'rsatiladi, lekin savatga qo'shib bo'lmaydi va do'konlar uni sotuvga qo'sha olmaydi. Mahsulotni ochib variant qo'shing yoki "Standart" tugmasini bosing.`, `Покупатели видят «Виды товара добавляются», но в корзину добавить нельзя и магазины не могут выставить его на продажу. Откройте товар и добавьте вариант или нажмите «Стандарт».`)}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 text-[10px] font-semibold whitespace-nowrap"
                           >
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
-                            Variant yo'q — sotib bo'lmaydi
+                            {t("Variant yo'q — sotib bo'lmaydi", "Нет вариантов — купить нельзя")}
                           </span>
                         )}
                         {noStock && (
                           <span
-                            title="Variantlari bor, lekin hech bir faol do'konda sotuvda emas — mijozlar hozircha sotib ola olmaydi."
+                            title={t("Variantlari bor, lekin hech bir faol do'konda sotuvda emas — mijozlar hozircha sotib ola olmaydi.", "Варианты есть, но ни один активный магазин их не продаёт — купить пока нельзя.")}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700 text-[10px] font-semibold whitespace-nowrap"
                           >
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
-                            Do'konda yo'q
+                            {t("Do'konda yo'q", "Нет в магазинах")}
                           </span>
                         )}
                       </div>
@@ -833,13 +840,13 @@ export default function ProductsTable({
                     <TableCell className="px-5 py-4">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-100 dark:border-gray-700">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M4 12h16M4 17h10" /></svg>
-                        {item.category?.name_uz ?? item.category?.name ?? "-"}
+                        {nm(item.category) || "-"}
                       </span>
                     </TableCell>
                     <TableCell className="px-5 py-4">
                       {item.unit_type ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-xs font-semibold text-brand-700 dark:text-brand-400 border border-brand-100 dark:border-brand-800/30">
-                          {item.unit_type.symbol} — {item.unit_type.name_uz ?? item.unit_type.name}
+                          {item.unit_type.symbol} — {nm(item.unit_type)}
                         </span>
                       ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
                     </TableCell>
@@ -854,14 +861,14 @@ export default function ProductsTable({
                         >
                           <path d="m9 18 6-6-6-6" />
                         </svg>
-                        {variants.length} ta
+                        {variants.length} {t("ta", "шт.")}
                       </span>
                       {canAddDefault && (
                         <button
                           // Not `disabled`: a click must never fall through to the row (expand toggle).
                           onClick={(e) => { e.stopPropagation(); addDefaultVariant(item); }}
                           aria-disabled={defaultAddingId !== null || !!bulk}
-                          title="Standart variant qo'shish — bir bosishda 'Standart' nomli variant yaratiladi"
+                          title={t("Standart variant qo'shish — bir bosishda 'Standart' nomli variant yaratiladi", "Добавить стандартный вариант — в один клик создаётся вариант «Standart»")}
                           className={`ml-1.5 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/40 transition-all ${
                             defaultAddingId !== null || bulk
                               ? "opacity-50 cursor-not-allowed"
@@ -873,7 +880,7 @@ export default function ProductsTable({
                           ) : (
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14" /></svg>
                           )}
-                          Standart
+                          {t("Standart", "Стандарт")}
                         </button>
                       )}
                     </TableCell>
@@ -884,7 +891,7 @@ export default function ProductsTable({
                       <TableActions
                         onEdit={() => startEditProduct(item)}
                         onDelete={() => deleteProduct(item.id)}
-                        confirmTitle="Mahsulotni o'chirishni tasdiqlaysizmi?"
+                        confirmTitle={t("Mahsulotni o'chirishni tasdiqlaysizmi?", "Удалить товар?")}
                         confirmDesc={productDeleteDesc(item)}
                       />
                     </TableCell>
@@ -904,8 +911,8 @@ export default function ProductsTable({
                                   </svg>
                                 </div>
                                 <h5 className="text-sm font-bold text-gray-800 dark:text-white">
-                                  Variantlar
-                                  <span className="ml-1.5 text-gray-400 dark:text-gray-500 font-normal">— {item.name_uz ?? item.name}</span>
+                                  {t("Variantlar", "Варианты")}
+                                  <span className="ml-1.5 text-gray-400 dark:text-gray-500 font-normal">— {nm(item)}</span>
                                 </h5>
                               </div>
                               <button
@@ -915,7 +922,7 @@ export default function ProductsTable({
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                   <path d="M12 5v14M5 12h14" />
                                 </svg>
-                                Variant qo'shish
+                                {t("Variant qo'shish", "Добавить вариант")}
                               </button>
                             </div>
                             {variants.length === 0 ? (
@@ -926,8 +933,8 @@ export default function ProductsTable({
                                     <path d="M12 22V12M3.27 6.96 12 12l8.73-5.04" />
                                   </svg>
                                 </div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Variantlar hali yo'q</p>
-                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Yuqoridagi tugmani bosib yangi variant qo'shing yoki bir bosishda standart variant yarating</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{t("Variantlar hali yo'q", "Вариантов пока нет")}</p>
+                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t("Yuqoridagi tugmani bosib yangi variant qo'shing yoki bir bosishda standart variant yarating", "Нажмите кнопку выше, чтобы добавить вариант, или создайте стандартный в один клик")}</p>
                                 {canAddDefault && (
                                   <button
                                     onClick={() => addDefaultVariant(item)}
@@ -939,7 +946,7 @@ export default function ProductsTable({
                                     ) : (
                                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
                                     )}
-                                    Standart variant qo'shish
+                                    {t("Standart variant qo'shish", "Добавить стандартный вариант")}
                                   </button>
                                 )}
                               </div>
@@ -948,12 +955,12 @@ export default function ProductsTable({
                                 <table className="w-full text-sm">
                                   <thead>
                                     <tr className="bg-gray-100/80 dark:bg-white/[0.04]">
-                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Nomi</th>
-                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">O'lchov</th>
-                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Rang</th>
-                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">O'lcham</th>
-                                      <th title="Bu variantni hozir sotayotgan faol do'konlar soni" className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Do'konlar</th>
-                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Amallar</th>
+                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t("Nomi", "Название")}</th>
+                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t("O'lchov", "Ед. изм.")}</th>
+                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t("Rang", "Цвет")}</th>
+                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t("O'lcham", "Размер")}</th>
+                                      <th title={t("Bu variantni hozir sotayotgan faol do'konlar soni", "Сколько активных магазинов продают этот вариант")} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t("Do'konlar", "Магазины")}</th>
+                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t("Amallar", "Действия")}</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -970,7 +977,7 @@ export default function ProductsTable({
                                                 </svg>
                                               </div>
                                             )}
-                                            <span>{decodeEntities(v.name) || "-"}</span>
+                                            <span>{nm(v) || "-"}</span>
                                           </div>
                                         </td>
                                         <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
@@ -1017,7 +1024,7 @@ export default function ProductsTable({
                                                 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20
                                                 dark:hover:bg-blue-500 dark:hover:text-white dark:hover:border-blue-500
                                                 transition-all duration-150"
-                                              title="Tahrirlash"
+                                              title={t("Tahrirlash", "Редактировать")}
                                             >
                                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -1032,7 +1039,7 @@ export default function ProductsTable({
                                                 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20
                                                 dark:hover:bg-red-500 dark:hover:text-white dark:hover:border-red-500
                                                 transition-all duration-150"
-                                              title="O'chirish"
+                                              title={t("O'chirish", "Удалить")}
                                             >
                                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                                 <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14" />
@@ -1060,7 +1067,7 @@ export default function ProductsTable({
         </Table>
         <div className="px-5 py-3 flex flex-wrap gap-3 justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            {filteredData.length} ta ichidan {Math.min((safePage - 1) * +optionValue + 1, filteredData.length)}–{Math.min(safePage * +optionValue, filteredData.length)} ko'rsatilmoqda
+            {t(`${filteredData.length} ta ichidan ${Math.min((safePage - 1) * +optionValue + 1, filteredData.length)}–${Math.min(safePage * +optionValue, filteredData.length)} ko'rsatilmoqda`, `Показано ${Math.min((safePage - 1) * +optionValue + 1, filteredData.length)}–${Math.min(safePage * +optionValue, filteredData.length)} из ${filteredData.length}`)}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -1120,7 +1127,7 @@ export default function ProductsTable({
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                 </svg>
               </div>
-              <h4 className="text-lg font-bold text-white">Mahsulotni tahrirlash</h4>
+              <h4 className="text-lg font-bold text-white">{t("Mahsulotni tahrirlash", "Редактирование товара")}</h4>
             </div>
           </div>
           {/* Body */}
@@ -1128,58 +1135,58 @@ export default function ProductsTable({
             <div className="flex flex-col gap-4">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label>Nomi (O'zbek)</Label>
+                  <Label>{t("Nomi (O'zbek)", "Название (узб.)")}</Label>
                   <TranslateButton
                     source={pForm.name_ru}
                     direction="ru->uz"
                     onResult={(t) => setPForm({ ...pForm, name_uz: t })}
                   />
                 </div>
-                <Input type="text" placeholder="Uzbekcha nomi" value={pForm.name_uz} onChange={(e) => setPForm({ ...pForm, name_uz: e.target.value })} />
+                <Input type="text" placeholder={t("Uzbekcha nomi", "Название на узбекском")} value={pForm.name_uz} onChange={(e) => setPForm({ ...pForm, name_uz: e.target.value })} />
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label>Nomi (Ruscha)</Label>
+                  <Label>{t("Nomi (Ruscha)", "Название (рус.)")}</Label>
                   <TranslateButton
                     source={pForm.name_uz}
                     direction="uz->ru"
                     onResult={(t) => setPForm({ ...pForm, name_ru: t })}
                   />
                 </div>
-                <Input type="text" placeholder="Ruscha nomi" value={pForm.name_ru} onChange={(e) => setPForm({ ...pForm, name_ru: e.target.value })} />
+                <Input type="text" placeholder={t("Ruscha nomi", "Название на русском")} value={pForm.name_ru} onChange={(e) => setPForm({ ...pForm, name_ru: e.target.value })} />
               </div>
               {categoryOptions.length > 0 && (
                 <div>
-                  <Label>Kategoriya</Label>
+                  <Label>{t("Kategoriya", "Категория")}</Label>
                   <Select options={editCategoryOptions} defaultValue={pForm.category_id} onChange={(v) => setPForm({ ...pForm, category_id: v })} />
                 </div>
               )}
               {unitTypes.length > 0 && (
                 <div>
-                  <Label>O'lchov birligi</Label>
-                  <Select options={[{ value: "", label: "Tanlanmagan" }, ...unitTypes]} defaultValue={pForm.unit_type_id} onChange={(v) => setPForm({ ...pForm, unit_type_id: v })} placeholder="kg, L, m..." />
+                  <Label>{t("O'lchov birligi", "Единица измерения")}</Label>
+                  <Select options={[{ value: "", label: t("Tanlanmagan", "Не выбрано") }, ...unitTypes]} defaultValue={pForm.unit_type_id} onChange={(v) => setPForm({ ...pForm, unit_type_id: v })} placeholder="kg, L, m..." />
                 </div>
               )}
               <div>
-                <Label>Rasm (barcha variantlar uchun)</Label>
+                <Label>{t("Rasm (barcha variantlar uchun)", "Фото (для всех вариантов)")}</Label>
                 <ImageField key={pImgKey.current} label="" allowUrl={false} onChange={(r) => { pImgRef.current = r; }} />
                 {editItem?.image && !pImgRef.current && (
                   <div className="mt-2 flex items-center gap-2">
                     <img src={`${staticUrl}/static/products/${editItem.image}`} className="w-10 h-10 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                    <span className="text-xs text-gray-400">Joriy rasm</span>
+                    <span className="text-xs text-gray-400">{t("Joriy rasm", "Текущее фото")}</span>
                   </div>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-3 mt-6 justify-end">
-              <Button size="sm" variant="outline" onClick={closeEdit}>Bekor qilish</Button>
+              <Button size="sm" variant="outline" onClick={closeEdit}>{t("Bekor qilish", "Отмена")}</Button>
               <Button size="sm" onClick={() => saveProduct()} disabled={pSaving}>
                 {pSaving ? (
                   <span className="inline-flex items-center gap-2">
                     <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                    Saqlanmoqda...
+                    {t("Saqlanmoqda...", "Сохранение...")}
                   </span>
-                ) : "Saqlash"}
+                ) : t("Saqlash", "Сохранить")}
               </Button>
             </div>
           </div>
@@ -1209,9 +1216,9 @@ export default function ProductsTable({
               </div>
               <div>
                 <h4 className="text-lg font-bold text-white">
-                  {editVariant ? "Variantni tahrirlash" : "Yangi variant qo'shish"}
+                  {editVariant ? t("Variantni tahrirlash", "Редактирование варианта") : t("Yangi variant qo'shish", "Новый вариант")}
                 </h4>
-                <p className="text-sm text-white/70">Rang, o'lcham va boshqa xususiyatlarni belgilang</p>
+                <p className="text-sm text-white/70">{t("Rang, o'lcham va boshqa xususiyatlarni belgilang", "Укажите цвет, размер и другие характеристики")}</p>
               </div>
             </div>
           </div>
@@ -1220,7 +1227,7 @@ export default function ProductsTable({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label>Variant nomi (UZ) *</Label>
+                  <Label>{t("Variant nomi (UZ) *", "Название варианта (UZ) *")}</Label>
                   <TranslateButton
                     source={vForm.name_ru}
                     direction="ru->uz"
@@ -1231,7 +1238,7 @@ export default function ProductsTable({
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label>Variant nomi (RU) <span className="text-xs text-gray-400">ixtiyoriy</span></Label>
+                  <Label>{t("Variant nomi (RU)", "Название варианта (RU)")} <span className="text-xs text-gray-400">{t("ixtiyoriy", "необязательно")}</span></Label>
                   <TranslateButton
                     source={vForm.name}
                     direction="uz->ru"
@@ -1246,12 +1253,12 @@ export default function ProductsTable({
                 <>
                   <div className="flex gap-2 items-end">
                     <div className="flex-1">
-                      <Label>X (eni)</Label>
+                      <Label>{t("X (eni)", "X (ширина)")}</Label>
                       <Input type="number" placeholder="120" value={vForm.size_x} onChange={(e) => setVForm({ ...vForm, size_x: e.target.value })} />
                     </div>
                     <span className="pb-2.5 text-gray-400 font-bold">x</span>
                     <div className="flex-1">
-                      <Label>Y (bo'yi)</Label>
+                      <Label>{t("Y (bo'yi)", "Y (длина)")}</Label>
                       <Input type="number" placeholder="80" value={vForm.size_y} onChange={(e) => setVForm({ ...vForm, size_y: e.target.value })} />
                     </div>
                   </div>
@@ -1277,17 +1284,17 @@ export default function ProductsTable({
                 </>
               ) : varUnitSymbol && varUnitSymbol !== "dona" ? (
                 <div>
-                  <Label>Miqdor ({varUnitSymbol})</Label>
-                  <Input type="number" placeholder={`Masalan: 1.5 ${varUnitSymbol}`} value={vForm.value} onChange={(e) => setVForm({ ...vForm, value: e.target.value })} />
+                  <Label>{t("Miqdor", "Количество")} ({varUnitSymbol})</Label>
+                  <Input type="number" placeholder={`${t("Masalan", "Например")}: 1.5 ${varUnitSymbol}`} value={vForm.value} onChange={(e) => setVForm({ ...vForm, value: e.target.value })} />
                 </div>
               ) : null}
               {/* Any unit type (dona too): an optional size, e.g. a sink's dimensions */}
               {varUnitSymbol !== "x*y" && varUnitSymbol !== "x*y*z" && (
                 <div>
-                  <Label>O'lcham <span className="text-xs text-gray-400">ixtiyoriy</span></Label>
+                  <Label>{t("O'lcham", "Размер")} <span className="text-xs text-gray-400">{t("ixtiyoriy", "необязательно")}</span></Label>
                   <Input
                     type="text"
-                    placeholder="Masalan: 600x395x220 sm"
+                    placeholder={t("Masalan: 600x395x220 sm", "Например: 600x395x220 см")}
                     value={vForm.size}
                     onChange={(e) => setVForm({ ...vForm, size: e.target.value.slice(0, MAX_VARIANT_SIZE) })}
                   />
@@ -1303,7 +1310,7 @@ export default function ProductsTable({
                   long product/variant descriptions fit without truncation. */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label>Tavsif (UZ)</Label>
+                  <Label>{t("Tavsif (UZ)", "Описание (UZ)")}</Label>
                   <TranslateButton
                     source={vForm.desc_ru}
                     direction="ru->uz"
@@ -1313,14 +1320,14 @@ export default function ProductsTable({
                 <textarea
                   className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm text-gray-800 dark:text-white/90 focus:border-brand-500 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10"
                   rows={4}
-                  placeholder="Ixtiyoriy tavsif"
+                  placeholder={t("Ixtiyoriy tavsif", "Необязательное описание (UZ)")}
                   value={vForm.desc}
                   onChange={(e) => setVForm({ ...vForm, desc: e.target.value })}
                 />
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <Label>Tavsif (RU) <span className="text-xs text-gray-400">ixtiyoriy</span></Label>
+                  <Label>{t("Tavsif (RU)", "Описание (RU)")} <span className="text-xs text-gray-400">{t("ixtiyoriy", "необязательно")}</span></Label>
                   <TranslateButton
                     source={vForm.desc}
                     direction="uz->ru"
@@ -1336,24 +1343,24 @@ export default function ProductsTable({
                 />
               </div>
               <div className="lg:col-span-2">
-                <ImageField key={varImgKey.current} label="Rasm (ixtiyoriy)" allowUrl={false} onChange={(r) => { varImgRef.current = r; if (r?.file || r?.url) setVarImgChanged(true); }} />
+                <ImageField key={varImgKey.current} label={t("Rasm (ixtiyoriy)", "Фото (необязательно)")} allowUrl={false} onChange={(r) => { varImgRef.current = r; if (r?.file || r?.url) setVarImgChanged(true); }} />
                 {editVariant?.image && !varImgChanged && (
                   <div className="mt-2 flex items-center gap-2">
                     <img src={`${staticUrl}/static/product-items/${editVariant.image}`} className="w-10 h-10 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                    <span className="text-xs text-gray-400">Joriy rasm</span>
+                    <span className="text-xs text-gray-400">{t("Joriy rasm", "Текущее фото")}</span>
                   </div>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-3 mt-6 justify-end">
-              <Button size="sm" variant="outline" onClick={closeVar}>Bekor qilish</Button>
+              <Button size="sm" variant="outline" onClick={closeVar}>{t("Bekor qilish", "Отмена")}</Button>
               <Button size="sm" onClick={saveVariant} disabled={vSaving}>
                 {vSaving ? (
                   <span className="inline-flex items-center gap-2">
                     <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                    Saqlanmoqda...
+                    {t("Saqlanmoqda...", "Сохранение...")}
                   </span>
-                ) : editVariant ? "Saqlash" : "Qo'shish"}
+                ) : editVariant ? t("Saqlash", "Сохранить") : t("Qo'shish", "Добавить")}
               </Button>
             </div>
           </div>
@@ -1363,7 +1370,7 @@ export default function ProductsTable({
       {/* Variant delete confirm */}
       {variantToDelete && (
         <ConfirmDeleteModal
-          title="Variantni o'chirishni tasdiqlaysizmi?"
+          title={t("Variantni o'chirishni tasdiqlaysizmi?", "Удалить вариант?")}
           desc={variantDeleteDesc(variantToDelete)}
           onConfirm={confirmDeleteVariant}
           onCancel={() => setVariantToDelete(null)}
@@ -1374,7 +1381,7 @@ export default function ProductsTable({
       {dupConfirm && (
         <ConfirmDeleteModal
           tone="primary"
-          title="Bunday mahsulot allaqachon bor"
+          title={t("Bunday mahsulot allaqachon bor", "Такой товар уже есть")}
           desc={dupConfirm}
           confirmLabel="Baribir saqlash"
           onConfirm={() => { setDupConfirm(null); saveProduct(true); }}
@@ -1386,7 +1393,7 @@ export default function ProductsTable({
       {bulkConfirm && (
         <ConfirmDeleteModal
           tone="primary"
-          title="Standart variant qo'shilsinmi?"
+          title={t("Standart variant qo'shilsinmi?", "Добавить стандартный вариант?")}
           desc={`Ro'yxatdagi ${bulkConfirm.length} ta variantsiz mahsulotning har biriga "Standart" nomli bitta variant qo'shiladi. Shundan so'ng do'konlar ularni sotuvga qo'sha oladi. So'rovlar birma-bir yuboriladi — tugaguncha sahifadan chiqmang.`}
           confirmLabel="Qo'shish"
           onConfirm={() => runBulkDefaultVariants(bulkConfirm)}

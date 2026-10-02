@@ -162,7 +162,7 @@ export default function CategorysTable({ data, onRefetch }: { data: CategoryItem
         </Table>
         <div className="px-5 py-3 flex flex-wrap gap-3 justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            {filteredData.length} ta ichidan {Math.min((safePage - 1) * +optionValue + 1, filteredData.length)}–{Math.min(safePage * +optionValue, filteredData.length)} ko'rsatilmoqda
+            {t(`${filteredData.length} ta ichidan ${Math.min((safePage - 1) * +optionValue + 1, filteredData.length)}–${Math.min(safePage * +optionValue, filteredData.length)} ko'rsatilmoqda`, `Показано ${Math.min((safePage - 1) * +optionValue + 1, filteredData.length)}–${Math.min(safePage * +optionValue, filteredData.length)} из ${filteredData.length}`)}
           </span>
           <div className="flex items-center gap-1">
             <button

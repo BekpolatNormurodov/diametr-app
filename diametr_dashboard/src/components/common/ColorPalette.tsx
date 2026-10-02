@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Label from "../form/Label";
+import { useLang } from "../../context/LangContext";
 import { COLOR_PALETTE } from "./colorPaletteData";
 
 interface ColorPaletteProps {
@@ -36,14 +37,15 @@ const COLOR_GROUPS: { label: string; colors: typeof COLOR_PALETTE }[] = (() => {
   }));
 })();
 
-export default function ColorPalette({ label = "Rang", value, onChange, onClear, defaultOpen = false }: ColorPaletteProps) {
+export default function ColorPalette({ label, value, onChange, onClear, defaultOpen = false }: ColorPaletteProps) {
+  const { t } = useLang();
   const [expanded, setExpanded] = useState(defaultOpen);
   const selected = COLOR_PALETTE.find((c) => c.hex.toLowerCase() === value?.toLowerCase());
 
   return (
     <div className="lg:col-span-2">
       <div className="flex items-center justify-between mb-2">
-        <Label>{label}</Label>
+        <Label>{label ?? t("Rang", "Цвет")}</Label>
         <div className="flex items-center gap-2">
           {value && (
             <>
@@ -59,7 +61,7 @@ export default function ColorPalette({ label = "Rang", value, onChange, onClear,
                   type="button"
                   onClick={onClear}
                   className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                  title="Rangni tozalash"
+                  title={t("Rangni tozalash", "Очистить цвет")}
                 >
                   <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
@@ -81,7 +83,7 @@ export default function ColorPalette({ label = "Rang", value, onChange, onClear,
               <circle cx="12" cy="12" r="10" />
               <circle cx="12" cy="12" r="4" />
             </svg>
-            {expanded ? "Yopish" : value ? "O'zgartirish" : "Tanlash"}
+            {expanded ? t("Yopish", "Закрыть") : value ? t("O'zgartirish", "Изменить") : t("Tanlash", "Выбрать")}
           </button>
         </div>
       </div>

@@ -34,7 +34,7 @@ export interface Product {
   unit_type_id?: string;
 }
 export default function ProductsPage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { isOpen, openModal, closeModal } = useModal();
   const [autoExpandId, setAutoExpandId] = useState<number | null>(null);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>("");
@@ -78,7 +78,7 @@ export default function ProductsPage() {
     fetcher: fetchCats,
   });
   const category_options = Array.isArray(catsData)
-    ? catsData.map((c) => ({ value: String(c.id), label: c.name_uz ?? c.name ?? c.name_ru ?? "" }))
+    ? catsData.map((c: any) => ({ value: String(c.id), label: (lang === "ru" ? c.name_ru || c.name_uz : c.name_uz || c.name_ru) || c.name || "" }))
     : [];
 
   // Fetch unit types for variant forms

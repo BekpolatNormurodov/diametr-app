@@ -232,13 +232,11 @@ class _ProductCard extends StatelessWidget {
         break;
       }
     }
-    // Prefer any variant image over the product image — a variant photo is
-    // more specific than the generic product/store shot the product often has.
-    final String? imageUrl = (itemImg != null)
-        ? Endpoints.img('product-items', itemImg)
-        : ((productImg != null && productImg.isNotEmpty)
-            ? Endpoints.img('products', productImg)
-            : null);
+    // The product's own photo first (admins upload one per product), then a
+    // variant's — same order as the product page and the website.
+    final String? imageUrl = (productImg != null && productImg.isNotEmpty)
+        ? Endpoints.img('products', productImg)
+        : (itemImg != null ? Endpoints.img('product-items', itemImg) : null);
     final String locCode = context.locale.languageCode;
     final String localized = locCode == 'ru'
         ? (item['name_ru']?.toString() ?? '')

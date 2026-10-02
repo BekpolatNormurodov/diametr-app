@@ -1100,9 +1100,10 @@ class _ProductCardState extends State<_ProductCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Card thumbnail priority: variant with own image → product image. A
-    // variant photo (e.g. an actual seyf) is more specific than the product's
-    // generic display shot.
+    // Card thumbnail: a named type's own photo, else the product's own photo
+    // (admins upload one per product), else any type's photo — same order as
+    // the product page and the website. A card naming a type never borrows a
+    // sibling type's photo.
     String? imageUrl;
     final List<Map> matched = widget.matched;
     for (final v in matched) {
@@ -1112,8 +1113,13 @@ class _ProductCardState extends State<_ProductCard> {
         break;
       }
     }
+    if (imageUrl == null) {
+      final String? img = widget.item["image"]?.toString();
+      if (img != null && img.isNotEmpty && img != 'null') {
+        imageUrl = Endpoints.img('products', img);
+      }
+    }
     final items = widget.item['items'];
-    // A card naming a type never borrows a sibling type's photo
     if (imageUrl == null && matched.isEmpty && items is List) {
       for (final it in items) {
         final v = it is Map ? it['image'] : null;
@@ -1121,12 +1127,6 @@ class _ProductCardState extends State<_ProductCard> {
           imageUrl = Endpoints.img('product-items', v);
           break;
         }
-      }
-    }
-    if (imageUrl == null) {
-      final String? img = widget.item["image"]?.toString();
-      if (img != null && img.isNotEmpty && img != 'null') {
-        imageUrl = Endpoints.img('products', img);
       }
     }
     // Product display name lives in name_uz/name_ru; plain `name` is usually

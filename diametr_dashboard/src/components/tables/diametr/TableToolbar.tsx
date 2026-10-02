@@ -1,3 +1,4 @@
+import { useLang } from "../../../context/LangContext";
 import Button from "../../ui/button/Button";
 import Select from "../../form/Select";
 import { DownloadIcon } from "../../../icons";
@@ -35,6 +36,7 @@ export default function TableToolbar({
   onExport,
   action,
 }: TableToolbarProps) {
+  const { t } = useLang();
   return (
     <div className="px-4 py-3 flex flex-wrap gap-3 items-center justify-between border-b border-gray-100 dark:border-white/[0.05] bg-white dark:bg-transparent">
       {/* Left: search */}
@@ -74,7 +76,7 @@ export default function TableToolbar({
       {/* Right: show-count + export + action */}
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">Ko'rsatish</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">{t("Ko'rsatish", "Показать")}</span>
           <Select
             options={SHOW_OPTIONS}
             defaultValue={showValue}

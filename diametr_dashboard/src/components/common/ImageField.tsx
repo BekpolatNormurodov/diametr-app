@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import { toast } from "../ui/toast";
+import { useLang } from "../../context/LangContext";
 
 // SVG is not accepted: the backend rejects it (an SVG can carry script and is
 // served from the API origin). Keep in sync with _utils/image-upload.ts.
@@ -29,7 +30,8 @@ interface ImageFieldProps {
   allowUrl?: boolean;
 }
 
-export default function ImageField({ label = "Rasm", existingUrl, onChange, allowUrl = true }: ImageFieldProps) {
+export default function ImageField({ label, existingUrl, onChange, allowUrl = true }: ImageFieldProps) {
+  const { t } = useLang();
   const [mode, setMode] = useState<"upload" | "url">("upload");
   const [urlValue, setUrlValue] = useState(existingUrl ?? "");
   const [preview, setPreview] = useState<string | null>(existingUrl ?? null);
@@ -83,7 +85,7 @@ export default function ImageField({ label = "Rasm", existingUrl, onChange, allo
 
   return (
     <div>
-      <Label>{label}</Label>
+      <Label>{label ?? t("Rasm", "Фото")}</Label>
 
       {/* Toggle (hidden when URL mode is disabled) */}
       {allowUrl && (
@@ -104,7 +106,7 @@ export default function ImageField({ label = "Rasm", existingUrl, onChange, allo
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0-12l-4 4m4-4l4 4" />
                 </svg>
-                Yuklash
+                {t("Yuklash", "Загрузить")}
               </>
             ) : (
               <>
@@ -175,7 +177,7 @@ export default function ImageField({ label = "Rasm", existingUrl, onChange, allo
               </svg>
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              <span className="font-medium text-brand-600 dark:text-brand-400">Rasm tanlang</span> yoki bu yerga tashlang
+              <span className="font-medium text-brand-600 dark:text-brand-400">{t("Rasm tanlang", "Выберите фото")}</span> {t("yoki bu yerga tashlang", "или перетащите сюда")}
             </p>
             <p className="text-xs text-gray-400">JPG, PNG, WebP, GIF, BMP</p>
           </div>
@@ -189,7 +191,7 @@ export default function ImageField({ label = "Rasm", existingUrl, onChange, allo
             onChange={handleUrlChange}
           />
           <p className="mt-1.5 text-xs text-gray-400">
-            URL kiritilsa, backend rasmni yuklab olib saqlaydi
+            {t("URL kiritilsa, backend rasmni yuklab olib saqlaydi", "По URL сервер сам скачает и сохранит фото")}
           </p>
           {preview && (
             <div className="mt-3">

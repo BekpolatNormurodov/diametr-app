@@ -156,7 +156,7 @@ export default function UnitTypesTable({ data, onRefetch }: { data: UnitTypeItem
         </Table>
         <div className="px-5 py-3 flex justify-between items-center border-t border-gray-100 dark:border-white/[0.05]">
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            {tableData.length} ta ichidan {Math.min((safePage - 1) * +optionValue + 1, tableData.length)}–{Math.min(safePage * +optionValue, tableData.length)} ko'rsatilmoqda
+            {t(`${tableData.length} ta ichidan ${Math.min((safePage - 1) * +optionValue + 1, tableData.length)}–${Math.min(safePage * +optionValue, tableData.length)} ko'rsatilmoqda`, `Показано ${Math.min((safePage - 1) * +optionValue + 1, tableData.length)}–${Math.min(safePage * +optionValue, tableData.length)} из ${tableData.length}`)}
           </span>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={() => setCurrentPage(p => p - 1)}>Oldingi</Button>
