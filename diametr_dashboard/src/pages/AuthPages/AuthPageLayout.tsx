@@ -2,14 +2,20 @@ import React from "react";
 import GridShape from "../../components/common/GridShape";
 import { Link } from "react-router";
 import ThemeTogglerTwo from "../../components/common/ThemeTogglerTwo";
+import LangSwitcher from "../../components/common/LangSwitcher";
+import { useLang } from "../../context/LangContext";
 
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { t } = useLang();
   return (
     <div className="relative p-6 bg-white z-1 dark:bg-gray-900 sm:p-0">
+      <div className="absolute z-50 top-4 right-4">
+        <LangSwitcher />
+      </div>
       <div className="relative flex flex-col justify-center w-full h-screen lg:flex-row dark:bg-gray-900 sm:p-0">
         {children}
         <div className="items-center hidden w-full h-full lg:w-1/2 bg-brand-950 dark:bg-white/5 lg:grid">
@@ -29,7 +35,7 @@ export default function AuthLayout({
                 <span className="text-xs font-semibold text-white/80 uppercase tracking-widest">Super Admin Panel</span>
               </div>
               <h2 className="mb-2 text-xl font-bold text-white text-center">
-                Diametr Boshqaruv Tizimi
+                {t("Diametr Boshqaruv Tizimi", "Система управления Diametr")}
               </h2>
 
             </div>

@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
@@ -6,6 +6,8 @@ import Input from "../form/input/InputField";
 import Button from "../ui/button/Button";
 import { toast } from "../ui/toast";
 import axiosClient from "../../service/axios.service";
+import { takeExpiredFlag } from "../../service/session";
+import { useLang } from "../../context/LangContext";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -14,12 +16,21 @@ export default function SignInForm() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const { t } = useLang();
+
+  // Sent here by a 401 / an expired token: say why, once. (The toast host
+  // registers in its own effect, which runs after this one.)
+  useEffect(() => {
+    if (takeExpiredFlag()) {
+      setTimeout(() => toast.warning(t("Sessiya muddati tugadi. Qaytadan kiring", "Сессия истекла. Войдите снова")), 0);
+    }
+  }, [t]);
 
   const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) e.preventDefault();
 
     if (!login.trim() || !password.trim()) {
-      toast.error("Login va parolni kiriting");
+      toast.error(t("Login va parolni kiriting", "Введите логин и пароль"));
       return;
     }
 
@@ -30,7 +41,7 @@ export default function SignInForm() {
       const user = res.data?.user ?? res.data;
       const role: string = (user?.role ?? "").toUpperCase();
       if (role !== "SUPER") {
-        toast.error("Bu panel faqat Super Admin uchun mo'ljallangan");
+        toast.error(t("Bu panel faqat Super Admin uchun mo'ljallangan", "Эта панель только для Супер Админа"));
         return;
       }
 
@@ -38,11 +49,11 @@ export default function SignInForm() {
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
 
-      toast.success("Kirish muvaffaqiyatli");
+      toast.success(t("Kirish muvaffaqiyatli", "Вход выполнен"));
       navigate('/');
 
     } catch (error: any) {
-      const msg = error?.response?.data?.message ?? "Login yoki parol noto'g'ri";
+      const msg = error?.response?.data?.message ?? t("Login yoki parol noto'g'ri", "Неверный логин или пароль");
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -59,14 +70,14 @@ export default function SignInForm() {
               <span className="text-xs font-semibold text-brand-600 dark:text-brand-400 uppercase tracking-wider">Super Admin</span>
             </div>
             <h1 className="mb-2 font-semibold text-gray-800 text-title-sm dark:text-white/90 sm:text-title-md">
-              Boshqaruv Paneliga Kirish
+              {t("Boshqaruv Paneliga Kirish", "Вход в панель управления")}
             </h1>
           </div>
           <form onSubmit={handleSubmit}>
             <div className="space-y-6">
               <div>
                 <Label>
-                  Login <span className="text-error-500">*</span>
+                  {t("Login", "Логин")} <span className="text-error-500">*</span>
                 </Label>
                 <Input
                   placeholder="998XXXXXXXXX"
@@ -76,12 +87,12 @@ export default function SignInForm() {
               </div>
               <div>
                 <Label>
-                  Parol <span className="text-error-500">*</span>
+                  {t("Parol", "Пароль")} <span className="text-error-500">*</span>
                 </Label>
                 <div className="relative">
                   <Input
                     type={showPassword ? "text" : "password"}
-                    placeholder="Parol kiriting"
+                    placeholder={t("Parol kiriting", "Введите пароль")}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -99,13 +110,13 @@ export default function SignInForm() {
               </div>
               <div>
                 <Button type="submit" className="w-full" size="sm" disabled={loading || login.trim().length < 12 || password.trim().length < 8}>
-                  {loading ? "Kirish..." : "Kirish"}
+                  {loading ? t("Kirish...", "Вход...") : t("Kirish", "Войти")}
                 </Button>
                 {(login.trim().length > 0 && login.trim().length < 12) && (
-                  <p className="text-xs text-error-500 mt-1">Login kamida 12 ta belgi bo'lishi kerak</p>
+                  <p className="text-xs text-error-500 mt-1">{t("Login kamida 12 ta belgi bo'lishi kerak", "Логин должен содержать не менее 12 символов")}</p>
                 )}
                 {(password.trim().length > 0 && password.trim().length < 8) && (
-                  <p className="text-xs text-error-500 mt-1">Parol kamida 8 ta belgi bo'lishi kerak</p>
+                  <p className="text-xs text-error-500 mt-1">{t("Parol kamida 8 ta belgi bo'lishi kerak", "Пароль должен содержать не менее 8 символов")}</p>
                 )}
               </div>
             </div>

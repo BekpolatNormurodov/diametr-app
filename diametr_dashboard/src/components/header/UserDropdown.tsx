@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { Dropdown } from "../ui/dropdown/Dropdown";
-import { Link } from "react-router";
+import { endSession } from "../../service/session";
+import { useLang } from "../../context/LangContext";
 import { formatPhoneNumber } from "../../service/formatters/phone.format";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useLang();
 
   function toggleDropdown() {
     setIsOpen(!isOpen);
@@ -14,7 +16,7 @@ export default function UserDropdown() {
   function closeDropdown() {
     setIsOpen(false);
   }
-    let user = JSON.parse(localStorage.getItem("user") ?? "null");
+    const user = JSON.parse(localStorage.getItem("user") ?? "null");
   return (
     <div className="relative">
       <button
@@ -25,7 +27,7 @@ export default function UserDropdown() {
                         <img  src={user?.image ? import.meta.env.VITE_STATIC_PATH +  user?.image : "/images/user.png"} alt="user" className="h-full w-full object-cover"/>
         </span>
 
-        <span className="block mr-1 font-medium text-theme-sm">Sherzod</span>
+        <span className="block mr-1 font-medium text-theme-sm">{user?.fullname ?? "Admin"}</span>
         <svg
           className={`stroke-gray-500 dark:stroke-gray-400 transition-transform duration-200 ${
             isOpen ? "rotate-180" : ""
@@ -83,7 +85,7 @@ export default function UserDropdown() {
                   fill=""
                 />
               </svg>
-              Edit profile
+              {t("Profil", "Профиль")}
             </DropdownItem>
           </li>
           {/* <li>
@@ -133,13 +135,14 @@ export default function UserDropdown() {
                   fill=""
                 />
               </svg>
-              Support
+              {t("Yordam", "Поддержка")}
             </DropdownItem>
           </li>
         </ul>
-        <Link
-          to="/signin"
-          className="flex items-center gap-3 px-3 py-2 mt-3 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
+        <button
+          type="button"
+          onClick={() => { closeDropdown(); endSession(); }}
+          className="flex w-full items-center gap-3 px-3 py-2 mt-3 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
         >
           <svg
             className="fill-gray-500 group-hover:fill-gray-700 dark:group-hover:fill-gray-300"
@@ -156,8 +159,8 @@ export default function UserDropdown() {
               fill=""
             />
           </svg>
-          Sign out
-        </Link>
+          {t("Chiqish", "Выйти")}
+        </button>
       </Dropdown>
     </div>
   );

@@ -1,16 +1,19 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useSidebar } from "../context/SidebarContext";
 import { ThemeToggleButton } from "../components/common/ThemeToggleButton";
 import LangSwitcher from "../components/common/LangSwitcher";
 import Moment from "moment";
 import { useShopSession, type SessionUser } from "../context/ShopSessionContext";
+import { useLang } from "../context/LangContext";
+import { endSession } from "../service/session";
 
-function getSubBadge(expired?: string | null) {
+function getSubBadge(expired: string | null | undefined, t: ReturnType<typeof useLang>["t"]) {
   if (!expired) return null;
   const days = Math.ceil((new Date(expired).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (days < 0)  return { text: "Obuna tugagan", cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" };
-  if (days <= 7) return { text: `Obuna: ${days} kun`, cls: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" };
-  return { text: `Obuna: ${Moment(expired).format("DD.MM.YY")}`, cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" };
+  if (days < 0)  return { text: t("Obuna tugagan", "Подписка истекла"), cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" };
+  if (days <= 7) return { text: t(`Obuna: ${days} kun`, `Подписка: ${days} дн.`), cls: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" };
+  return { text: `${t("Obuna", "Подписка")}: ${Moment(expired).format("DD.MM.YY")}`, cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" };
 }
 
 const AppHeader: React.FC = () => {
@@ -27,8 +30,9 @@ const AppHeader: React.FC = () => {
   // Stored login snapshot is only the placeholder; the session provider keeps
   // shop name / expiry live (mount, every 60s, on focus, after payments).
   const { user } = useShopSession();
-  const shopName = user?.shop?.name ?? user?.shopName ?? "Do'kon Admin";
-  const subBadge = getSubBadge(user?.shop?.expired);
+  const { t } = useLang();
+  const shopName = user?.shop?.name ?? user?.shopName ?? t("Do'kon Admin", "Админ магазина");
+  const subBadge = getSubBadge(user?.shop?.expired, t);
 
   return (
     <header className="sticky top-0 flex w-full bg-white border-gray-200 z-99999 dark:border-gray-800 dark:bg-gray-900 lg:border-b">
@@ -73,16 +77,31 @@ const AppHeader: React.FC = () => {
 };
 
 function ShopUserDropdown({ user }: { user: SessionUser | null }) {
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("shop_id");
-    window.location.href = "/signin";
-  };
+  const { t } = useLang();
+  // Opens on hover and on click/tap (hover alone never opened it on touch screens).
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | TouchEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("touchstart", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("touchstart", close);
+    };
+  }, [open]);
 
   return (
-    <div className="relative group">
-      <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+    <div className="relative group" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+      >
         <div className="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-500/20 flex items-center justify-center text-brand-600 dark:text-brand-400 text-sm font-semibold">
           {user?.fullname?.[0]?.toUpperCase() ?? "A"}
         </div>
@@ -95,22 +114,23 @@ function ShopUserDropdown({ user }: { user: SessionUser | null }) {
       </button>
 
       {/* Dropdown */}
-      <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-150 z-50">
+      <div className={`absolute right-0 top-full mt-1 w-48 rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 shadow-lg transition-all duration-150 z-50 ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"}`}>
         <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
           <p className="text-sm font-medium text-gray-800 dark:text-white">{user?.fullname ?? "Admin"}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">{user?.phone ?? ""}</p>
         </div>
         <div className="p-2">
-          <a href="/profile" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+          <Link to="/profile" onClick={() => setOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
-            Profil
-          </a>
+            {t("Profil", "Профиль")}
+          </Link>
           <button
-            onClick={handleLogout}
+            type="button"
+            onClick={() => endSession()}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/></svg>
-            Chiqish
+            {t("Chiqish", "Выйти")}
           </button>
         </div>
       </div>
