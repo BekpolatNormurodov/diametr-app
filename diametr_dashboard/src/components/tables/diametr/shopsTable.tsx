@@ -16,8 +16,15 @@ import * as XLSX from "xlsx";
 import { matchesSearchKey, searchKey } from "../../../utils/searchKey";
 import { useAutoClampPage } from "../../common/Pagination";
 import { useLang, tr } from "../../../context/LangContext";
+import TranslateButton from "../../common/TranslateButton";
+import WorkHoursEditor from "../../common/WorkHoursEditor";
+import { parseWorkHours, workHoursValid, type WorkHours } from "../../../utils/workHours";
+import { decodeEntities } from "../../../utils/text";
 
 export interface ShopItemProps {
+  description?: string | null;
+  description_ru?: string | null;
+  work_hours?: unknown;
   id: number;
   name?: string;
   inn?: string;
@@ -67,6 +74,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
   const [editItem, setEditItem] = useState<ShopItemProps | null>(null);
   const [form, setForm] = useState({ name: "", region_id: "", inn: "", address: "", delivery_amount: "", expired: "", auto_payment: true, lat: "", lon: "" });
   const [bonusDays, setBonusDays] = useState(0);
+  const [info, setInfo] = useState<{ uz: string; ru: string; hours: WorkHours | null }>({ uz: "", ru: "", hours: null });
   const [cancelSub, setCancelSub] = useState(false);
   const [saving, setSaving] = useState(false);
   const [optionValue, setOptionValue] = useState("10");
@@ -99,6 +107,11 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
     setEditItem(item);
     setBonusDays(0);
     setCancelSub(false);
+    setInfo({
+      uz: decodeEntities(item.description ?? ""),
+      ru: decodeEntities(item.description_ru ?? ""),
+      hours: parseWorkHours(item.work_hours),
+    });
     setForm({
       name: item.name ?? "",
       region_id: item.region?.id ? String(item.region.id) : (item.regionId ? String(item.regionId) : ""),
@@ -121,11 +134,18 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
       toast.error(t("Latitude va Longitude son bo'lishi kerak", "Широта и долгота должны быть числами"));
       return;
     }
+    if (!workHoursValid(info.hours)) {
+      toast.error(t("Ish vaqtida ochilish va yopilish bir xil bo'lmasin", "Время открытия и закрытия не должно совпадать"));
+      return;
+    }
     setSaving(true);
     try {
       // INN: blank is sent as null (clears it); "" would fail the number-string validation.
       const payload: any = { name: form.name, inn: form.inn.trim() || null, address: form.address };
       if (form.region_id) payload.region_id = Number(form.region_id);
+      payload.description = info.uz.trim() || null;
+      payload.description_ru = info.ru.trim() || null;
+      payload.work_hours = info.hours;
       if (form.delivery_amount) payload.delivery_amount = Number(form.delivery_amount);
       // Subscription bonus / cancel travel as `expired` ("YYYY-MM-DD") in PUT /shop/:id.
       if (cancelSub) {
@@ -306,7 +326,7 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
       </div>
 
       {/* Edit Modal */}
-      <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[640px] m-4">
+      <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[760px] m-4">
         <div className="relative w-full p-6 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
@@ -384,6 +404,31 @@ export default function ShopsTable({ data, onRefetch }: { data: ShopItemProps[];
               <div>
                 <Label>{t("Longitude (ixtiyoriy)", "Долгота (необязательно)")}</Label>
                 <Input type="text" placeholder="69.2401" value={form.lon} onChange={(e) => setForm({ ...form, lon: e.target.value })} />
+              </div>
+            </div>
+            {/* Shop page: about text + weekly hours (the owner can edit them too) ── */}
+            <div className="rounded-xl border border-gray-200 dark:border-white/10 p-4 space-y-4">
+              <div>
+                <h5 className="text-sm font-semibold text-gray-800 dark:text-white/90">{t("Do'kon sahifasi", "Страница магазина")}</h5>
+                <p className="text-xs text-gray-400">{t("Tavsif va ish vaqti saytda va ilovada ko'rinadi", "Описание и время работы видны на сайте и в приложении")}</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label>{t("Do'kon haqida (o'zbekcha)", "О магазине (узбекский)")}</Label>
+                  <TranslateButton source={info.ru} direction="ru->uz" onResult={(v) => setInfo((s) => ({ ...s, uz: v }))} />
+                </div>
+                <textarea rows={3} maxLength={3000} value={info.uz} onChange={(e) => setInfo({ ...info, uz: e.target.value })} className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 focus:border-emerald-400 focus:outline-hidden focus:ring-3 focus:ring-emerald-500/10 dark:border-gray-700 dark:text-white/90" />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label>{t("Do'kon haqida (ruscha)", "О магазине (русский)")}</Label>
+                  <TranslateButton source={info.uz} direction="uz->ru" onResult={(v) => setInfo((s) => ({ ...s, ru: v }))} />
+                </div>
+                <textarea rows={3} maxLength={3000} value={info.ru} onChange={(e) => setInfo({ ...info, ru: e.target.value })} className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 focus:border-emerald-400 focus:outline-hidden focus:ring-3 focus:ring-emerald-500/10 dark:border-gray-700 dark:text-white/90" />
+              </div>
+              <div>
+                <Label>{t("Ish vaqti", "Время работы")}</Label>
+                <WorkHoursEditor value={info.hours} onChange={(hours) => setInfo((s) => ({ ...s, hours }))} />
               </div>
             </div>
             {/* Subscription bonus / cancel ─────────────────────── */}

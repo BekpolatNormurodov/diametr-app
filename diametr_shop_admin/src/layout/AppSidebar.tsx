@@ -66,6 +66,7 @@ const SIDEBAR_GROUPS_L: LocalizedGroup[] = [
 ];
 
 const AppSidebar: React.FC = () => {
+  const { t } = useLang();
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const location = useLocation();
   const { lang } = useLang();
@@ -138,7 +139,7 @@ const AppSidebar: React.FC = () => {
         {showText && (
           <div className="ml-3 flex flex-col justify-center">
             <span className="text-sm font-semibold text-gray-800 dark:text-white leading-tight">Diametr</span>
-            <span className="text-xs text-gray-400 dark:text-gray-500">Do'kon Admin</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{t("Do'kon Admin", "Панель магазина")}</span>
           </div>
         )}
       </div>

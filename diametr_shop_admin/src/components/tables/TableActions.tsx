@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { EditIcon, DeleteIcon } from "../../icons";
 
+import { useLang } from "../../context/LangContext";
 interface TableActionsProps {
   onEdit: () => void;
   onDelete: () => void;
@@ -29,6 +30,7 @@ export function ConfirmDeleteModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useLang();
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onCancel();
     document.addEventListener("keydown", esc);
@@ -86,7 +88,7 @@ export function ConfirmDeleteModal({
                        hover:bg-gray-50 dark:hover:bg-gray-700
                        transition-colors"
           >
-            Bekor qilish
+            {t("Bekor qilish", "Отмена")}
           </button>
           <button
             onClick={onConfirm}
@@ -96,7 +98,7 @@ export function ConfirmDeleteModal({
                        shadow-sm shadow-red-500/30
                        transition-colors"
           >
-            O'chirish
+            {t("O'chirish", "Удалить")}
           </button>
         </div>
       </div>
@@ -120,12 +122,17 @@ export function ConfirmDeleteModal({
 export default function TableActions({
   onEdit,
   onDelete,
-  editLabel = "Tahrirlash",
-  deleteLabel = "O'chirish",
-  confirmTitle = "O'chirishni tasdiqlaysizmi?",
-  confirmDesc = "Bu amalni qaytarib bo'lmaydi.",
+  editLabel: editLabelProp,
+  deleteLabel: deleteLabelProp,
+  confirmTitle: confirmTitleProp,
+  confirmDesc: confirmDescProp,
   extraActions = [],
 }: TableActionsProps) {
+  const { t } = useLang();
+  const editLabel = editLabelProp ?? t("Tahrirlash", "Редактировать");
+  const deleteLabel = deleteLabelProp ?? t("O'chirish", "Удалить");
+  const confirmTitle = confirmTitleProp ?? t("O'chirishni tasdiqlaysizmi?", "Подтвердить удаление?");
+  const confirmDesc = confirmDescProp ?? t("Bu amalni qaytarib bo'lmaydi.", "Это действие нельзя отменить.");
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -156,7 +163,7 @@ export default function TableActions({
               ? "bg-gray-100 text-gray-600 dark:bg-white/[0.12] dark:text-white"
               : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-400 dark:hover:bg-white/[0.08] dark:hover:text-gray-200"
             }`}
-          aria-label="Amallar"
+          aria-label={t("Amallar", "Действия")}
         >
           <svg width="4" height="16" viewBox="0 0 4 16" fill="currentColor">
             <circle cx="2" cy="2"  r="1.8" />

@@ -26,7 +26,7 @@ export default function OrdersPage() {
       setData(all.filter((o: any) => o.shop_id === shopId));
     } catch {
       if (!req.isLatest(id)) return;
-      toast.error("Ma'lumotlarni yuklashda xatolik");
+      toast.error(t("Ma'lumotlarni yuklashda xatolik", "Ошибка при загрузке данных"));
     }
   };
 
@@ -35,7 +35,7 @@ export default function OrdersPage() {
 
   return (
     <>
-      <PageMeta title={t.k("orderList")} description="Do'kon buyurtmalari" />
+      <PageMeta title={t.k("orderList")} description={t("Do'kon buyurtmalari", "Заказы магазина")} />
       <PageBreadcrumb pageTitle={t.k("orderList")} />
       <div className="space-y-6">
         <OrdersTable data={data} onRefetch={fetchData} />

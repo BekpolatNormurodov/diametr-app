@@ -17,7 +17,7 @@ import Moment from "moment";
 import * as XLSX from "xlsx";
 import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
 import { apiMessage } from "../../utils/apiMessage";
-import { useLang } from "../../context/LangContext";
+import { useLang, tr } from "../../context/LangContext";
 
 export interface PromoCodeItemProps {
   id: number;
@@ -35,8 +35,8 @@ export interface PromoCodeItemProps {
 }
 
 const discountTypeOptions = [
-  { value: "PERCENT", label: "Foiz (%)" },
-  { value: "FIXED",   label: "Belgilangan summa" },
+  { value: "PERCENT", get label() { return tr("Foiz (%)", "Процент (%)"); } },
+  { value: "FIXED",   get label() { return tr("Belgilangan summa", "Фиксированная сумма"); } },
 ];
 const emptyForm = {
   code: "",
@@ -100,12 +100,12 @@ export default function PromoCodesTable({
 
   const handleSave = async () => {
     if (!form.code || !form.discount_value) {
-      toast.error("Kod va chegirma miqdorini kiriting");
+      toast.error(t("Kod va chegirma miqdorini kiriting", "Введите код и размер скидки"));
       return;
     }
     // Same rule as the backend: a percentage discount cannot exceed 100%.
     if (form.discount_type === "PERCENT" && Number(form.discount_value) > 100) {
-      toast.error("Foizli chegirma 100% dan oshmasligi kerak");
+      toast.error(t("Foizli chegirma 100% dan oshmasligi kerak", "Процентная скидка не может превышать 100%"));
       return;
     }
     setSaving(true);
@@ -121,10 +121,10 @@ export default function PromoCodesTable({
 
       if (editItem) {
         await axiosClient.patch(`/promo-code/${editItem.id}`, payload);
-        toast.success("Promo kod yangilandi");
+        toast.success(t("Promo kod yangilandi", "Промокод обновлён"));
       } else {
         await axiosClient.post("/promo-code", payload);
-        toast.success("Promo kod yaratildi");
+        toast.success(t("Promo kod yaratildi", "Промокод создан"));
       }
       onRefetch();
       closeModal();
@@ -138,7 +138,7 @@ export default function PromoCodesTable({
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/promo-code/${id}`);
-      toast.success("O'chirildi");
+      toast.success(t("O'chirildi", "Отключено"));
       onRefetch();
     } catch (e) {
       // e.g. 400 for a code already used in orders — the server explains it in Uzbek.
@@ -149,10 +149,10 @@ export default function PromoCodesTable({
   const handleToggle = async (item: PromoCodeItemProps) => {
     try {
       await axiosClient.patch(`/promo-code/${item.id}`, { is_active: !item.is_active });
-      toast.success(item.is_active ? "O'chirildi" : "Yoqildi");
+      toast.success(item.is_active ? t("O'chirildi", "Отключено") : t("Yoqildi", "Включено"));
       onRefetch();
     } catch (e) {
-      toast.error(apiMessage(e, "Xatolik"));
+      toast.error(apiMessage(e, t("Xatolik", "Ошибка")));
     }
   };
 
@@ -160,13 +160,13 @@ export default function PromoCodesTable({
     const ws = XLSX.utils.json_to_sheet(
       tableData.map((p) => ({
         Kod: p.code,
-        "Chegirma turi": p.discount_type === "PERCENT" ? "Foiz" : "Summa",
-        "Chegirma miqdori": p.discount_type === "PERCENT" ? `${p.discount_value}%` : `${formatMoney(p.discount_value)} so'm`,
-        "Min buyurtma": p.min_order_amount ? `${formatMoney(p.min_order_amount)} so'm` : "—",
-        "Maks foydalanish": p.max_uses ?? "Cheksiz",
+        [t("Chegirma turi", "Тип скидки")]: p.discount_type === "PERCENT" ? t("Foiz", "Процент") : t("Summa", "Сумма"),
+        [t("Chegirma miqdori", "Размер скидки")]: p.discount_type === "PERCENT" ? `${p.discount_value}%` : t(`${formatMoney(p.discount_value)} so'm`, `${formatMoney(p.discount_value)} сум`),
+        [t("Min buyurtma", "Мин. заказ")]: p.min_order_amount ? t(`${formatMoney(p.min_order_amount)} so'm`, `${formatMoney(p.min_order_amount)} сум`) : "—",
+        [t("Maks foydalanish", "Макс. использований")]: p.max_uses ?? t("Cheksiz", "Без ограничений"),
         Foydalanilgan: p.used_count,
-        Holati: p.is_active ? "Faol" : "Nofaol",
-        Muddat: p.expires_at ? Moment(p.expires_at).format("DD.MM.YYYY") : "Cheksiz",
+        Holati: p.is_active ? t("Faol", "Активен") : t("Nofaol", "Неактивен"),
+        Muddat: p.expires_at ? Moment(p.expires_at).format("DD.MM.YYYY") : t("Cheksiz", "Без ограничений"),
       }))
     );
     const wb = XLSX.utils.book_new();
@@ -180,13 +180,13 @@ export default function PromoCodesTable({
         <TableToolbar
           search={search}
           onSearch={(v) => { setSearch(v); setCurrentPage(1); }}
-          searchPlaceholder="Kod qidirish..."
+          searchPlaceholder={t("Kod qidirish...", "Поиск по коду...")}
           showValue={optionValue}
           onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }}
           onExport={handleExport}
           action={
             <Button size="sm" variant="primary" startIcon={<PlusIcon className="size-4 fill-white" />} onClick={openAdd}>
-              Qo'shish
+              {t("Qo'shish", "Добавить")}
             </Button>
           }
         />
@@ -196,16 +196,16 @@ export default function PromoCodesTable({
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("code")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("discount")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Ishlatildi</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Ishlatildi", "Использован")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("expiration")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Holat</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Holat", "Статус")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
           </TableHeader>
           <TableBody>
             {currentItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-gray-400">Promo kodlar yo'q</TableCell>
+                <TableCell colSpan={7} className="py-8 text-center text-gray-400">{t("Promo kodlar yo'q", "Промокодов нет")}</TableCell>
               </TableRow>
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
@@ -220,10 +220,10 @@ export default function PromoCodesTable({
                 <TableCell className="px-5 py-4 text-sm font-semibold text-brand-600 dark:text-brand-400">
                   {item.discount_type === "PERCENT"
                     ? `${item.discount_value}%`
-                    : `${formatMoney(item.discount_value)} so'm`}
+                    : t(`${formatMoney(item.discount_value)} so'm`, `${formatMoney(item.discount_value)} сум`)}
                   {item.min_order_amount && (
                     <span className="block text-xs font-normal text-gray-400">
-                      Min: {formatMoney(item.min_order_amount)} so'm
+                      {t("Min:", "Мин.:")} {formatMoney(item.min_order_amount)} {t("so'm", "сум")}
                     </span>
                   )}
                 </TableCell>
@@ -231,7 +231,7 @@ export default function PromoCodesTable({
                   {item.used_count} / {item.max_uses ?? "∞"}
                 </TableCell>
                 <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                  {item.expires_at ? Moment(item.expires_at).format("DD.MM.YYYY") : "Cheksiz"}
+                  {item.expires_at ? Moment(item.expires_at).format("DD.MM.YYYY") : t("Cheksiz", "Без ограничений")}
                 </TableCell>
                 <TableCell className="px-5 py-4">
                   <button
@@ -242,7 +242,7 @@ export default function PromoCodesTable({
                         : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200"
                     }`}
                   >
-                    {item.is_active ? "Faol" : "Nofaol"}
+                    {item.is_active ? t("Faol", "Активен") : t("Nofaol", "Неактивен")}
                   </button>
                 </TableCell>
                 <TableCell className="px-5 py-4">
@@ -256,7 +256,7 @@ export default function PromoCodesTable({
           currentPage={currentPage}
           maxPage={maxPage}
           totalItems={filteredData.length}
-          totalLabel="ta promo kod"
+          totalLabel={t("ta promo kod", "промокодов")}
           onChange={setCurrentPage}
           scrollTargetRef={tableTopRef}
         />
@@ -266,20 +266,20 @@ export default function PromoCodesTable({
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <div className="px-2 pr-14 mb-6">
             <h4 className="text-xl font-semibold text-gray-800 dark:text-white">
-              {editItem ? "Promo kodni tahrirlash" : "Yangi promo kod"}
+              {editItem ? t("Promo kodni tahrirlash", "Редактировать промокод") : t("Yangi promo kod", "Новый промокод")}
             </h4>
           </div>
           <div className="flex flex-col gap-4 px-2">
             <div>
-              <Label>Kod <span className="text-error-500">*</span></Label>
+              <Label>{t("Kod", "Код")} <span className="text-error-500">*</span></Label>
               <Input type="text" placeholder="SUMMER20" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} />
             </div>
             <div>
-              <Label>Chegirma turi</Label>
+              <Label>{t("Chegirma turi", "Тип скидки")}</Label>
               <Select options={discountTypeOptions} defaultValue={form.discount_type} onChange={(v) => setForm({ ...form, discount_type: v })} />
             </div>
             <div>
-              <Label>Chegirma miqdori <span className="text-error-500">*</span></Label>
+              <Label>{t("Chegirma miqdori", "Размер скидки")} <span className="text-error-500">*</span></Label>
               <Input
                 type="number"
                 placeholder={form.discount_type === "PERCENT" ? "20" : "10000"}
@@ -288,21 +288,21 @@ export default function PromoCodesTable({
               />
             </div>
             <div>
-              <Label>Minimal buyurtma summasi (so'm)</Label>
-              <Input type="number" placeholder="Ixtiyoriy" value={form.min_order_amount} onChange={(e) => setForm({ ...form, min_order_amount: e.target.value })} />
+              <Label>{t("Minimal buyurtma summasi (so'm)", "Минимальная сумма заказа (сум)")}</Label>
+              <Input type="number" placeholder={t("Ixtiyoriy", "Необязательно")} value={form.min_order_amount} onChange={(e) => setForm({ ...form, min_order_amount: e.target.value })} />
             </div>
             <div>
-              <Label>Maksimal foydalanish soni</Label>
-              <Input type="number" placeholder="Cheksiz" value={form.max_uses} onChange={(e) => setForm({ ...form, max_uses: e.target.value })} />
+              <Label>{t("Maksimal foydalanish soni", "Максимальное число использований")}</Label>
+              <Input type="number" placeholder={t("Cheksiz", "Без ограничений")} value={form.max_uses} onChange={(e) => setForm({ ...form, max_uses: e.target.value })} />
             </div>
             <div>
-              <Label>Tugash sanasi</Label>
+              <Label>{t("Tugash sanasi", "Дата окончания")}</Label>
               <Input type="date" value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} />
             </div>
           </div>
           <div className="flex items-center gap-3 px-2 mt-6 justify-end">
-            <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saqlanmoqda..." : "Saqlash"}</Button>
+            <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}</Button>
           </div>
         </div>
       </Modal>

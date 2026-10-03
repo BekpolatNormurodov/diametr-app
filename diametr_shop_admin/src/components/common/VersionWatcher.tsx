@@ -3,6 +3,7 @@ import { useLocation } from "react-router";
 import Button from "../ui/button/Button";
 import { isBusy } from "../../utils/busy";
 
+import { useLang } from "../../context/LangContext";
 /**
  * Lets a long-open tab pick up a new deploy without a hard refresh.
  *
@@ -40,6 +41,7 @@ function clearAttempt() {
 }
 
 export default function VersionWatcher() {
+  const { t } = useLang();
   const location = useLocation();
   const [running] = useState<string | null>(() => bundleSrc(document));
   const [available, setAvailable] = useState(false);
@@ -114,12 +116,12 @@ export default function VersionWatcher() {
         className="relative flex items-center gap-3 overflow-hidden rounded-xl bg-white py-2.5 pl-4 pr-2.5 ring-1 ring-blue-100 shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:bg-gray-800 dark:ring-blue-500/20 dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)]"
       >
         <span className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />
-        <p className="text-sm font-medium text-gray-800 dark:text-white">Yangi versiya mavjud</p>
-        <Button size="sm" onClick={() => window.location.reload()}>Yangilash</Button>
+        <p className="text-sm font-medium text-gray-800 dark:text-white">{t("Yangi versiya mavjud", "Доступна новая версия")}</p>
+        <Button size="sm" onClick={() => window.location.reload()}>{t("Yangilash", "Обновить")}</Button>
         <button
           type="button"
           onClick={() => setDismissed(true)}
-          aria-label="Yopish"
+          aria-label={t("Yopish", "Закрыть")}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-300 transition-colors hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400"
         >
           <svg viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">

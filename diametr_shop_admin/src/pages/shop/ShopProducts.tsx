@@ -26,7 +26,7 @@ export default function ShopProductsPage() {
       setData(all.filter((p) => p.shop_id === shopId));
     } catch {
       if (!req.isLatest(id)) return;
-      toast.error("Ma'lumotlarni yuklashda xatolik");
+      toast.error(t("Ma'lumotlarni yuklashda xatolik", "Ошибка при загрузке данных"));
     }
   };
 
@@ -53,7 +53,7 @@ export default function ShopProductsPage() {
     for (const p of liveData) {
       const cat = p.product_item?.product?.category;
       const catId = cat?.id ?? 0;
-      const catName = cat?.name_uz ?? cat?.name ?? 'Boshqa';
+      const catName = cat?.name_uz ?? cat?.name ?? t("Boshqa", "Другое");
       if (!map.has(catId)) map.set(catId, { name: catName, count: 0, stock: 0, value: 0, sold: 0 });
       const entry = map.get(catId)!;
       entry.count++;
@@ -66,7 +66,7 @@ export default function ShopProductsPage() {
 
   return (
     <>
-      <PageMeta title={t.k("shopProducts")} description="Do'kon tovarlar ro'yxati" />
+      <PageMeta title={t.k("shopProducts")} description={t("Do'kon tovarlar ro'yxati", "Список товаров магазина")} />
       <PageBreadcrumb pageTitle={t.k("products")} />
       <div className="space-y-6">
         {/* Inventory Stats */}
@@ -74,49 +74,49 @@ export default function ShopProductsPage() {
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
             <p className="text-xs text-gray-400 font-medium mb-1">{t("Jami tovarlar", "Всего товаров")}</p>
             <p className="text-2xl font-bold text-gray-800 dark:text-white">{stats.totalProducts}</p>
-            <p className="text-[11px] text-gray-400">xil tovar</p>
+            <p className="text-[11px] text-gray-400">{t("xil tovar", "видов товаров")}</p>
           </div>
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
             <p className="text-xs text-gray-400 font-medium mb-1">{t.k("stock")}</p>
             <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.totalStock.toLocaleString()}</p>
-            <p className="text-[11px] text-gray-400">ta mahsulot</p>
+            <p className="text-[11px] text-gray-400">{t("ta mahsulot", "товаров")}</p>
           </div>
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
             <p className="text-xs text-gray-400 font-medium mb-1">{t.k("stockValue")}</p>
             <p className="text-2xl font-bold text-gray-800 dark:text-white">{fmt(stats.totalValue)}</p>
-            <p className="text-[11px] text-gray-400">so'm</p>
+            <p className="text-[11px] text-gray-400">{t("so'm", "сум")}</p>
           </div>
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
             <p className="text-xs text-gray-400 font-medium mb-1">{t.k("soldItems")}</p>
             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalSold.toLocaleString()}</p>
-            <p className="text-[11px] text-gray-400">ta jami</p>
+            <p className="text-[11px] text-gray-400">{t("ta jami", "всего")}</p>
           </div>
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
             <p className="text-xs text-gray-400 font-medium mb-1">{t.k("lowStock")}</p>
             <p className={`text-2xl font-bold ${stats.lowStock > 0 ? 'text-orange-500' : 'text-gray-300 dark:text-gray-600'}`}>{stats.lowStock}</p>
-            <p className="text-[11px] text-gray-400">≤5 ta qolgan</p>
+            <p className="text-[11px] text-gray-400">{t("≤5 ta qolgan", "осталось ≤5")}</p>
           </div>
           <div className="rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3 p-4">
             <p className="text-xs text-gray-400 font-medium mb-1">{t.k("outOfStock")}</p>
             <p className={`text-2xl font-bold ${stats.outOfStock > 0 ? 'text-red-500' : 'text-gray-300 dark:text-gray-600'}`}>{stats.outOfStock}</p>
-            <p className="text-[11px] text-gray-400">0 ta qolgan</p>
+            <p className="text-[11px] text-gray-400">{t("0 ta qolgan", "осталось 0")}</p>
           </div>
         </div>
         {/* Category Stats */}
         {catStats.length > 1 && (
           <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/6 bg-white dark:bg-white/3">
             <div className="px-4 py-2.5 border-b border-gray-100 dark:border-white/6">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Kategoriyalar bo'yicha</h3>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t("Kategoriyalar bo'yicha", "По категориям")}</h3>
             </div>
             <div className="max-w-full overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-white/2">
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kategoriya</th>
-                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Tovarlar</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t("Kategoriya", "Категория")}</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{t("Tovarlar", "Товары")}</th>
                     <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{t.k("stock")}</th>
                     <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{t.k("soldItems")}</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qiymati</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t("Qiymati", "Стоимость")}</th>
                   </tr>
                 </thead>
                 <tbody>

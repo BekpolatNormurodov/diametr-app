@@ -21,7 +21,7 @@ export default function PromoCodesPage() {
       setData(res.data?.data ?? res.data ?? []);
     } catch {
       if (!req.isLatest(id)) return;
-      toast.error("Ma'lumotlarni yuklashda xatolik");
+      toast.error(t("Ma'lumotlarni yuklashda xatolik", "Ошибка при загрузке данных"));
     }
   };
 
@@ -30,7 +30,7 @@ export default function PromoCodesPage() {
 
   return (
     <>
-      <PageMeta title={t.k("promoCodes")} description="Do'kon promo kodlari" />
+      <PageMeta title={t.k("promoCodes")} description={t("Do'kon promo kodlari", "Промокоды магазина")} />
       <PageBreadcrumb pageTitle={t.k("promoCodes")} />
       <div className="space-y-6">
         <PromoCodesTable data={data} onRefetch={fetchData} />

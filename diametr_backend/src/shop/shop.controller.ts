@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Headers,
+  Req,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -24,7 +25,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { Express } from 'express';
+import type { Express, Request } from 'express';
 import { diskStorage } from 'multer';
 import { join } from 'path';
 import {
@@ -37,6 +38,7 @@ import {
 import { ShopService } from './shop.service';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
+import { ShopInfoDto } from './dto/shop-info.dto';
 import { Role } from '@prisma/client';
 import { RolesGuardFactory } from 'src/_guard/roles.guard';
 import { isSuperRequest } from 'src/_guard/optional-auth';
@@ -54,6 +56,18 @@ export class ShopController {
   /** A valid SUPER token (dashboard) gets the full rows; everyone else the public shape. */
   private isSuper(authorization?: string) {
     return isSuperRequest(this.jwt, this.prisma, authorization);
+  }
+
+  /**
+   * The shop's own admin edits only the shop page info (about text, weekly
+   * hours) of the shop the token belongs to; never another shop or billing.
+   */
+  @Patch('my/info')
+  @UseGuards(RolesGuardFactory([Role.ADMIN]))
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: "O'z do'konining tavsifi va ish vaqti (ADMIN)" })
+  updateMyInfo(@Req() req: Request, @Body() data: ShopInfoDto) {
+    return this.shopService.updateInfo(Number((req as any).user?.shop_id), data);
   }
 
   // Shop create/edit/delete is platform-admin only (the dashboard). A shop

@@ -11,7 +11,7 @@ import { toast } from "../ui/toast";
 import * as XLSX from "xlsx";
 import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
 import { apiMessage } from "../../utils/apiMessage";
-import { useLang } from "../../context/LangContext";
+import { useLang, tr } from "../../context/LangContext";
 
 interface OrderProduct {
   id: number;
@@ -63,16 +63,16 @@ export interface OrderItemProps {
 // Platform wording (Telegram): FINISHED = confirmed by the shop, ready for delivery;
 // CONFIRMED = delivered, the final state.
 const statusConfig: Record<string, { label: string; className: string }> = {
-  STARTED:   { label: "Yangi",          className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
-  FINISHED:  { label: "Tasdiqlangan",   className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  CONFIRMED: { label: "Yetkazilgan",    className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-  CANCELED:  { label: "Bekor qilingan", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  STARTED:   { get label() { return tr("Yangi", "Новый"); },          className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
+  FINISHED:  { get label() { return tr("Tasdiqlangan", "Подтверждён"); },   className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  CONFIRMED: { get label() { return tr("Yetkazilgan", "Доставка"); },    className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  CANCELED:  { get label() { return tr("Bekor qilingan", "Отменён"); }, className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
 };
 
 const customerPhone = (o: OrderItemProps) => o.user?.phone || o.phone || "";
 
 const payLabel: Record<string, string> = { cash: "Naqd", payme: "Payme", click: "Click", uzum: "Uzum" };
-const deliveryLabel: Record<string, string> = { MARKET: "Olib ketish", YANDEX: "Yandex", FIXED: "Yetkazish" };
+const deliveryLabel: Record<string, string> = { get MARKET() { return tr("Olib ketish", "Самовывоз"); }, YANDEX: "Yandex", FIXED: "Yetkazish" };
 
 export default function OrdersTable({
   data,
@@ -124,7 +124,7 @@ export default function OrdersTable({
     try {
       await axiosClient.put(`/order/${action}/${id}`);
       // finish: STARTED → FINISHED ("Tasdiqlandi"); confirm: FINISHED → CONFIRMED ("Yetkazildi").
-      const label = action === "finish" ? "Tasdiqlandi" : action === "confirm" ? "Yetkazildi" : "Bekor qilindi";
+      const label = action === "finish" ? t("Tasdiqlandi", "Подтверждено") : action === "confirm" ? t("Yetkazildi", "Доставлено") : t("Bekor qilindi", "Отменено");
       toast.success(label);
       onRefetch?.();
     } catch (e: unknown) {
@@ -137,7 +137,7 @@ export default function OrdersTable({
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/order/${id}`);
-      toast.success("Buyurtma o'chirildi");
+      toast.success(t("Buyurtma o'chirildi", "Заказ удалён"));
       onRefetch?.();
     } catch (e: unknown) {
       toast.error(apiMessage(e));
@@ -167,7 +167,7 @@ export default function OrdersTable({
         <TableToolbar
           search={search}
           onSearch={(v) => { setSearch(v); setCurrentPage(1); }}
-          searchPlaceholder="ID, mijoz, manzil qidirish..."
+          searchPlaceholder={t("ID, mijoz, manzil qidirish...", "Поиск по ID, клиенту, адресу...")}
           showValue={optionValue}
           onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }}
           onExport={handleExport}
@@ -176,10 +176,10 @@ export default function OrdersTable({
           <TableHeader>
             <TableRow>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Mijoz</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Telefon</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Mijoz", "Клиент")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Telefon", "Телефон")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("amount")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Status</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Holat", "Статус")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("createdAt")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
@@ -188,7 +188,7 @@ export default function OrdersTable({
             {currentItems.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="py-8 text-center text-gray-400">
-                  Buyurtmalar yo'q
+                  {t("Buyurtmalar yo'q", "Заказов нет")}
                 </TableCell>
               </TableRow>
             ) : currentItems.map((item, idx) => {
@@ -219,7 +219,7 @@ export default function OrdersTable({
                       ) : "-"}
                     </TableCell>
                     <TableCell className="px-5 py-4 text-sm font-semibold text-green-600 dark:text-green-400">
-                      {item.amount != null ? `${item.amount.toLocaleString()} so'm` : "-"}
+                      {item.amount != null ? t(`${item.amount.toLocaleString()} so'm`, `${item.amount.toLocaleString()} сум`) : "-"}
                       {item.discount_amount ? (
                         <span className="ml-1 text-xs text-orange-500">(-{item.discount_amount.toLocaleString()})</span>
                       ) : null}
@@ -241,7 +241,7 @@ export default function OrdersTable({
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 transition-all"
                           >
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                            {busy ? "..." : "Tasdiqlash"}
+                            {busy ? "..." : t("Tasdiqlash", "Подтвердить")}
                           </button>
                         )}
                         {item.status === "FINISHED" && (
@@ -251,7 +251,7 @@ export default function OrdersTable({
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 disabled:opacity-40 transition-all"
                           >
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            {busy ? "..." : "Yetkazildi"}
+                            {busy ? "..." : t("Yetkazildi", "Доставлено")}
                           </button>
                         )}
                         {(item.status === "STARTED" || item.status === "FINISHED") && (
@@ -261,7 +261,7 @@ export default function OrdersTable({
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-all"
                           >
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                            {busy ? "..." : "Bekor"}
+                            {busy ? "..." : t("Bekor", "Отменено")}
                           </button>
                         )}
                         <button
@@ -282,18 +282,18 @@ export default function OrdersTable({
                             <span>📍 {item.address ?? "—"}</span>
                             <span>💳 {payLabel[item.payment_type ?? ""] ?? item.payment_type ?? "—"}</span>
                             <span>🚚 {deliveryLabel[item.delivery_type ?? ""] ?? item.delivery_type ?? "—"}</span>
-                            {item.discount_amount ? <span>🏷 Chegirma: -{item.discount_amount.toLocaleString()} so'm ({item.discount_percent}%)</span> : null}
+                            {item.discount_amount ? <span>{t("🏷 Chegirma: -", "🏷 Скидка: -")}{item.discount_amount.toLocaleString()} {t("so'm (", "сум (")}{item.discount_percent}%)</span> : null}
                           </div>
                           {/* Products sub-table */}
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="text-xs text-gray-400 dark:text-gray-500">
-                                <th className="px-8 py-2 text-left font-medium">Mahsulot</th>
-                                <th className="px-4 py-2 text-left font-medium">Kategoriya</th>
-                                <th className="px-4 py-2 text-left font-medium">Variant</th>
-                                <th className="px-4 py-2 text-right font-medium">Narx</th>
-                                <th className="px-4 py-2 text-right font-medium">Soni</th>
-                                <th className="px-8 py-2 text-right font-medium">Jami</th>
+                                <th className="px-8 py-2 text-left font-medium">{t("Mahsulot", "Товар")}</th>
+                                <th className="px-4 py-2 text-left font-medium">{t("Kategoriya", "Категория")}</th>
+                                <th className="px-4 py-2 text-left font-medium">{t("Variant", "Вариант")}</th>
+                                <th className="px-4 py-2 text-right font-medium">{t("Narx", "Цена")}</th>
+                                <th className="px-4 py-2 text-right font-medium">{t("Soni", "Количество")}</th>
+                                <th className="px-8 py-2 text-right font-medium">{t("Jami", "Всего")}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -323,7 +323,7 @@ export default function OrdersTable({
                                     </td>
                                     <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-400">{(p.amount ?? 0).toLocaleString()}</td>
                                     <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-400">{p.count}</td>
-                                    <td className="px-8 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">{((p.amount ?? 0) * p.count).toLocaleString()} so'm</td>
+                                    <td className="px-8 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">{((p.amount ?? 0) * p.count).toLocaleString()} {t("so'm", "сум")}</td>
                                   </tr>
                                 );
                               })}
@@ -342,15 +342,15 @@ export default function OrdersTable({
           currentPage={currentPage}
           maxPage={maxPage}
           totalItems={sorted.length}
-          totalLabel="ta buyurtma"
+          totalLabel={t("ta buyurtma", "заказов")}
           onChange={setCurrentPage}
           scrollTargetRef={tableTopRef}
         />
       </div>
       {confirmId !== null && (
         <ConfirmDeleteModal
-          title="Buyurtmani o'chirasizmi?"
-          desc="Bu amalni qaytarib bo'lmaydi."
+          title={t("Buyurtmani o'chirasizmi?", "Удалить заказ?")}
+          desc={t("Bu amalni qaytarib bo'lmaydi.", "Это действие нельзя отменить.")}
           onConfirm={() => { handleDelete(confirmId); setConfirmId(null); }}
           onCancel={() => setConfirmId(null)}
         />

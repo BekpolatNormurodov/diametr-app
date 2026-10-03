@@ -13,6 +13,8 @@ import {
 } from 'src/shop-product/stock.utils';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
+import { ShopInfoDto } from './dto/shop-info.dto';
+import { shopInfoData } from './shop-info';
 import {
   SHOP_PUBLIC_ADMIN_SELECT,
   SHOP_PUBLIC_SELECT,
@@ -48,9 +50,13 @@ export class ShopService {
       expired.setMonth(expired.getMonth() + trialMonths);
     }
 
-    const { free_trial_months: _, ...shopData } = data;
+    const { free_trial_months: _, description, description_ru, work_hours, ...shopData } = data;
     const shop = await this.prisma.shop.create({
-      data: { ...shopData, ...(expired ? { expired } : {}) },
+      data: {
+        ...shopData,
+        ...shopInfoData({ description, description_ru, work_hours }),
+        ...(expired ? { expired } : {}),
+      },
     });
 
     // Log the free trial
@@ -315,7 +321,7 @@ export class ShopService {
     // free_trial_months only applies on create (not a column); `expired` is
     // the dashboard's subscription bonus / cancel. work_status is left as is:
     // unblocking stays an explicit admin action (the dashboard warns).
-    const { free_trial_months: _trial, expired, ...fields } = data;
+    const { free_trial_months: _trial, expired, description, description_ru, work_hours, ...fields } = data;
     let expiredDate: Date | undefined;
     if (expired !== undefined) {
       expiredDate = new Date(expired);
@@ -329,8 +335,29 @@ export class ShopService {
       where: { id },
       data: {
         ...fields,
+        ...shopInfoData({ description, description_ru, work_hours }),
         ...(expiredDate ? { expired: expiredDate } : {}),
       },
+    });
+  }
+
+  /** About text + weekly hours, written by the shop's own admin in the shop panel. */
+  async updateInfo(shopId: number, data: ShopInfoDto) {
+    this.logger.log('updateInfo');
+    if (!Number.isInteger(shopId) || shopId <= 0) {
+      throw new NotFoundException('shop not found');
+    }
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { id: true },
+    });
+    if (!shop) {
+      throw new NotFoundException('shop not found');
+    }
+    return await this.prisma.shop.update({
+      where: { id: shopId },
+      data: shopInfoData(data),
+      select: SHOP_PUBLIC_SELECT,
     });
   }
 

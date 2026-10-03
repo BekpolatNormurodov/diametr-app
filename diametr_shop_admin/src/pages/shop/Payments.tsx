@@ -24,7 +24,7 @@ export default function PaymentsPage() {
       setData(all.filter((p: any) => p.shop_id === shopId));
     } catch {
       if (!req.isLatest(id)) return;
-      toast.error("Ma'lumotlarni yuklashda xatolik");
+      toast.error(t("Ma'lumotlarni yuklashda xatolik", "Ошибка при загрузке данных"));
     }
   };
 
@@ -33,7 +33,7 @@ export default function PaymentsPage() {
 
   return (
     <>
-      <PageMeta title={t.k("payments")} description="Do'kon to'lovlari" />
+      <PageMeta title={t.k("payments")} description={t("Do'kon to'lovlari", "Платежи магазина")} />
       <PageBreadcrumb pageTitle={t.k("payments")} />
       <div className="space-y-6">
         <PaymentsTable data={data} onRefetch={fetchData} />

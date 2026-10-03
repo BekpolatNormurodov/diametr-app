@@ -18,7 +18,7 @@ import { formatMoney } from "../../service/formatters/money.format";
 import * as XLSX from "xlsx";
 import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
 import { apiMessage } from "../../utils/apiMessage";
-import { useLang } from "../../context/LangContext";
+import { useLang, tr } from "../../context/LangContext";
 
 export interface PaymentItemProps {
   id: number;
@@ -34,10 +34,10 @@ export interface PaymentItemProps {
 }
 
 const typeOptions = [
-  { value: "CARD",   label: "Karta" },
-  { value: "CASH",   label: "Naqd" },
-  { value: "ONLINE", label: "Online" },
-  { value: "SHOP",   label: "Do'kon to'lovi" },
+  { value: "CARD",   get label() { return tr("Karta", "Карта"); } },
+  { value: "CASH",   get label() { return tr("Naqd", "Наличные"); } },
+  { value: "ONLINE", get label() { return tr("Online", "Онлайн"); } },
+  { value: "SHOP",   get label() { return tr("Do'kon to'lovi", "Платёж магазина"); } },
 ];
 const emptyForm = { amount: "", type: "SHOP", start_date: "", end_date: "" };
 
@@ -92,7 +92,7 @@ export default function PaymentsTable({
 
   const handleSave = async () => {
     if (!form.amount) {
-      toast.error("Summani kiriting");
+      toast.error(t("Summani kiriting", "Введите сумму"));
       return;
     }
     setSaving(true);
@@ -107,10 +107,10 @@ export default function PaymentsTable({
 
       if (editItem) {
         await axiosClient.put(`/payment/${editItem.id}`, payload);
-        toast.success("To'lov yangilandi");
+        toast.success(t("To'lov yangilandi", "Платёж обновлён"));
       } else {
         await axiosClient.post("/payment", payload);
-        toast.success("To'lov qo'shildi");
+        toast.success(t("To'lov qo'shildi", "Платёж добавлен"));
       }
       onRefetch?.();
       closeModal();
@@ -124,7 +124,7 @@ export default function PaymentsTable({
   const handleDelete = async (id: number) => {
     try {
       await axiosClient.delete(`/payment/${id}`);
-      toast.success("To'lov o'chirildi");
+      toast.success(t("To'lov o'chirildi", "Платёж удалён"));
       onRefetch?.();
     } catch (e) {
       toast.error(apiMessage(e));
@@ -163,13 +163,13 @@ export default function PaymentsTable({
         <TableToolbar
           search={search}
           onSearch={(v) => { setSearch(v); setCurrentPage(1); }}
-          searchPlaceholder="Qidirish..."
+          searchPlaceholder={t("Qidirish...", "Поиск...")}
           showValue={optionValue}
           onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }}
           onExport={handleExport}
           action={
             <Button size="sm" variant="primary" startIcon={<PlusIcon className="size-4 fill-white" />} onClick={openAdd}>
-              To'lov qo'shish
+              {t("To'lov qo'shish", "Добавить платёж")}
             </Button>
           }
         />
@@ -178,9 +178,9 @@ export default function PaymentsTable({
             <TableRow>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">#</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("amount")}</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Turi</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Boshlanish</TableCell>
-              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Tugash</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Turi", "Тип")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Boshlanish", "Начало")}</TableCell>
+              <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t("Tugash", "Окончание")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("createdAt")}</TableCell>
               <TableCell isHeader className="px-5 py-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{t.k("actions")}</TableCell>
             </TableRow>
@@ -188,7 +188,7 @@ export default function PaymentsTable({
           <TableBody>
             {currentItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-gray-400">To'lovlar yo'q</TableCell>
+                <TableCell colSpan={7} className="py-8 text-center text-gray-400">{t("To'lovlar yo'q", "Платежей нет")}</TableCell>
               </TableRow>
             ) : currentItems.map((item, idx) => (
               <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
@@ -196,7 +196,7 @@ export default function PaymentsTable({
                   {(safePage - 1) * +optionValue + idx + 1}
                 </TableCell>
                 <TableCell className="px-5 py-4 text-sm font-semibold text-green-600 dark:text-green-400">
-                  {item.amount != null ? `${formatMoney(item.amount)} so'm` : "-"}
+                  {item.amount != null ? t(`${formatMoney(item.amount)} so'm`, `${formatMoney(item.amount)} сум`) : "-"}
                 </TableCell>
                 <TableCell className="px-5 py-4 text-sm">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${typeClass(item.type)}`}>
@@ -223,7 +223,7 @@ export default function PaymentsTable({
           currentPage={currentPage}
           maxPage={maxPage}
           totalItems={filteredData.length}
-          totalLabel={`ta to'lov · Jami: ${formatMoney(tableData.reduce((s, p) => s + (p.amount ?? 0), 0))} so'm`}
+          totalLabel={t(`ta to'lov · Jami: ${formatMoney(tableData.reduce((s, p) => s + (p.amount ?? 0), 0))} so'm`, `платежей · Итого: ${formatMoney(tableData.reduce((s, p) => s + (p.amount ?? 0), 0))} сум`)}
           onChange={setCurrentPage}
           scrollTargetRef={tableTopRef}
         />
@@ -233,30 +233,30 @@ export default function PaymentsTable({
         <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-8">
           <div className="px-2 pr-14 mb-6">
             <h4 className="text-xl font-semibold text-gray-800 dark:text-white">
-              {editItem ? "To'lovni tahrirlash" : "To'lov qo'shish"}
+              {editItem ? t("To'lovni tahrirlash", "Редактировать платёж") : t("To'lov qo'shish", "Добавить платёж")}
             </h4>
           </div>
           <div className="flex flex-col gap-4 px-2">
             <div>
-              <Label>Summa <span className="text-error-500">*</span></Label>
+              <Label>{t("Summa", "Сумма")} <span className="text-error-500">*</span></Label>
               <Input type="number" placeholder="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
             </div>
             <div>
-              <Label>To'lov turi</Label>
+              <Label>{t("To'lov turi", "Тип платежа")}</Label>
               <Select options={typeOptions} defaultValue={form.type} onChange={(v) => setForm({ ...form, type: v })} />
             </div>
             <div>
-              <Label>Boshlanish sanasi</Label>
+              <Label>{t("Boshlanish sanasi", "Дата начала")}</Label>
               <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
             </div>
             <div>
-              <Label>Tugash sanasi</Label>
+              <Label>{t("Tugash sanasi", "Дата окончания")}</Label>
               <Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
             </div>
           </div>
           <div className="flex items-center gap-3 px-2 mt-6 justify-end">
-            <Button size="sm" variant="outline" onClick={closeModal}>Bekor qilish</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saqlanmoqda..." : "Saqlash"}</Button>
+            <Button size="sm" variant="outline" onClick={closeModal}>{t("Bekor qilish", "Отмена")}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t("Saqlanmoqda...", "Сохранение...") : t("Saqlash", "Сохранить")}</Button>
           </div>
         </div>
       </Modal>

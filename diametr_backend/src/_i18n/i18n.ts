@@ -40,6 +40,8 @@ const FIELDS: Record<string, { uz: string; ru: string }> = {
   title: { uz: 'Sarlavha', ru: 'Заголовок' },
   desc: { uz: 'Tavsif', ru: 'Описание' },
   address: { uz: 'Manzil', ru: 'Адрес' },
+  description_ru: { uz: 'Tavsif (ruscha)', ru: 'Описание (рус.)' },
+  work_hours: { uz: 'Ish vaqti', ru: 'Время работы' },
   image: { uz: 'Rasm', ru: 'Изображение' },
   type: { uz: 'Turi', ru: 'Тип' },
   status: { uz: 'Holati', ru: 'Статус' },
@@ -195,6 +197,7 @@ const HTTP_MESSAGES: Record<string, { uz: string; ru: string }> = {
   'unauthorized': { uz: 'Avtorizatsiya talab qilinadi', ru: 'Требуется авторизация' },
   'forbidden': { uz: 'Ruxsat yo`q', ru: 'Доступ запрещён' },
   'bad request': { uz: "Noto'g'ri so'rov", ru: 'Неверный запрос' },
+  'invalid work hours': { uz: "Ish vaqti noto'g'ri kiritilgan", ru: 'Неверно указано время работы' },
 };
 
 /** Translate a plain HttpException message. Unknown → returned unchanged. */

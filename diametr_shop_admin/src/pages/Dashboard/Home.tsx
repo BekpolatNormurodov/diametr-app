@@ -7,6 +7,7 @@ import { fetchOwnStock } from "../../service/ownStock";
 import { formatMoney } from "../../service/formatters/money.format";
 import Moment from "moment";
 
+import { useLang } from "../../context/LangContext";
 // ─── helpers ──────────────────────────────────────────────────────────────────
 // Platform wording (Telegram): FINISHED = confirmed by the shop, ready for delivery;
 // CONFIRMED = delivered, the final state.
@@ -60,18 +61,19 @@ function StatCard({ label, value, icon, colorClass, sub }: {
 
 // ─── Weekly bar chart (pure SVG/CSS) ─────────────────────────────────────────
 function WeeklyChart({ days }: { days: { label: string; amount: number }[] }) {
+  const { t } = useLang();
   const max = Math.max(...days.map((d) => d.amount), 1);
   return (
     <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03] p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-base font-semibold text-gray-800 dark:text-white">Haftalik Daromad</h3>
-          <p className="text-xs text-gray-400 dark:text-gray-500">So&apos;nggi 7 kun (Tasdiqlangan va yetkazilgan buyurtmalar)</p>
+          <h3 className="text-base font-semibold text-gray-800 dark:text-white">{t("Haftalik Daromad", "Доход за неделю")}</h3>
+          <p className="text-xs text-gray-400 dark:text-gray-500">{t("So'nggi 7 kun (Tasdiqlangan va yetkazilgan buyurtmalar)", "Последние 7 дней (подтверждённые и доставленные заказы)")}</p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-gray-400 dark:text-gray-500">Jami</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">{t("Jami", "Всего")}</p>
           <p className="text-sm font-bold text-gray-800 dark:text-white">
-            {formatMoney(days.reduce((s, d) => s + d.amount, 0))} so&apos;m
+            {formatMoney(days.reduce((s, d) => s + d.amount, 0))} {t("so'm", "сум")}
           </p>
         </div>
       </div>
@@ -83,7 +85,7 @@ function WeeklyChart({ days }: { days: { label: string; amount: number }[] }) {
             <div key={d.label} className="flex flex-col items-center flex-1 gap-1 group relative">
               {/* Tooltip */}
               <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:flex bg-gray-800 dark:bg-gray-700 text-white text-xs rounded-lg px-2 py-1 whitespace-nowrap z-10 shadow-lg">
-                {formatMoney(d.amount)} so&apos;m
+                {formatMoney(d.amount)} {t("so'm", "сум")}
               </div>
               <div className="w-full flex items-end justify-center h-28">
                 <div
@@ -110,6 +112,7 @@ function WeeklyChart({ days }: { days: { label: string; amount: number }[] }) {
 
 // ─── Monthly revenue mini-stat ────────────────────────────────────────────────
 function MonthlyRevenue({ orders }: { orders: any[] }) {
+  const { t } = useLang();
   const thisMonth = Moment().format("YYYY-MM");
   const lastMonth = Moment().subtract(1, "month").format("YYYY-MM");
   const this_total = orders
@@ -123,18 +126,18 @@ function MonthlyRevenue({ orders }: { orders: any[] }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03] p-6 flex flex-col justify-between">
       <div>
-        <h3 className="text-base font-semibold text-gray-800 dark:text-white">Oylik Daromad</h3>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-white">{t("Oylik Daromad", "Доход за месяц")}</h3>
         <p className="text-xs text-gray-400 dark:text-gray-500">{Moment().format("MMMM YYYY")}</p>
       </div>
       <div className="mt-4">
-        <p className="text-2xl font-bold text-gray-800 dark:text-white">{formatMoney(this_total)} so&apos;m</p>
+        <p className="text-2xl font-bold text-gray-800 dark:text-white">{formatMoney(this_total)} {t("so'm", "сум")}</p>
         {pct !== null && (
           <p className={`mt-1 text-sm font-medium ${pct >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-            {pct >= 0 ? "+" : ""}{pct}% o&apos;tgan oyga nisbatan
+            {pct >= 0 ? "+" : ""}{pct}{t("% o'tgan oyga nisbatan", "% к прошлому месяцу")}
           </p>
         )}
         <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-          <p className="text-xs text-gray-400">O&apos;tgan oy: {formatMoney(last_total)} so&apos;m</p>
+          <p className="text-xs text-gray-400">{t("O'tgan oy:", "Прошлый месяц:")} {formatMoney(last_total)} {t("so'm", "сум")}</p>
         </div>
       </div>
     </div>
@@ -143,6 +146,7 @@ function MonthlyRevenue({ orders }: { orders: any[] }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Home() {
+  const { t } = useLang();
   const shopId = useShopId();
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -203,7 +207,7 @@ export default function Home() {
           ?? item.product_item?.product?.name_uz
           ?? item.product_item?.product?.name
           ?? item.name
-          ?? "Noma'lum";
+          ?? t("Noma'lum", "Неизвестно");
         if (!map[piId]) map[piId] = { name, count: 0, revenue: 0 };
         map[piId].count += Number(item.count ?? item.quantity ?? 1);
         map[piId].revenue += Number(item.amount ?? item.price ?? 0) * Number(item.count ?? item.quantity ?? 1);
@@ -217,38 +221,38 @@ export default function Home() {
 
   return (
     <>
-      <PageMeta title="Dashboard" description="Do'kon statistikasi" />
+      <PageMeta title={t("Bosh sahifa", "Главная")} description={t("Do'kon statistikasi", "Статистика магазина")} />
       <div className="space-y-6">
         <div>
-          <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-1">Dashboard</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Do&apos;koningizning umumiy ko&apos;rsatkichlari</p>
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-1">{t("Bosh sahifa", "Главная")}</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t("Do'koningizning umumiy ko'rsatkichlari", "Общие показатели вашего магазина")}</p>
         </div>
 
         {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
           <StatCard
-            label="Jami Buyurtmalar"
+            label={t("Jami Buyurtmalar", "Всего заказов")}
             value={loading ? <span className={skel + " h-6 w-16 block"} /> : orders.length}
             colorClass="bg-brand-50 dark:bg-brand-500/15"
-            sub={`${activeOrders.length} ta aktiv`}
+            sub={t(`${activeOrders.length} ta aktiv`, `активных: ${activeOrders.length}`)}
             icon={<svg className="w-6 h-6 text-brand-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>}
           />
           <StatCard
-            label="Jami Tushumlar"
+            label={t("Jami Tushumlar", "Общая выручка")}
             value={loading ? <span className={skel + " h-6 w-28 block"} /> : `${formatMoney(revenue)} so'm`}
             colorClass="bg-success-50 dark:bg-success-500/15"
-            sub={`${soldOrders.length} ta sotilgan`}
+            sub={t(`${soldOrders.length} ta sotilgan`, `продано: ${soldOrders.length}`)}
             icon={<svg className="w-6 h-6 text-success-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33"/></svg>}
           />
           <StatCard
-            label="Do'kon Tovarlar"
+            label={t("Do'kon Tovarlar", "Товары магазина")}
             value={loading ? <span className={skel + " h-6 w-12 block"} /> : products.length}
             colorClass="bg-blue-50 dark:bg-blue-500/15"
-            sub={`${products.filter((p) => (p.count ?? 0) > 0).length} ta mavjud`}
+            sub={t(`${products.filter((p) => (p.count ?? 0) > 0).length} ta mavjud`, `в наличии: ${products.filter((p) => (p.count ?? 0) > 0).length}`)}
             icon={<svg className="w-6 h-6 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>}
           />
           <StatCard
-            label="To'lovlar Jami"
+            label={t("To'lovlar Jami", "Всего платежей")}
             value={loading ? <span className={skel + " h-6 w-28 block"} /> : `${formatMoney(paymentsTotal)} so'm`}
             colorClass="bg-purple-50 dark:bg-purple-500/15"
             icon={<svg className="w-6 h-6 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/></svg>}
@@ -269,28 +273,28 @@ export default function Home() {
           {/* Recent orders */}
           <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-              <h3 className="text-base font-medium text-gray-800 dark:text-white">Oxirgi Buyurtmalar</h3>
-              <a href="/orders" className="text-xs text-brand-500 hover:underline">Barchasi</a>
+              <h3 className="text-base font-medium text-gray-800 dark:text-white">{t("Oxirgi Buyurtmalar", "Последние заказы")}</h3>
+              <a href="/orders" className="text-xs text-brand-500 hover:underline">{t("Barchasi", "Все")}</a>
             </div>
             {loading ? (
               <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => <div key={i} className={skel + " w-full h-8"} />)}</div>
             ) : recentOrders.length === 0 ? (
-              <div className="py-10 text-center text-gray-400 text-sm">Buyurtmalar yo&apos;q</div>
+              <div className="py-10 text-center text-gray-400 text-sm">{t("Buyurtmalar yo'q", "Заказов нет")}</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full">
                   <thead>
                     <tr className="border-b border-gray-50 dark:border-gray-800">
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">Mijoz</th>
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">Summa</th>
-                      <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">{t("Mijoz", "Клиент")}</th>
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">{t("Summa", "Сумма")}</th>
+                      <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">{t("Holat", "Статус")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {recentOrders.map((order) => (
                       <tr key={order.id} className="border-b border-gray-50 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-white/[0.02]">
                         <td className="px-5 py-3 text-sm text-gray-700 dark:text-gray-300">{order.user?.fullname || order.user?.phone || order.phone || "—"}</td>
-                        <td className="px-5 py-3 text-sm font-medium text-gray-800 dark:text-white">{order.amount ? `${formatMoney(Number(order.amount))} so'm` : "—"}</td>
+                        <td className="px-5 py-3 text-sm font-medium text-gray-800 dark:text-white">{order.amount ? t(`${formatMoney(Number(order.amount))} so'm`, `${formatMoney(Number(order.amount))} сум`) : "—"}</td>
                         <td className="px-5 py-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status ?? ""] ?? "bg-gray-100 text-gray-500"}`}>
                             {statusLabels[order.status ?? ""] ?? order.status ?? "—"}
@@ -307,13 +311,13 @@ export default function Home() {
           {/* Recently sold products */}
           <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-              <h3 className="text-base font-medium text-gray-800 dark:text-white">Ko&apos;p Sotilgan Tovarlar</h3>
-              <a href="/shop-products" className="text-xs text-brand-500 hover:underline">Tovarlar</a>
+              <h3 className="text-base font-medium text-gray-800 dark:text-white">{t("Ko'p Sotilgan Tovarlar", "Самые продаваемые товары")}</h3>
+              <a href="/shop-products" className="text-xs text-brand-500 hover:underline">{t("Tovarlar", "Товары")}</a>
             </div>
             {loading ? (
               <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => <div key={i} className={skel + " w-full h-8"} />)}</div>
             ) : recentlySold.length === 0 ? (
-              <div className="py-10 text-center text-gray-400 text-sm">Ma&apos;lumot yo&apos;q</div>
+              <div className="py-10 text-center text-gray-400 text-sm">{t("Ma'lumot yo'q", "Нет данных")}</div>
             ) : (
               <div className="p-4 space-y-3">
                 {recentlySold.map((item, i) => (
@@ -323,10 +327,10 @@ export default function Home() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 dark:text-white truncate">{item.name}</p>
-                      <p className="text-xs text-gray-400">{item.count} ta sotildi</p>
+                      <p className="text-xs text-gray-400">{item.count} {t("ta sotildi", "продано")}</p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-semibold text-gray-800 dark:text-white">{formatMoney(item.revenue)} so&apos;m</p>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-white">{formatMoney(item.revenue)} {t("so'm", "сум")}</p>
                     </div>
                   </div>
                 ))}
@@ -339,22 +343,22 @@ export default function Home() {
         {/* All products in shop */}
         <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-            <h3 className="text-base font-medium text-gray-800 dark:text-white">Do&apos;kon Tovarlar ({products.length})</h3>
-            <a href="/shop-products" className="text-xs text-brand-500 hover:underline">Barchasi</a>
+            <h3 className="text-base font-medium text-gray-800 dark:text-white">{t("Do'kon Tovarlar (", "Товары магазина (")}{products.length})</h3>
+            <a href="/shop-products" className="text-xs text-brand-500 hover:underline">{t("Barchasi", "Все")}</a>
           </div>
           {loading ? (
             <div className="p-6 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className={skel + " w-full h-8"} />)}</div>
           ) : products.length === 0 ? (
-            <div className="py-10 text-center text-gray-400 text-sm">Tovarlar yo&apos;q</div>
+            <div className="py-10 text-center text-gray-400 text-sm">{t("Tovarlar yo'q", "Товаров нет")}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full">
                 <thead>
                   <tr className="border-b border-gray-50 dark:border-gray-800">
                     <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">#</th>
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">Tovar</th>
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">Soni</th>
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">Narx</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">{t("Tovar", "Товар")}</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">{t("Soni", "Количество")}</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-gray-400 uppercase">{t("Narx", "Цена")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -375,7 +379,7 @@ export default function Home() {
                         </td>
                         <td className="px-5 py-3 text-sm text-gray-600 dark:text-gray-400">
                           <span className={(sp.count ?? 0) > 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}>
-                            {sp.count ?? 0} ta
+                            {sp.count ?? 0} {t("ta", "шт.")}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-sm font-medium text-gray-800 dark:text-white">
@@ -383,10 +387,10 @@ export default function Home() {
                             <span>
                               <span className="text-brand-600 dark:text-brand-400">{formatMoney(sp.bonus_price)}</span>
                               <span className="text-xs text-gray-400 line-through ml-1">{formatMoney(sp.price)}</span>
-                              <span className="text-xs"> so&apos;m</span>
+                              <span className="text-xs"> {t("so'm", "сум")}</span>
                             </span>
                           ) : (
-                            <span>{sp.price != null ? `${formatMoney(sp.price)} so'm` : "—"}</span>
+                            <span>{sp.price != null ? t(`${formatMoney(sp.price)} so'm`, `${formatMoney(sp.price)} сум`) : "—"}</span>
                           )}
                         </td>
                       </tr>

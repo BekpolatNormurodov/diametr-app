@@ -6,7 +6,9 @@ import AppSidebar from "./AppSidebar";
 import { PrivateRoute } from "./PrivateRoute";
 import { ShopSessionProvider, useShopSession } from "../context/ShopSessionContext";
 
+import { useLang } from "../context/LangContext";
 const SubscriptionBanner: React.FC = () => {
+  const { t } = useLang();
   const navigate = useNavigate();
   // Re-evaluated on every live session refresh (mount, 60s, focus, after a payment),
   // so a renewal clears the banner and an expiry while the panel is open shows it.
@@ -30,8 +32,8 @@ const SubscriptionBanner: React.FC = () => {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-red-700 dark:text-red-400">
           {expired
-            ? "Obuna muddati tugagan — mahsulotlaringiz platformada ko'rsatilmaydi"
-            : "Do'kon bloklangan — mahsulotlaringiz platformada ko'rsatilmaydi"}
+            ? t("Obuna muddati tugagan — mahsulotlaringiz platformada ko'rsatilmaydi", "Срок подписки истёк — ваши товары не показываются на платформе")
+            : t("Do'kon bloklangan — mahsulotlaringiz platformada ko'rsatilmaydi", "Магазин заблокирован — ваши товары не показываются на платформе")}
         </p>
       </div>
       <svg className="w-5 h-5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

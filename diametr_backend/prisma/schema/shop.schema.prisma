@@ -11,6 +11,13 @@ model Shop {
     work_status     WORK_STATUS @default(WORKING)
     address         String? @db.Text
     address_ru      String? @db.Text
+    // Shown on the shop page (site + app). The owner writes them in the shop
+    // panel; the platform admin can edit them too.
+    description     String? @db.Text
+    description_ru  String? @db.Text
+    // Weekly hours, Monday first: 7 x ({open:"09:00",close:"18:00"} | null =
+    // day off). Null = not set (no "open now" badge).
+    work_hours      Json?
     inn         String?
     lat             Float?
     lon            Float?

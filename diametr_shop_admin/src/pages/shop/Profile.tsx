@@ -7,9 +7,12 @@ import Button from "../../components/ui/button/Button";
 import Input from "../../components/form/input/InputField";
 import Label from "../../components/form/Label";
 import { useShopSession } from "../../context/ShopSessionContext";
+import ShopInfoCard from "../../components/shop/ShopInfoCard";
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../../utils/password";
 
+import { useLang } from "../../context/LangContext";
 export default function ProfilePage() {
+  const { t } = useLang();
   // Live session (shop name refreshed from the API); stored snapshot is only the placeholder.
   const { user, updateUser, refresh } = useShopSession();
 
@@ -29,21 +32,21 @@ export default function ProfilePage() {
   }, [user?.chat_id]);
 
   const handlePasswordChange = async () => {
-    if (!oldPassword || !newPassword) { toast.error("Eski va yangi parolni kiriting"); return; }
-    if (newPassword !== confirmPassword) { toast.error("Yangi parollar mos kelmaydi"); return; }
-    if (newPassword.length < MIN_PASSWORD_LENGTH) { toast.error(PASSWORD_TOO_SHORT); return; }
+    if (!oldPassword || !newPassword) { toast.error(t("Eski va yangi parolni kiriting", "Введите старый и новый пароль")); return; }
+    if (newPassword !== confirmPassword) { toast.error(t("Yangi parollar mos kelmaydi", "Новые пароли не совпадают")); return; }
+    if (newPassword.length < MIN_PASSWORD_LENGTH) { toast.error(t(PASSWORD_TOO_SHORT, `Пароль должен содержать не менее ${MIN_PASSWORD_LENGTH} символов`)); return; }
     setSaving(true);
     try {
       await axiosClient.patch(`/admin/me/password`, { old_password: oldPassword, password: newPassword });
-      toast.success("Parol muvaffaqiyatli o'zgartirildi");
+      toast.success(t("Parol muvaffaqiyatli o'zgartirildi", "Пароль успешно изменён"));
       setOldPassword(""); setNewPassword(""); setConfirmPassword("");
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally { setSaving(false); }
   };
 
   const handleSaveChatId = async () => {
-    if (!chatId.trim()) { toast.error("Chat ID kiriting"); return; }
+    if (!chatId.trim()) { toast.error(t("Chat ID kiriting", "Введите Chat ID")); return; }
     setSavingTg(true);
     try {
       const res = await axiosClient.patch("/admin/me", { chat_id: chatId.trim() });
@@ -55,9 +58,9 @@ export default function ProfilePage() {
       });
       chatIdEdited.current = false;
       refresh();
-      toast.success("Telegram ulandi");
+      toast.success(t("Telegram ulandi", "Telegram подключён"));
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     } finally { setSavingTg(false); }
   };
 
@@ -65,8 +68,8 @@ export default function ProfilePage() {
 
   return (
     <>
-      <PageMeta title="Profil" description="Foydalanuvchi profili" />
-      <PageBreadcrumb pageTitle="Profil" />
+      <PageMeta title={t("Profil", "Профиль")} description={t("Foydalanuvchi profili", "Профиль пользователя")} />
+      <PageBreadcrumb pageTitle={t("Profil", "Профиль")} />
 
       <div className="max-w-3xl mx-auto space-y-6">
 
@@ -94,6 +97,9 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {/* Shop page: about text + weekly hours */}
+        <ShopInfoCard />
+
         {/* Telegram */}
         <div className="rounded-2xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6">
           <div className="flex items-center gap-3 mb-5">
@@ -103,21 +109,21 @@ export default function ProfilePage() {
               </svg>
             </div>
             <div>
-              <h3 className="text-base font-semibold text-gray-800 dark:text-white">Telegram bildirishnomalar</h3>
-              <p className="text-xs text-gray-400">Obuna va buyurtmalar haqida xabar olish</p>
+              <h3 className="text-base font-semibold text-gray-800 dark:text-white">{t("Telegram bildirishnomalar", "Уведомления в Telegram")}</h3>
+              <p className="text-xs text-gray-400">{t("Obuna va buyurtmalar haqida xabar olish", "Получайте сообщения о подписке и заказах")}</p>
             </div>
             {user?.chat_id && (
               <span className="ml-auto px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">
-                Ulangan
+                {t("Ulangan", "Подключён")}
               </span>
             )}
           </div>
           {!user?.chat_id && (
             <div className="mb-4 p-3.5 rounded-xl bg-sky-50 dark:bg-sky-900/10 border border-sky-100 dark:border-sky-800/30">
-              <p className="text-xs font-semibold text-sky-700 dark:text-sky-300 mb-1.5">Qanday ulash?</p>
+              <p className="text-xs font-semibold text-sky-700 dark:text-sky-300 mb-1.5">{t("Qanday ulash?", "Как подключить?")}</p>
               <ol className="text-xs text-sky-600 dark:text-sky-400 space-y-1 list-decimal list-inside">
-                <li><a href="https://t.me/diametr_admin_bot" target="_blank" rel="noreferrer" className="font-semibold underline">@diametr_admin_bot</a> ga /start yuboring</li>
-                <li>Bot Chat ID yuboradi — uni quyiga kiriting</li>
+                <li><a href="https://t.me/diametr_admin_bot" target="_blank" rel="noreferrer" className="font-semibold underline">@diametr_admin_bot</a> {t("ga /start yuboring", "— отправьте /start")}</li>
+                <li>{t("Bot Chat ID yuboradi — uni quyiga kiriting", "Бот пришлёт Chat ID — введите его ниже")}</li>
               </ol>
             </div>
           )}
@@ -126,7 +132,7 @@ export default function ProfilePage() {
               <Input type="text" placeholder="Chat ID" value={chatId} onChange={(e: any) => { chatIdEdited.current = true; setChatId(e.target.value); }} />
             </div>
             <Button onClick={handleSaveChatId} disabled={savingTg} size="sm">
-              {savingTg ? "..." : user?.chat_id ? "Yangilash" : "Ulash"}
+              {savingTg ? "..." : user?.chat_id ? t("Yangilash", "Обновить") : t("Ulash", "Подключить")}
             </Button>
           </div>
         </div>
@@ -139,25 +145,25 @@ export default function ProfilePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h3 className="text-base font-semibold text-gray-800 dark:text-white">Parolni o'zgartirish</h3>
+            <h3 className="text-base font-semibold text-gray-800 dark:text-white">{t("Parolni o'zgartirish", "Изменить пароль")}</h3>
           </div>
           <div className="space-y-3">
             <div>
-              <Label>Eski parol</Label>
-              <Input type="password" placeholder="Eski parol" value={oldPassword} onChange={(e: any) => setOldPassword(e.target.value)} />
+              <Label>{t("Eski parol", "Старый пароль")}</Label>
+              <Input type="password" placeholder={t("Eski parol", "Старый пароль")} value={oldPassword} onChange={(e: any) => setOldPassword(e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Yangi parol</Label>
-                <Input type="password" placeholder={`Kamida ${MIN_PASSWORD_LENGTH} belgi`} value={newPassword} onChange={(e: any) => setNewPassword(e.target.value)} />
+                <Label>{t("Yangi parol", "Новый пароль")}</Label>
+                <Input type="password" placeholder={t(`Kamida ${MIN_PASSWORD_LENGTH} belgi`, `Не менее ${MIN_PASSWORD_LENGTH} символов`)} value={newPassword} onChange={(e: any) => setNewPassword(e.target.value)} />
               </div>
               <div>
-                <Label>Tasdiqlash</Label>
-                <Input type="password" placeholder="Qayta kiriting" value={confirmPassword} onChange={(e: any) => setConfirmPassword(e.target.value)} />
+                <Label>{t("Tasdiqlash", "Подтвердить")}</Label>
+                <Input type="password" placeholder={t("Qayta kiriting", "Повторите пароль")} value={confirmPassword} onChange={(e: any) => setConfirmPassword(e.target.value)} />
               </div>
             </div>
             <Button onClick={handlePasswordChange} disabled={saving} className="w-full">
-              {saving ? "Saqlanmoqda..." : "Parolni o'zgartirish"}
+              {saving ? t("Saqlanmoqda...", "Сохранение...") : t("Parolni o'zgartirish", "Изменить пароль")}
             </Button>
           </div>
         </div>

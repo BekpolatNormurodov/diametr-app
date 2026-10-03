@@ -6,39 +6,41 @@ import Moment from "moment";
 import { toast } from "../../components/ui/toast";
 import { useShopSession } from "../../context/ShopSessionContext";
 
+import { useLang, tr } from "../../context/LangContext";
 function formatMoney(n: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(n);
 }
 
 function statusInfo(expired?: string | null) {
-  if (!expired) return { cls: "bg-gray-100 text-gray-500 border-gray-200", dot: "bg-gray-400", label: "Belgilanmagan", days: null, color: "gray" };
+  if (!expired) return { cls: "bg-gray-100 text-gray-500 border-gray-200", dot: "bg-gray-400", label: tr("Belgilanmagan", "Не задано"), days: null, color: "gray" };
   const days = Math.ceil((new Date(expired).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (days < 0) return { cls: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500", label: "Muddati tugagan", days, color: "red" };
-  if (days <= 3) return { cls: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500", label: `${days} kun qoldi`, days, color: "red" };
-  if (days <= 7) return { cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500", label: `${days} kun qoldi`, days, color: "amber" };
-  if (days <= 30) return { cls: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500", label: `${days} kun qoldi`, days, color: "blue" };
-  return { cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", label: "Faol", days, color: "green" };
+  if (days < 0) return { cls: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500", label: tr("Muddati tugagan", "Подписка истекла"), days, color: "red" };
+  if (days <= 3) return { cls: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500", label: tr(`${days} kun qoldi`, `осталось ${days} дн.`), days, color: "red" };
+  if (days <= 7) return { cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500", label: tr(`${days} kun qoldi`, `осталось ${days} дн.`), days, color: "amber" };
+  if (days <= 30) return { cls: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500", label: tr(`${days} kun qoldi`, `осталось ${days} дн.`), days, color: "blue" };
+  return { cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", label: tr("Faol", "Активен"), days, color: "green" };
 }
 
 const LOG_LABELS: Record<string, { label: string; cls: string }> = {
   TOP_UP_CLICK: { label: "Click", cls: "bg-blue-50 text-blue-600" },
   TOP_UP_PAYME: { label: "Payme", cls: "bg-cyan-50 text-cyan-600" },
   TOP_UP_UZUM: { label: "Uzum", cls: "bg-purple-50 text-purple-600" },
-  TOP_UP_MANUAL: { label: "Qolda", cls: "bg-teal-50 text-teal-600" },
-  SUBSCRIPTION_DEDUCT: { label: "Obuna", cls: "bg-red-50 text-red-600" },
-  FREE_TRIAL: { label: "Tekin", cls: "bg-violet-50 text-violet-600" },
+  TOP_UP_MANUAL: { get label() { return tr("Qolda", "Вручную"); }, cls: "bg-teal-50 text-teal-600" },
+  SUBSCRIPTION_DEDUCT: { get label() { return tr("Obuna", "Подписка"); }, cls: "bg-red-50 text-red-600" },
+  FREE_TRIAL: { get label() { return tr("Tekin", "Бесплатно"); }, cls: "bg-violet-50 text-violet-600" },
 };
 
 const AMOUNTS = [50000, 100000, 200000, 500000];
 
 const PLANS = [
-  { months: 1, discount: 0, label: "1 oy" },
-  { months: 3, discount: 10, label: "3 oy", badge: "−10%" },
-  { months: 6, discount: 20, label: "6 oy", badge: "−20%" },
-  { months: 12, discount: 30, label: "12 oy", badge: "−30%" },
+  { months: 1, discount: 0, get label() { return tr("1 oy", "1 мес."); } },
+  { months: 3, discount: 10, get label() { return tr("3 oy", "3 мес."); }, badge: "−10%" },
+  { months: 6, discount: 20, get label() { return tr("6 oy", "6 мес."); }, badge: "−20%" },
+  { months: 12, discount: 30, get label() { return tr("12 oy", "12 мес."); }, badge: "−30%" },
 ];
 
 export default function SubscriptionPage() {
+  const { t } = useLang();
   const [balance, setBalance] = useState<any>(null);
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,25 +120,25 @@ export default function SubscriptionPage() {
   const handlePayFromBalance = async () => {
     if (payingBalance) return;
     if ((balance?.balance ?? 0) < planTotal) {
-      toast.error(`Balansda yetarli mablag' yo'q! Kerak: ${formatMoney(planTotal)} so'm`);
+      toast.error(t(`Balansda yetarli mablag' yo'q! Kerak: ${formatMoney(planTotal)} so'm`, `Недостаточно средств на балансе! Нужно: ${formatMoney(planTotal)} сум`));
       return;
     }
     setPayingBalance(true);
     try {
       await axiosClient.post("/subscription/pay-from-balance", { months: plan.months });
-      toast.success(`Obuna ${plan.months} oyga muvaffaqiyatli uzaytirildi!`);
+      toast.success(t(`Obuna ${plan.months} oyga muvaffaqiyatli uzaytirildi!`, `Подписка успешно продлена на ${plan.months} мес.!`));
       fetchData();
       refreshSession(); // header badge + expired banner update immediately
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Xatolik yuz berdi");
+      toast.error(e?.response?.data?.message ?? t("Xatolik yuz berdi", "Произошла ошибка"));
     }
     setPayingBalance(false);
   };
 
   return (
     <>
-      <PageMeta title="Obuna" description="Obuna holati" />
-      <PageBreadcrumb pageTitle="Obuna" />
+      <PageMeta title={t("Obuna", "Подписка")} description={t("Obuna holati", "Статус подписки")} />
+      <PageBreadcrumb pageTitle={t("Obuna", "Подписка")} />
 
       {/* Expired Alert */}
       {isExpired && (
@@ -148,13 +150,13 @@ export default function SubscriptionPage() {
               </svg>
             </div>
             <div>
-              <h3 className="text-lg font-bold text-red-700 dark:text-red-400">Obuna muddati tugagan!</h3>
+              <h3 className="text-lg font-bold text-red-700 dark:text-red-400">{t("Obuna muddati tugagan!", "Срок подписки истёк!")}</h3>
               <p className="text-sm text-red-600 dark:text-red-300 mt-1">
-                Sizning mahsulotlaringiz platformada foydalanuvchilarga <strong>ko'rsatilmaydi</strong>. 
+                {t("Sizning mahsulotlaringiz platformada foydalanuvchilarga", "Ваши товары не показываются покупателям на платформе")} <strong>{t("ko'rsatilmaydi", "")}</strong>. 
                 Obunani yangilash uchun balansni to'ldiring yoki administrator bilan bog'laning.
               </p>
               <p className="text-xs text-red-500 dark:text-red-400 mt-2">
-                Tugagan sana: {balance?.expired ? Moment(balance.expired).format("DD.MM.YYYY") : "—"}
+                {t("Tugagan sana:", "Дата окончания:")} {balance?.expired ? Moment(balance.expired).format("DD.MM.YYYY") : "—"}
               </p>
             </div>
           </div>
@@ -180,10 +182,10 @@ export default function SubscriptionPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-gray-400 uppercase">Balans</div>
+                <div className="text-xs font-medium text-gray-400 uppercase">{t("Balans", "Баланс")}</div>
               </div>
               <div className="text-2xl font-bold text-gray-800 dark:text-white">
-                {formatMoney(balance?.balance ?? 0)} <span className="text-sm font-normal text-gray-400">so'm</span>
+                {formatMoney(balance?.balance ?? 0)} <span className="text-sm font-normal text-gray-400">{t("so'm", "сум")}</span>
               </div>
             </div>
 
@@ -195,7 +197,7 @@ export default function SubscriptionPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-gray-400 uppercase">Obuna muddati</div>
+                <div className="text-xs font-medium text-gray-400 uppercase">{t("Obuna muddati", "Срок подписки")}</div>
               </div>
               <div className="text-2xl font-bold text-gray-800 dark:text-white">
                 {balance?.expired ? Moment(balance.expired).format("DD.MM.YYYY") : "—"}
@@ -214,13 +216,13 @@ export default function SubscriptionPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-gray-400 uppercase">Holat</div>
+                <div className="text-xs font-medium text-gray-400 uppercase">{t("Holat", "Статус")}</div>
               </div>
               <div className={`text-2xl font-bold ${isBlocked ? "text-red-600" : "text-emerald-600"}`}>
-                {isBlocked ? "Bloklangan" : "Faol"}
+                {isBlocked ? t("Bloklangan", "Заблокирован") : t("Faol", "Активен")}
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                {isBlocked ? "Mahsulotlaringiz platformada ko'rinmaydi" : "Mahsulotlaringiz platformada ko'rinadi"}
+                {isBlocked ? t("Mahsulotlaringiz platformada ko'rinmaydi", "Ваши товары не видны на платформе") : t("Mahsulotlaringiz platformada ko'rinadi", "Ваши товары видны на платформе")}
               </p>
             </div>
           </>
@@ -238,8 +240,8 @@ export default function SubscriptionPage() {
                 </svg>
               </div>
               <div>
-                <div className="text-sm font-semibold text-gray-800 dark:text-white">Avto to'lov</div>
-                <p className="text-xs text-gray-400 mt-0.5">Balansdan avtomatik yechib obunani uzaytirish</p>
+                <div className="text-sm font-semibold text-gray-800 dark:text-white">{t("Avto to'lov", "Автоплатёж")}</div>
+                <p className="text-xs text-gray-400 mt-0.5">{t("Balansdan avtomatik yechib obunani uzaytirish", "Автоматически продлевать подписку с баланса")}</p>
               </div>
             </div>
             <button
@@ -251,7 +253,7 @@ export default function SubscriptionPage() {
                   setBalance((b: any) => ({ ...b, auto_payment: newVal }));
                   refreshSession();
                 } catch (e: any) {
-                  toast.error(e?.response?.data?.message ?? "Avto to'lovni o'zgartirib bo'lmadi");
+                  toast.error(e?.response?.data?.message ?? t("Avto to'lovni o'zgartirib bo'lmadi", "Не удалось изменить автоплатёж"));
                   fetchData();
                 }
                 setToggling(false);
@@ -266,8 +268,8 @@ export default function SubscriptionPage() {
           </div>
           <div className={`mt-3 px-3 py-2 rounded-lg text-xs ${balance?.auto_payment !== false ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400" : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}>
             {balance?.auto_payment !== false
-              ? "Obuna muddati tugaganda, balansda yetarli mablag' bo'lsa avtomatik uzaytiriladi"
-              : "Avto to'lov o'chirilgan — obuna muddati tugaganda do'kon bloklanadi"}
+              ? t("Obuna muddati tugaganda, balansda yetarli mablag' bo'lsa avtomatik uzaytiriladi", "Когда подписка закончится, она продлится автоматически, если на балансе достаточно средств")
+              : t("Avto to'lov o'chirilgan — obuna muddati tugaganda do'kon bloklanadi", "Автоплатёж выключен — по окончании подписки магазин будет заблокирован")}
           </div>
         </div>
       )}
@@ -284,14 +286,14 @@ export default function SubscriptionPage() {
                 </svg>
               </div>
               <div>
-                <div className="text-sm font-semibold text-gray-800 dark:text-white">Balansni to'ldirish</div>
-                <p className="text-xs text-gray-400 mt-0.5">Hisobingizni to'ldiring</p>
+                <div className="text-sm font-semibold text-gray-800 dark:text-white">{t("Balansni to'ldirish", "Пополнить баланс")}</div>
+                <p className="text-xs text-gray-400 mt-0.5">{t("Hisobingizni to'ldiring", "Пополните счёт")}</p>
               </div>
             </div>
 
             {/* Amount selector */}
             <div className="mb-4">
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">Summa tanlang yoki kiriting</label>
+              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">{t("Summa tanlang yoki kiriting", "Выберите или введите сумму")}</label>
               <div className="grid grid-cols-2 gap-2 mb-3">
                 {AMOUNTS.map(amt => (
                   <button
@@ -303,7 +305,7 @@ export default function SubscriptionPage() {
                         : "border-gray-200 dark:border-white/[0.08] text-gray-600 dark:text-gray-400 hover:border-gray-300"
                     }`}
                   >
-                    {formatMoney(amt)} so'm
+                    {formatMoney(amt)} {t("so'm", "сум")}
                   </button>
                 ))}
               </div>
@@ -313,14 +315,14 @@ export default function SubscriptionPage() {
                   min={1000}
                   value={customAmount}
                   onChange={e => setCustomAmount(e.target.value)}
-                  placeholder="Boshqa summa kiriting..."
+                  placeholder={t("Boshqa summa kiriting...", "Введите другую сумму...")}
                   className={`w-full px-4 py-2.5 rounded-xl border text-sm transition-all outline-none ${
                     customAmount
                       ? "border-brand-500 ring-1 ring-brand-200 bg-brand-50/50 dark:bg-brand-900/10"
                       : "border-gray-200 dark:border-white/[0.08]"
                   } dark:bg-white/[0.02] text-gray-700 dark:text-gray-200 placeholder-gray-400`}
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">so'm</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{t("so'm", "сум")}</span>
               </div>
             </div>
 
@@ -335,7 +337,7 @@ export default function SubscriptionPage() {
                 <img src="/payments/click.png" alt="Click" className="w-9 h-9 rounded-lg object-contain" />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600">Click</div>
-                  <div className="text-[10px] text-gray-400">{formatMoney(effectiveTopUp)} so'm to'lash</div>
+                  <div className="text-[10px] text-gray-400">{formatMoney(effectiveTopUp)} {t("so'm to'lash", "сум — оплатить")}</div>
                 </div>
                 <svg className="w-4 h-4 text-gray-300 group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </a>
@@ -348,7 +350,7 @@ export default function SubscriptionPage() {
                 <img src="/payments/payme.png" alt="Payme" className="w-9 h-9 rounded-lg object-contain" />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-cyan-600">Payme</div>
-                  <div className="text-[10px] text-gray-400">{formatMoney(effectiveTopUp)} so'm to'lash</div>
+                  <div className="text-[10px] text-gray-400">{formatMoney(effectiveTopUp)} {t("so'm to'lash", "сум — оплатить")}</div>
                 </div>
                 <svg className="w-4 h-4 text-gray-300 group-hover:text-cyan-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </a>
@@ -361,12 +363,12 @@ export default function SubscriptionPage() {
                 <img src="/payments/uzum.png" alt="Uzum" className="w-9 h-9 rounded-lg object-contain" />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-purple-600">Uzum</div>
-                  <div className="text-[10px] text-gray-400">{formatMoney(effectiveTopUp)} so'm to'lash</div>
+                  <div className="text-[10px] text-gray-400">{formatMoney(effectiveTopUp)} {t("so'm to'lash", "сум — оплатить")}</div>
                 </div>
                 <svg className="w-4 h-4 text-gray-300 group-hover:text-purple-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </a>
             </div>
-            <p className="mt-3 text-[10px] text-gray-400 text-center">To'lov qilganingizda balans avtomatik to'ldiriladi</p>
+            <p className="mt-3 text-[10px] text-gray-400 text-center">{t("To'lov qilganingizda balans avtomatik to'ldiriladi", "После оплаты баланс пополнится автоматически")}</p>
           </div>
 
           {/* Obunaga to'lov */}
@@ -378,14 +380,14 @@ export default function SubscriptionPage() {
                 </svg>
               </div>
               <div>
-                <div className="text-sm font-semibold text-gray-800 dark:text-white">Obunaga to'lov</div>
-                <p className="text-xs text-gray-400 mt-0.5">Muddat tanlang va to'lang</p>
+                <div className="text-sm font-semibold text-gray-800 dark:text-white">{t("Obunaga to'lov", "Оплата подписки")}</div>
+                <p className="text-xs text-gray-400 mt-0.5">{t("Muddat tanlang va to'lang", "Выберите срок и оплатите")}</p>
               </div>
             </div>
 
             {/* Plan selector */}
             <div className="mb-4">
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">Muddat tanlang</label>
+              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">{t("Muddat tanlang", "Выберите срок")}</label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {PLANS.map((p, i) => (
                   <button
@@ -406,7 +408,7 @@ export default function SubscriptionPage() {
                       {p.label}
                     </div>
                     <div className="text-[10px] text-gray-400 mt-0.5">
-                      {formatMoney(Math.round(subPrice * p.months * (1 - p.discount / 100)))} so'm
+                      {formatMoney(Math.round(subPrice * p.months * (1 - p.discount / 100)))} {t("so'm", "сум")}
                     </div>
                   </button>
                 ))}
@@ -419,7 +421,7 @@ export default function SubscriptionPage() {
                 <div>
                   <div className="text-xs text-emerald-600 dark:text-emerald-400">{plan.label} obuna</div>
                   <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
-                    {formatMoney(planTotal)} so'm
+                    {formatMoney(planTotal)} {t("so'm", "сум")}
                     {plan.discount > 0 && (
                       <span className="text-xs line-through text-gray-400 font-normal">{formatMoney(planOriginal)}</span>
                     )}
@@ -427,7 +429,7 @@ export default function SubscriptionPage() {
                 </div>
                 {plan.discount > 0 && (
                   <span className="px-2 py-1 rounded-lg bg-orange-100 text-orange-600 text-xs font-bold dark:bg-orange-900/30 dark:text-orange-400">
-                    Tejaysiz {formatMoney(planOriginal - planTotal)} so'm
+                    {t("Tejaysiz", "Экономия")} {formatMoney(planOriginal - planTotal)} {t("so'm", "сум")}
                   </span>
                 )}
               </div>
@@ -443,8 +445,8 @@ export default function SubscriptionPage() {
               >
                 <img src="/payments/click.png" alt="Click" className="w-9 h-9 rounded-lg object-contain" />
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600">Click orqali</div>
-                  <div className="text-[10px] text-gray-400">{formatMoney(planTotal)} so'm</div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600">{t("Click orqali", "Через Click")}</div>
+                  <div className="text-[10px] text-gray-400">{formatMoney(planTotal)} {t("so'm", "сум")}</div>
                 </div>
                 <svg className="w-4 h-4 text-gray-300 group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </a>
@@ -456,8 +458,8 @@ export default function SubscriptionPage() {
               >
                 <img src="/payments/payme.png" alt="Payme" className="w-9 h-9 rounded-lg object-contain" />
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-cyan-600">Payme orqali</div>
-                  <div className="text-[10px] text-gray-400">{formatMoney(planTotal)} so'm</div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-cyan-600">{t("Payme orqali", "Через Payme")}</div>
+                  <div className="text-[10px] text-gray-400">{formatMoney(planTotal)} {t("so'm", "сум")}</div>
                 </div>
                 <svg className="w-4 h-4 text-gray-300 group-hover:text-cyan-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </a>
@@ -469,8 +471,8 @@ export default function SubscriptionPage() {
               >
                 <img src="/payments/uzum.png" alt="Uzum" className="w-9 h-9 rounded-lg object-contain" />
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-purple-600">Uzum orqali</div>
-                  <div className="text-[10px] text-gray-400">{formatMoney(planTotal)} so'm</div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-purple-600">{t("Uzum orqali", "Через Uzum")}</div>
+                  <div className="text-[10px] text-gray-400">{formatMoney(planTotal)} {t("so'm", "сум")}</div>
                 </div>
                 <svg className="w-4 h-4 text-gray-300 group-hover:text-purple-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </a>
@@ -490,12 +492,12 @@ export default function SubscriptionPage() {
                 </div>
                 <div className="flex-1 text-left">
                   <div className="text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-emerald-600">
-                    {payingBalance ? "To'lanmoqda..." : "Balansdan to'lash"}
+                    {payingBalance ? t("To'lanmoqda...", "Оплата...") : t("Balansdan to'lash", "Оплатить с баланса")}
                   </div>
                   <div className="text-[10px] text-gray-400">
                     {(balance?.balance ?? 0) >= planTotal
-                      ? `Balans: ${formatMoney(balance?.balance ?? 0)} so'm`
-                      : `Yetarli emas (${formatMoney(balance?.balance ?? 0)} / ${formatMoney(planTotal)} so'm)`}
+                      ? t(`Balans: ${formatMoney(balance?.balance ?? 0)} so'm`, `Баланс: ${formatMoney(balance?.balance ?? 0)} сум`)
+                      : t(`Yetarli emas (${formatMoney(balance?.balance ?? 0)} / ${formatMoney(planTotal)} so'm)`, `Недостаточно (${formatMoney(balance?.balance ?? 0)} / ${formatMoney(planTotal)} сум)`)}
                   </div>
                 </div>
                 {(balance?.balance ?? 0) >= planTotal && (
@@ -514,26 +516,26 @@ export default function SubscriptionPage() {
             <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
-            Tranzaksiyalar tarixi
+            {t("Tranzaksiyalar tarixi", "История транзакций")}
           </h3>
-          <span className="text-xs text-gray-400">{logs.length} ta</span>
+          <span className="text-xs text-gray-400">{logs.length} {t("ta", "шт.")}</span>
         </div>
         {loading ? (
           <div className="p-6 space-y-3">
             {[...Array(4)].map((_, i) => <div key={i} className="animate-pulse bg-gray-200 dark:bg-gray-700 rounded h-10" />)}
           </div>
         ) : logs.length === 0 ? (
-          <div className="py-12 text-center text-gray-400 text-sm">Tranzaksiyalar topilmadi</div>
+          <div className="py-12 text-center text-gray-400 text-sm">{t("Tranzaksiyalar topilmadi", "Транзакции не найдены")}</div>
         ) : (
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
             <table className="min-w-full">
               <thead className="sticky top-0 bg-white dark:bg-gray-900 z-10">
                 <tr className="border-b border-gray-100 dark:border-white/[0.05]">
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">Sana</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">Tur</th>
-                  <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase">Summa</th>
-                  <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase">Balans</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">Izoh</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("Sana", "Дата")}</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("Tur", "Тип")}</th>
+                  <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase">{t("Summa", "Сумма")}</th>
+                  <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase">{t("Balans", "Баланс")}</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("Izoh", "Комментарий")}</th>
                 </tr>
               </thead>
               <tbody>

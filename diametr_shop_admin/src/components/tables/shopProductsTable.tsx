@@ -19,7 +19,7 @@ import Moment from "moment";
 import { buildSearchIndex, filterSearchIndex } from "../../utils/searchKey";
 import { beginBusy, endBusy } from "../../utils/busy";
 import Pagination, { useAutoClampPage } from "../common/Pagination";
-import { useLang } from "../../context/LangContext";
+import { useLang, tr } from "../../context/LangContext";
 
 export interface ShopProductItemProps {
   id: number;
@@ -150,16 +150,16 @@ function validateRow(v: RowValues, label: string): string | null {
   const price = v.price.trim();
   const count = v.count.trim();
   const bonus = v.bonus_price.trim();
-  if (!price) return say("narxni kiriting");
-  if (!INT_RE.test(price)) return say("narx butun musbat son bo'lishi kerak (masalan 15000)");
-  if (Number(price) < 1000) return say("narx kamida 1 000 so'm bo'lishi kerak");
-  if (Number(price) > MAX_INT) return say("narx juda katta");
-  if (!count) return say("sonini kiriting (0 ham bo'lishi mumkin)");
-  if (!INT_RE.test(count)) return say("soni 0 yoki undan katta butun son bo'lishi kerak");
-  if (Number(count) > MAX_INT) return say("soni juda katta");
+  if (!price) return say(tr("narxni kiriting", "введите цену"));
+  if (!INT_RE.test(price)) return say(tr("narx butun musbat son bo'lishi kerak (masalan 15000)", "цена должна быть целым положительным числом (например 15000)"));
+  if (Number(price) < 1000) return say(tr("narx kamida 1 000 so'm bo'lishi kerak", "цена должна быть не меньше 1 000 сум"));
+  if (Number(price) > MAX_INT) return say(tr("narx juda katta", "цена слишком большая"));
+  if (!count) return say(tr("sonini kiriting (0 ham bo'lishi mumkin)", "введите количество (можно 0)"));
+  if (!INT_RE.test(count)) return say(tr("soni 0 yoki undan katta butun son bo'lishi kerak", "количество должно быть целым числом от 0"));
+  if (Number(count) > MAX_INT) return say(tr("soni juda katta", "количество слишком большое"));
   if (bonus) {
-    if (!INT_RE.test(bonus) || Number(bonus) <= 0) return say("skidka narxi 0 dan katta butun son bo'lishi kerak (skidkasiz bo'lsa bo'sh qoldiring)");
-    if (Number(bonus) >= Number(price)) return say("skidka narxi narxdan kichik bo'lishi kerak");
+    if (!INT_RE.test(bonus) || Number(bonus) <= 0) return say(tr("skidka narxi 0 dan katta butun son bo'lishi kerak (skidkasiz bo'lsa bo'sh qoldiring)", "цена со скидкой должна быть целым числом больше 0 (без скидки оставьте пустым)"));
+    if (Number(bonus) >= Number(price)) return say(tr("skidka narxi narxdan kichik bo'lishi kerak", "цена со скидкой должна быть меньше цены"));
   }
   return null;
 }
@@ -188,7 +188,7 @@ function changedPayload(v: RowValues, orig: RowValues): SaveOp["payload"] | null
 const apiError = (e: unknown): string => {
   const msg = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
   if (Array.isArray(msg)) return msg.join(", ");
-  return msg || "Xatolik yuz berdi";
+  return msg || tr("Xatolik yuz berdi", "Произошла ошибка");
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -484,10 +484,10 @@ export default function ShopProductsTable({
       if (current === null) {
         savedStockIds.current.delete(op.piId);
         if (op.spId != null) goneStockIds.current.add(op.spId);
-        return { ok: false, gone: true, message: withLabel(op.label, "bu variant do'kondan o'chirilgan — qayta saqlasangiz yangidan qo'shiladi") };
+        return { ok: false, gone: true, message: withLabel(op.label, t("bu variant do'kondan o'chirilgan — qayta saqlasangiz yangidan qo'shiladi", "этот вариант удалён из магазина — при сохранении он будет добавлен заново")) };
       }
       if (op.expectCount !== undefined && current !== Number(op.expectCount)) {
-        return { ok: false, currentCount: current, message: withLabel(op.label, `soni boshqa joyda o'zgargan (hozir ${current} ta) — tekshirib, qayta saqlang`) };
+        return { ok: false, currentCount: current, message: withLabel(op.label, t(`soni boshqa joyda o'zgargan (hozir ${current} ta) — tekshirib, qayta saqlang`, `количество изменилось в другом месте (сейчас ${current} шт.) — проверьте и сохраните снова`)) };
       }
       await axiosClient.put(`/shop-product/${op.spId}`, op.payload);
       return { ok: true };
@@ -506,10 +506,10 @@ export default function ShopProductsTable({
   };
 
   const reportSave = (done: string[], failures: string[]) => {
-    if (failures.length === 0) { toast.success(done.join(", ") || "Saqlandi"); return; }
+    if (failures.length === 0) { toast.success(done.join(", ") || t("Saqlandi", "Сохранено")); return; }
     const head = done.length ? `${done.join(", ")}. ` : "";
     if (failures.length === 1) { toast.error(`${head}${failures[0]}`); return; }
-    toast.error(`${head}${failures.length} ta xatolik:`);
+    toast.error(t(`${head}${failures.length} ta xatolik:`, `${head}ошибок: ${failures.length}:`));
     // One toast per failed variant (the toast stack keeps the last five).
     failures.slice(0, 4).forEach((f) => toast.error(f));
   };
@@ -520,7 +520,7 @@ export default function ShopProductsTable({
     return next;
   };
 
-  const firstErrors = (errors: string[]) => `${errors[0]}${errors.length > 1 ? ` (yana ${errors.length - 1} ta xato)` : ""}`;
+  const firstErrors = (errors: string[]) => t(`${errors[0]}${errors.length > 1 ? ` (yana ${errors.length - 1} ta xato)` : ""}`, `${errors[0]}${errors.length > 1 ? ` (ещё ошибок: ${errors.length - 1})` : ""}`);
 
   // ─── Add modal ─────────────────────────────────────────
   const catalogReady = catalogStatus === "ready";
@@ -535,7 +535,7 @@ export default function ShopProductsTable({
   // The product select's search also matches variant names (keywords), so "rakovina" finds
   // "Hammom aksessuarlari" through its variant "раковина". Memoized: the Select builds its search keys per list.
   const addProductOptions = useMemo(() => [
-    { value: "", label: "Barcha tovarlar" },
+    { value: "", label: t("Barcha tovarlar", "Все товары") },
     ...allProducts
       .filter((p) => !addCatId || String(p.category_id) === addCatId)
       .map((p) => ({ p, variants: variantsOf(p.id) }))
@@ -543,7 +543,7 @@ export default function ShopProductsTable({
       .map(({ p, variants }) => {
         const cnt = variants.length;
         const pName = p.name_uz ?? p.name ?? p.name_ru ?? `#${p.id}`;
-        const suffix = !catalogReady ? "" : cnt > 0 ? ` (${cnt} ta variant)` : " (tovar turlari qo'shilmoqda)";
+        const suffix = !catalogReady ? "" : cnt > 0 ? t(` (${cnt} ta variant)`, ` (вариантов: ${cnt})`) : t(" (tovar turlari qo'shilmoqda)", " (виды товара добавляются)");
         // The label shows one language; search the other product names and the variants too.
         const keywords = [p.name_uz, p.name_ru, p.name, ...variants.map((v) => v.name)]
           .filter((x): x is string => !!x);
@@ -592,12 +592,12 @@ export default function ShopProductsTable({
       ops.push(op);
     }
     if (errors.length) { toast.error(firstErrors(errors)); return; }
-    const droppedMsg = droppedIds.length ? `${droppedIds.length} ta tanlangan variant katalogdan olib tashlangan — saqlanmadi` : "";
+    const droppedMsg = droppedIds.length ? t(`${droppedIds.length} ta tanlangan variant katalogdan olib tashlangan — saqlanmadi`, `Выбранных вариантов, удалённых из каталога: ${droppedIds.length} — не сохранены`) : "";
     if (droppedIds.length) setVariantRows((prev) => untickRows(prev, droppedIds));
     if (ops.length === 0) {
       if (droppedMsg) toast.error(droppedMsg);
-      else if (checkedCount === 0) toast.error("Kamida bitta variant tanlang");
-      else { toast.info("O'zgarishlar yo'q"); closeAddModal(); }
+      else if (checkedCount === 0) toast.error(t("Kamida bitta variant tanlang", "Выберите хотя бы один вариант"));
+      else { toast.info(t("O'zgarishlar yo'q", "Изменений нет")); closeAddModal(); }
       return;
     }
 
@@ -625,8 +625,8 @@ export default function ShopProductsTable({
       onRefetch?.();
     }
     const done: string[] = [];
-    if (created) done.push(`${created} ta yangi qo'shildi`);
-    if (updated) done.push(`${updated} ta yangilandi`);
+    if (created) done.push(t(`${created} ta yangi qo'shildi`, `добавлено новых: ${created}`));
+    if (updated) done.push(t(`${updated} ta yangilandi`, `обновлено: ${updated}`));
     reportSave(done, failures);
     if (failures.length === 0) closeAddModal();
   };
@@ -698,11 +698,11 @@ export default function ShopProductsTable({
       if (r.checked && !r.orig && !variantIds.has(Number(id))) droppedIds.push(Number(id));
     }
     if (errors.length) { toast.error(firstErrors(errors)); return; }
-    const droppedMsg = droppedIds.length ? `${droppedIds.length} ta variant katalogdan olib tashlangan — saqlanmadi` : "";
+    const droppedMsg = droppedIds.length ? t(`${droppedIds.length} ta variant katalogdan olib tashlangan — saqlanmadi`, `Вариантов, удалённых из каталога: ${droppedIds.length} — не сохранены`) : "";
     if (droppedIds.length) setEditRows((prev) => untickRows(prev, droppedIds));
     if (ops.length === 0) {
       if (droppedMsg) toast.error(droppedMsg);
-      else { toast.info("O'zgarishlar yo'q"); closeEditModal(); }
+      else { toast.info(t("O'zgarishlar yo'q", "Изменений нет")); closeEditModal(); }
       return;
     }
 
@@ -731,9 +731,9 @@ export default function ShopProductsTable({
       onRefetch?.();
     }
     const done: string[] = [];
-    if (created) done.push(`${created} ta qo'shildi`);
-    if (updated) done.push(`${updated} ta yangilandi`);
-    if (deleted) done.push(`${deleted} ta o'chirildi`);
+    if (created) done.push(t(`${created} ta qo'shildi`, `добавлено: ${created}`));
+    if (updated) done.push(t(`${updated} ta yangilandi`, `обновлено: ${updated}`));
+    if (deleted) done.push(t(`${deleted} ta o'chirildi`, `удалено: ${deleted}`));
     reportSave(done, failures);
     if (failures.length === 0) closeEditModal();
   };
@@ -752,12 +752,12 @@ export default function ShopProductsTable({
       endBusy();
       onRefetch?.();
     }
-    if (failures.length === 0) toast.success(`${group.productName} o'chirildi`);
-    else toast.error(`${deleted} ta o'chirildi, ${failures.length} ta xatolik: ${failures[0]}`);
+    if (failures.length === 0) toast.success(t(`${group.productName} o'chirildi`, `${group.productName} удалён`));
+    else toast.error(t(`${deleted} ta o'chirildi, ${failures.length} ta xatolik: ${failures[0]}`, `удалено: ${deleted}, ошибок: ${failures.length}: ${failures[0]}`));
   };
 
   const handleDeleteSingle = async (id: number) => {
-    try { await axiosClient.delete(`/shop-product/${id}`); toast.success("Variant o'chirildi"); }
+    try { await axiosClient.delete(`/shop-product/${id}`); toast.success(t("Variant o'chirildi", "Вариант удалён")); }
     catch (e) { toast.error(apiError(e)); }
     finally { onRefetch?.(); }
   };
@@ -792,7 +792,7 @@ export default function ShopProductsTable({
         expectCount: changed.count !== undefined ? inlineOrig.count : undefined,
       });
       if (res.ok) {
-        toast.success("Yangilandi");
+        toast.success(t("Yangilandi", "Обновлено"));
         setInlineEditId(null);
       } else {
         toast.error(res.message);
@@ -825,11 +825,11 @@ export default function ShopProductsTable({
         const pi = p.product_item;
         const pname = pi?.product?.name_uz ?? pi?.product?.name ?? pi?.name ?? "";
         const { label } = getVariantInfo(p);
-        return { "Tovar": pname, "Variant": label, "Soni": p.count ?? 0, "Sotilgan": p.sold_count ?? 0, "Oxirgi savdo": p.last_sold ? Moment(p.last_sold).format('DD.MM.YYYY') : "", "Narx": p.price ?? 0, "Skidka narxi": p.bonus_price ?? "" };
+        return { [t("Tovar", "Товар")]: pname, [t("Variant", "Вариант")]: label, [t("Soni", "Количество")]: p.count ?? 0, [t("Sotilgan", "Продано")]: p.sold_count ?? 0, [t("Oxirgi savdo", "Последняя продажа")]: p.last_sold ? Moment(p.last_sold).format('DD.MM.YYYY') : "", [t("Narx", "Цена")]: p.price ?? 0, [t("Skidka narxi", "Цена со скидкой")]: p.bonus_price ?? "" };
       })
     );
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Tovarlar");
+    XLSX.utils.book_append_sheet(wb, ws, t("Tovarlar", "Товары"));
     XLSX.writeFile(wb, `shop-products-${Moment().format("YYYY-MM-DD")}.xlsx`);
   };
 
@@ -839,11 +839,11 @@ export default function ShopProductsTable({
         <TableToolbar
           search={search}
           onSearch={(v) => { setSearch(v); setCurrentPage(1); }}
-          searchPlaceholder="Tovar qidirish..."
+          searchPlaceholder={t("Tovar qidirish...", "Поиск товара...")}
           showValue={optionValue}
           onShowChange={(v) => { setOptionValue(v); setCurrentPage(1); }}
           onExport={handleExport}
-          action={<Button size="sm" variant="primary" startIcon={<PlusIcon className="size-4 fill-white" />} onClick={openAdd}>Qo&apos;shish</Button>}
+          action={<Button size="sm" variant="primary" startIcon={<PlusIcon className="size-4 fill-white" />} onClick={openAdd}>{t("Qo'shish", "Добавить")}</Button>}
         />
         <Table>
           <TableHeader>
@@ -860,7 +860,7 @@ export default function ShopProductsTable({
           </TableHeader>
           <TableBody>
             {currentGroups.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="py-8 text-center text-gray-400">Tovarlar yo&apos;q</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="py-8 text-center text-gray-400">{t("Tovarlar yo'q", "Товаров нет")}</TableCell></TableRow>
             ) : currentGroups.map((group, idx) => {
               const isExpanded = expandedProducts.has(group.productId);
               const variantCount = group.shopItems.length;
@@ -890,26 +890,26 @@ export default function ShopProductsTable({
                     <div>
                       {group.productName}
                       {group.archived && (
-                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-medium align-middle">Katalogdan o&apos;chirilgan</span>
+                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-medium align-middle">{t("Katalogdan o'chirilgan", "Удалён из каталога")}</span>
                       )}
                     </div>
                     {group.categoryName && <span className="text-xs text-gray-400">{group.categoryName}</span>}
                   </TableCell>
                   <TableCell className="px-4 py-4 text-sm text-center">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-semibold">{variantCount} ta</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-semibold">{variantCount} {t("ta", "шт.")}</span>
                     {unassigned.length > 0 && (
                       <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 text-[10px] font-medium">+{unassigned.length}</span>
                     )}
                   </TableCell>
-                  <TableCell className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300 font-semibold text-right">{group.totalCount > 0 ? `${group.totalCount.toLocaleString()} ta` : "—"}</TableCell>
-                  <TableCell className="px-4 py-4 text-sm font-semibold text-gray-800 dark:text-white text-right">{group.totalSold} ta</TableCell>
+                  <TableCell className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300 font-semibold text-right">{group.totalCount > 0 ? t(`${group.totalCount.toLocaleString()} ta`, `${group.totalCount.toLocaleString()} шт.`) : "—"}</TableCell>
+                  <TableCell className="px-4 py-4 text-sm font-semibold text-gray-800 dark:text-white text-right">{group.totalSold} {t("ta", "шт.")}</TableCell>
                   <TableCell className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-center gap-1">
                       <button
                         type="button"
                         onClick={() => { setInfoGroup(group); openInfoModal(); }}
                         className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition"
-                        title="Batafsil ma'lumot"
+                        title={t("Batafsil ma'lumot", "Подробнее")}
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
@@ -935,22 +935,22 @@ export default function ShopProductsTable({
                       <TableCell colSpan={2} className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
                         {label || "—"}
                         {!group.archived && isCatalogArchived(sp) && (
-                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-medium">Katalogdan o&apos;chirilgan</span>
+                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-medium">{t("Katalogdan o'chirilgan", "Удалён из каталога")}</span>
                         )}
                       </TableCell>
                       {isEditing ? (
                         <>
                           <TableCell className="px-4 py-2">
-                            <input type="number" min="0" placeholder="Soni" value={inlineForm.count}
+                            <input type="number" min="0" placeholder={t("Soni", "Количество")} value={inlineForm.count}
                               onChange={(e) => setInlineForm({ ...inlineForm, count: e.target.value })}
                               className="w-20 px-2 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none" />
                           </TableCell>
                           <TableCell className="px-4 py-2">
                             <div className="flex items-center gap-2">
-                              <input type="number" min="0" placeholder="Narx" value={inlineForm.price}
+                              <input type="number" min="0" placeholder={t("Narx", "Цена")} value={inlineForm.price}
                                 onChange={(e) => setInlineForm({ ...inlineForm, price: e.target.value })}
                                 className="w-28 px-2 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none" />
-                              <input type="number" min="0" placeholder="Skidka" value={inlineForm.bonus_price}
+                              <input type="number" min="0" placeholder={t("Skidka", "Скидка")} value={inlineForm.bonus_price}
                                 onChange={(e) => setInlineForm({ ...inlineForm, bonus_price: e.target.value })}
                                 className="w-28 px-2 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                             </div>
@@ -958,11 +958,11 @@ export default function ShopProductsTable({
                           <TableCell className="px-4 py-2">
                             <div className="flex items-center gap-1.5">
                               <button onClick={() => saveInlineEdit(sp)} disabled={inlineSaving}
-                                className="p-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors disabled:opacity-50" title="Saqlash">
+                                className="p-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors disabled:opacity-50" title={t("Saqlash", "Сохранить")}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
                               </button>
                               <button onClick={cancelInlineEdit}
-                                className="p-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors" title="Bekor qilish">
+                                className="p-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors" title={t("Bekor qilish", "Отмена")}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
                               </button>
                             </div>
@@ -970,28 +970,28 @@ export default function ShopProductsTable({
                         </>
                       ) : (
                         <>
-                          <TableCell className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{sp.count ? `${sp.count} ta` : "—"}</TableCell>
+                          <TableCell className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{sp.count ? t(`${sp.count} ta`, `${sp.count} шт.`) : "—"}</TableCell>
                           <TableCell className="px-4 py-3 text-sm">
                             {sp.bonus_price != null && sp.bonus_price > 0 && sp.price != null && sp.bonus_price < sp.price ? (
                               <div>
-                                <span className="font-bold text-brand-600 dark:text-brand-400">{formatMoney(sp.bonus_price)} so&apos;m</span>
+                                <span className="font-bold text-brand-600 dark:text-brand-400">{formatMoney(sp.bonus_price)} {t("so'm", "сум")}</span>
                                 {dp !== null && dp > 0 && <span className="ml-1 px-1 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-medium">-{dp}%</span>}
-                                <div className="text-[11px] text-gray-400 line-through">{formatMoney(sp.price)} so&apos;m</div>
+                                <div className="text-[11px] text-gray-400 line-through">{formatMoney(sp.price)} {t("so'm", "сум")}</div>
                               </div>
                             ) : (
-                              <span className="font-semibold text-gray-800 dark:text-white">{sp.price != null ? `${formatMoney(sp.price)} so'm` : "—"}</span>
+                              <span className="font-semibold text-gray-800 dark:text-white">{sp.price != null ? t(`${formatMoney(sp.price)} so'm`, `${formatMoney(sp.price)} сум`) : "—"}</span>
                             )}
                           </TableCell>
                           <TableCell className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
-                              <button onClick={() => startInlineEdit(sp)} title="Tahrirlash"
+                              <button onClick={() => startInlineEdit(sp)} title={t("Tahrirlash", "Редактировать")}
                                 className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 hover:text-blue-600 transition-colors">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                                 </svg>
                               </button>
-                              <button onClick={() => handleDeleteSingle(sp.id)} title="O'chirish"
+                              <button onClick={() => handleDeleteSingle(sp.id)} title={t("O'chirish", "Удалить")}
                                 className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 hover:text-red-500 transition-colors">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6" />
@@ -1016,12 +1016,12 @@ export default function ShopProductsTable({
                         {info.color?.startsWith('#') && <span className="w-7 h-7 rounded-lg inline-block ring-1 ring-black/10 shadow-sm opacity-50" style={{ background: info.color }} />}
                       </TableCell>
                       <TableCell colSpan={2} className="px-4 py-3 text-sm text-gray-400 italic">
-                        {info.label} <span className="text-[10px] font-medium text-orange-500">(qo&apos;shilmagan)</span>
+                        {info.label} <span className="text-[10px] font-medium text-orange-500">{t("(qo'shilmagan)", "(не добавлен)")}</span>
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-400">—</TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-400">—</TableCell>
                       <TableCell className="px-4 py-3">
-                        <button onClick={() => openEditGroup(group)} className="text-xs text-emerald-600 hover:text-emerald-700 font-medium">+ Qo&apos;shish</button>
+                        <button onClick={() => openEditGroup(group)} className="text-xs text-emerald-600 hover:text-emerald-700 font-medium">{t("+ Qo'shish", "+ Добавить")}</button>
                       </TableCell>
                     </TableRow>
                   );
@@ -1034,7 +1034,7 @@ export default function ShopProductsTable({
           currentPage={currentPage}
           maxPage={maxPage}
           totalItems={groupedData.length}
-          totalLabel="ta tovar"
+          totalLabel={t("ta tovar", "товаров")}
           onChange={setCurrentPage}
           scrollTargetRef={tableTopRef}
         />
@@ -1049,8 +1049,8 @@ export default function ShopProductsTable({
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-lg font-bold text-white">Tovar qo&apos;shish</h4>
-                <p className="text-sm text-white/70">Kategoriya tanlang yoki qidiring, variantlarni belgilang</p>
+                <h4 className="text-lg font-bold text-white">{t("Tovar qo'shish", "Добавить товар")}</h4>
+                <p className="text-sm text-white/70">{t("Kategoriya tanlang yoki qidiring, variantlarni belgilang", "Выберите или найдите категорию, отметьте варианты")}</p>
               </div>
               {/* Manual refresh — for the case when a SUPER admin just added
                   a new category/product and the shop owner wants it visible
@@ -1059,25 +1059,25 @@ export default function ShopProductsTable({
                 type="button"
                 onClick={() => loadCatalog()}
                 disabled={catalogStatus === "loading"}
-                title="Katalogni yangilash — SUPER admin yangi tovar/kategoriya qo'shsa, shu tugma orqali darhol ko'rasiz"
-                aria-label="Katalogni yangilash"
+                title={t("Katalogni yangilash — SUPER admin yangi tovar/kategoriya qo'shsa, shu tugma orqali darhol ko'rasiz", "Обновить каталог — когда SUPER админ добавит новый товар/категорию, нажмите, чтобы сразу увидеть")}
+                aria-label={t("Katalogni yangilash", "Обновить каталог")}
                 className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-white/15 hover:bg-white/25 disabled:opacity-50 transition-colors backdrop-blur-sm"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className={catalogStatus === "loading" ? "animate-spin" : ""}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M20 12a8 8 0 1 1-3.05-6.29M20 4v5h-5" />
                 </svg>
-                Yangilash
+                {t("Yangilash", "Обновить")}
               </button>
             </div>
           </div>
           <div className="px-6 pt-4 pb-2 shrink-0 border-b border-gray-100 dark:border-white/5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label>Kategoriya</Label>
-                <Select options={[{ value: "", label: "Barchasi" }, ...allCategories]} defaultValue={addCatId} onChange={(v) => { setAddCatId(v); setAddProdId(""); }} />
+                <Label>{t("Kategoriya", "Категория")}</Label>
+                <Select options={[{ value: "", label: t("Barchasi", "Все") }, ...allCategories]} defaultValue={addCatId} onChange={(v) => { setAddCatId(v); setAddProdId(""); }} />
               </div>
               <div>
-                <Label>Tovar</Label>
+                <Label>{t("Tovar", "Товар")}</Label>
                 <Select options={addProductOptions} defaultValue={addProdId} onChange={(v) => setAddProdId(v)} />
               </div>
             </div>
@@ -1087,15 +1087,15 @@ export default function ShopProductsTable({
               <div className="py-12 text-center">
                 {catalogStatus === "error" ? (
                   <>
-                    <p className="text-sm text-gray-400">Katalogni yuklab bo&apos;lmadi</p>
-                    <button type="button" onClick={() => loadCatalog()} className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium">Qayta urinish</button>
+                    <p className="text-sm text-gray-400">{t("Katalogni yuklab bo'lmadi", "Не удалось загрузить каталог")}</p>
+                    <button type="button" onClick={() => loadCatalog()} className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium">{t("Qayta urinish", "Повторить")}</button>
                   </>
                 ) : (
-                  <p className="text-sm text-gray-400">Yuklanmoqda...</p>
+                  <p className="text-sm text-gray-400">{t("Yuklanmoqda...", "Загрузка...")}</p>
                 )}
               </div>
             ) : addFilteredProducts.length === 0 ? (
-              <div className="py-12 text-center"><p className="text-sm text-gray-400">Tovar topilmadi</p></div>
+              <div className="py-12 text-center"><p className="text-sm text-gray-400">{t("Tovar topilmadi", "Товар не найден")}</p></div>
             ) : (
               <div className="space-y-2">
                 {addFilteredProducts.map((prod) => {
@@ -1111,7 +1111,7 @@ export default function ShopProductsTable({
                           </svg>
                           <div className="flex-1 min-w-0">
                             <span className="font-semibold text-sm text-gray-400 dark:text-gray-500">{pName}</span>
-                            <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">Tovar turlari qo&apos;shilmoqda — administrator variant qo&apos;shgach narx kiritish mumkin bo&apos;ladi</p>
+                            <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">{t("Tovar turlari qo'shilmoqda — administrator variant qo'shgach narx kiritish mumkin bo'ladi", "Виды товара добавляются — цену можно будет указать после того, как администратор добавит варианты")}</p>
                           </div>
                         </div>
                       </div>
@@ -1139,17 +1139,17 @@ export default function ShopProductsTable({
                         </svg>
                         <div className="flex-1 min-w-0">
                           <span className="font-semibold text-sm text-gray-800 dark:text-white">{pName}</span>
-                          <span className="ml-2 text-xs text-gray-400">({prodItems.length} ta variant)</span>
+                          <span className="ml-2 text-xs text-gray-400">({prodItems.length} {t("ta variant)", "вариантов)")}</span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {existingInShop > 0 && (
                             <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[10px] font-medium">
-                              {existingInShop} ta sizda bor
+                              {existingInShop} {t("ta sizda bor", "шт. уже у вас")}
                             </span>
                           )}
                           {checkedInProd > 0 && (
                             <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
-                              {checkedInProd} ta tanlandi
+                              {checkedInProd} {t("ta tanlandi", "выбрано")}
                             </span>
                           )}
                         </div>
@@ -1176,12 +1176,12 @@ export default function ShopProductsTable({
           </div>
           <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 dark:border-white/5 shrink-0 justify-between">
             <span className="text-xs text-gray-400">
-              {addFilteredProducts.length} ta tovar
-              {hiddenCheckedCount > 0 && ` · yana ${hiddenCheckedCount} ta tanlov boshqa filtrda`}
+              {addFilteredProducts.length} {t("ta tovar", "товаров")}
+              {hiddenCheckedCount > 0 && t(` · yana ${hiddenCheckedCount} ta tanlov boshqa filtrda`, ` · ещё выбрано в другом фильтре: ${hiddenCheckedCount}`)}
             </span>
             <div className="flex items-center gap-3">
-              <Button size="sm" variant="outline" onClick={closeAddModal} disabled={addSaving}>Bekor qilish</Button>
-              <Button size="sm" onClick={handleAddSave} disabled={addSaving || checkedCount === 0}>{addSaving ? "Saqlanmoqda..." : `Saqlash (${checkedCount} ta)`}</Button>
+              <Button size="sm" variant="outline" onClick={closeAddModal} disabled={addSaving}>{t("Bekor qilish", "Отмена")}</Button>
+              <Button size="sm" onClick={handleAddSave} disabled={addSaving || checkedCount === 0}>{addSaving ? t("Saqlanmoqda...", "Сохранение...") : t(`Saqlash (${checkedCount} ta)`, `Сохранить (${checkedCount})`)}</Button>
             </div>
           </div>
         </div>
@@ -1199,7 +1199,7 @@ export default function ShopProductsTable({
                 </svg>
               </div>
               <div>
-                <h4 className="text-lg font-bold text-white">Variantlarni tahrirlash</h4>
+                <h4 className="text-lg font-bold text-white">{t("Variantlarni tahrirlash", "Редактировать варианты")}</h4>
                 {editGroup && <p className="text-sm text-white/70">{editGroup.productName}</p>}
               </div>
             </div>
@@ -1209,11 +1209,11 @@ export default function ShopProductsTable({
               <div className="py-12 text-center">
                 {catalogStatus === "error" ? (
                   <>
-                    <p className="text-sm text-gray-400">Katalogni yuklab bo&apos;lmadi</p>
-                    <button type="button" onClick={() => loadCatalog()} className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium">Qayta urinish</button>
+                    <p className="text-sm text-gray-400">{t("Katalogni yuklab bo'lmadi", "Не удалось загрузить каталог")}</p>
+                    <button type="button" onClick={() => loadCatalog()} className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium">{t("Qayta urinish", "Повторить")}</button>
                   </>
                 ) : (
-                  <p className="text-sm text-gray-400">Yuklanmoqda...</p>
+                  <p className="text-sm text-gray-400">{t("Yuklanmoqda...", "Загрузка...")}</p>
                 )}
               </div>
             ) : editGroup && (() => {
@@ -1223,8 +1223,8 @@ export default function ShopProductsTable({
             })()}
           </div>
           <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 dark:border-white/5 shrink-0 justify-end">
-            <Button size="sm" variant="outline" onClick={closeEditModal} disabled={editSaving}>Bekor qilish</Button>
-            <Button size="sm" onClick={handleEditSave} disabled={editSaving || !catalogReady}>{editSaving ? "Saqlanmoqda..." : `Saqlash (${editCheckedCount} ta)`}</Button>
+            <Button size="sm" variant="outline" onClick={closeEditModal} disabled={editSaving}>{t("Bekor qilish", "Отмена")}</Button>
+            <Button size="sm" onClick={handleEditSave} disabled={editSaving || !catalogReady}>{editSaving ? t("Saqlanmoqda...", "Сохранение...") : t(`Saqlash (${editCheckedCount} ta)`, `Сохранить (${editCheckedCount})`)}</Button>
           </div>
         </div>
       </Modal>
@@ -1251,7 +1251,7 @@ export default function ShopProductsTable({
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Tovar ma&apos;lumoti</p>
+                    <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">{t("Tovar ma'lumoti", "Информация о товаре")}</p>
                     <h4 className="text-lg font-bold text-white leading-tight truncate">{infoGroup.productName}</h4>
                     {infoGroup.categoryName && (
                       <p className="text-sm text-white/80 mt-0.5">📂 {infoGroup.categoryName}</p>
@@ -1269,11 +1269,11 @@ export default function ShopProductsTable({
                   {/* Names UZ/RU */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/3 p-3">
-                      <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">Nomi (UZ)</p>
+                      <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">{t("Nomi (UZ)", "Название (UZ)")}</p>
                       <p className="text-sm font-medium text-gray-800 dark:text-white">{prod?.name_uz ?? prod?.name ?? "—"}</p>
                     </div>
                     <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/3 p-3">
-                      <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">Nomi (RU)</p>
+                      <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">{t("Nomi (RU)", "Название (RU)")}</p>
                       <p className="text-sm font-medium text-gray-800 dark:text-white">{prod?.name_ru ?? "—"}</p>
                     </div>
                   </div>
@@ -1281,7 +1281,7 @@ export default function ShopProductsTable({
                   {/* Description */}
                   {desc && (
                     <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/3 p-3">
-                      <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">Tavsif</p>
+                      <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">{t("Tavsif", "Описание")}</p>
                       <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{desc}</p>
                     </div>
                   )}
@@ -1289,19 +1289,19 @@ export default function ShopProductsTable({
                   {/* Stats grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 p-3">
-                      <p className="text-[10px] font-semibold uppercase text-blue-600 dark:text-blue-400">Variantlar</p>
+                      <p className="text-[10px] font-semibold uppercase text-blue-600 dark:text-blue-400">{t("Variantlar", "Варианты")}</p>
                       <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{variants.length}</p>
                     </div>
                     <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-3">
-                      <p className="text-[10px] font-semibold uppercase text-emerald-600 dark:text-emerald-400">Skladda</p>
+                      <p className="text-[10px] font-semibold uppercase text-emerald-600 dark:text-emerald-400">{t("Skladda", "На складе")}</p>
                       <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{totalCount.toLocaleString()}</p>
                     </div>
                     <div className="rounded-xl bg-orange-50 dark:bg-orange-900/20 p-3">
-                      <p className="text-[10px] font-semibold uppercase text-orange-600 dark:text-orange-400">Sotilgan</p>
+                      <p className="text-[10px] font-semibold uppercase text-orange-600 dark:text-orange-400">{t("Sotilgan", "Продано")}</p>
                       <p className="text-xl font-bold text-orange-700 dark:text-orange-300">{totalSold.toLocaleString()}</p>
                     </div>
                     <div className="rounded-xl bg-purple-50 dark:bg-purple-900/20 p-3">
-                      <p className="text-[10px] font-semibold uppercase text-purple-600 dark:text-purple-400">Qiymati</p>
+                      <p className="text-[10px] font-semibold uppercase text-purple-600 dark:text-purple-400">{t("Qiymati", "Стоимость")}</p>
                       <p className="text-xl font-bold text-purple-700 dark:text-purple-300">{formatMoney(totalValue)}</p>
                     </div>
                   </div>
@@ -1310,13 +1310,13 @@ export default function ShopProductsTable({
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                     {infoGroup.unitType?.symbol && (
                       <div className="rounded-lg bg-gray-50 dark:bg-white/3 px-3 py-2">
-                        <span className="text-gray-400">O&apos;lchov: </span>
+                        <span className="text-gray-400">{t("O'lchov:", "Ед. изм.:")} </span>
                         <span className="font-semibold text-gray-700 dark:text-gray-200">{infoGroup.unitType.symbol}</span>
                       </div>
                     )}
                     {prod?.type && (
                       <div className="rounded-lg bg-gray-50 dark:bg-white/3 px-3 py-2">
-                        <span className="text-gray-400">Tur: </span>
+                        <span className="text-gray-400">{t("Tur:", "Тип:")} </span>
                         <span className="font-semibold text-gray-700 dark:text-gray-200">{prod.type}</span>
                       </div>
                     )}
@@ -1329,11 +1329,11 @@ export default function ShopProductsTable({
                   {/* All variants list */}
                   <div>
                     <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400 mb-2">
-                      Barcha variantlar ({variants.length})
+                      {t("Barcha variantlar (", "Все варианты (")}{variants.length})
                     </p>
                     <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                       {variants.length === 0 ? (
-                        <p className="text-sm text-gray-400 text-center py-4">Variant yo&apos;q</p>
+                        <p className="text-sm text-gray-400 text-center py-4">{t("Variant yo'q", "Нет вариантов")}</p>
                       ) : variants.map((v) => {
                         const sp = infoGroup.shopItems.find((s) => stockVariantId(s) === v.id);
                         const inShop = !!sp;
@@ -1371,16 +1371,16 @@ export default function ShopProductsTable({
                               <p className="text-sm font-medium text-gray-800 dark:text-white truncate">{vLabel}</p>
                               {inShop ? (
                                 <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                                  Sklad: <span className="font-semibold text-gray-700 dark:text-gray-200">{sp!.count ?? 0}</span>
+                                  {t("Sklad:", "Склад:")} <span className="font-semibold text-gray-700 dark:text-gray-200">{sp!.count ?? 0}</span>
                                   {" · "}
-                                  Narx: <span className="font-semibold text-gray-700 dark:text-gray-200">{sp!.price ? formatMoney(sp!.price) : "—"}</span>
+                                  {t("Narx:", "Цена:")} <span className="font-semibold text-gray-700 dark:text-gray-200">{sp!.price ? formatMoney(sp!.price) : "—"}</span>
                                   {sp!.bonus_price && sp!.bonus_price > 0 && sp!.bonus_price < (sp!.price ?? 0) ? (
                                     <> {" · "}<span className="text-rose-500 font-semibold">skidka {formatMoney(sp!.bonus_price)}</span></>
                                   ) : null}
                                   {sp!.sold_count ? <> {" · "}sotilgan: <span className="font-semibold">{sp!.sold_count}</span></> : null}
                                 </p>
                               ) : (
-                                <p className="text-[11px] text-gray-400">Do&apos;konda yo&apos;q</p>
+                                <p className="text-[11px] text-gray-400">{t("Do'konda yo'q", "Нет в магазине")}</p>
                               )}
                             </div>
                           </div>
@@ -1390,11 +1390,11 @@ export default function ShopProductsTable({
                   </div>
                 </div>
                 <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 dark:border-white/5 shrink-0 justify-end">
-                  <Button size="sm" variant="outline" onClick={closeInfoModal}>Yopish</Button>
+                  <Button size="sm" variant="outline" onClick={closeInfoModal}>{t("Yopish", "Закрыть")}</Button>
                   <Button
                     size="sm"
                     onClick={() => { closeInfoModal(); openEditGroup(infoGroup); }}
-                  >Tahrirlash</Button>
+                  >{t("Tahrirlash", "Редактировать")}</Button>
                 </div>
               </>
             );
@@ -1420,16 +1420,17 @@ function VariantCheckboxList({
   shopId: number;
   allProducts: ProductRaw[];
 }) {
+  const { t } = useLang();
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-          Variantlar <span className="ml-1.5 text-gray-400 font-normal">({variants.length} ta)</span>
+          {t("Variantlar", "Варианты")} <span className="ml-1.5 text-gray-400 font-normal">({variants.length} ta)</span>
         </p>
         {checkedCount > 0 && (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 text-xs font-bold border border-emerald-100 dark:border-emerald-800/30">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-            {checkedCount} ta tanlandi
+            {checkedCount} {t("ta tanlandi", "выбрано")}
           </span>
         )}
       </div>
@@ -1464,31 +1465,31 @@ function VariantCheckboxList({
                   </div>
                 </div>
                 {existing && !row.checked && (
-                  <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[11px] font-medium">Sizda bor</span>
+                  <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[11px] font-medium">{t("Sizda bor", "Уже у вас")}</span>
                 )}
               </label>
               {row.checked && (
                 <div className="px-4 pb-3 pt-0">
                   {existing && (
                     <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 px-3 py-2 mb-3">
-                      <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">Sizda bor &mdash; o&apos;zgartirmoqchimisiz?</p>
+                      <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">{t("Sizda bor — o'zgartirmoqchimisiz?", "Уже у вас — изменить?")}</p>
                       <p className="text-xs text-blue-600 dark:text-blue-400">
-                        Hozirgi: {existing.count ?? 0} ta &middot; {existing.price ? `${formatMoney(existing.price)} so'm` : "narx yo'q"}
-                        {existing.bonus_price != null && existing.bonus_price > 0 && existing.bonus_price < (existing.price ?? 0) ? ` · skidka: ${formatMoney(existing.bonus_price)} so'm` : ""}
+                        {t("Hozirgi:", "Сейчас:")} {existing.count ?? 0} {t("ta ·", "шт. ·")} {existing.price ? t(`${formatMoney(existing.price)} so'm`, `${formatMoney(existing.price)} сум`) : t("narx yo'q", "нет цены")}
+                        {existing.bonus_price != null && existing.bonus_price > 0 && existing.bonus_price < (existing.price ?? 0) ? t(` · skidka: ${formatMoney(existing.bonus_price)} so'm`, ` · скидка: ${formatMoney(existing.bonus_price)} сум`) : ""}
                       </p>
                     </div>
                   )}
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Soni <span className="text-error-500">*</span></label>
+                      <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t("Soni", "Количество")} <span className="text-error-500">*</span></label>
                       <Input type="number" min="0" placeholder="0" value={row.count} onChange={(e) => update(v.id, "count", e.target.value)} />
                     </div>
                     <div>
-                      <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Narx <span className="text-error-500">*</span></label>
-                      <Input type="number" min="0" placeholder="so'm" value={row.price} onChange={(e) => update(v.id, "price", e.target.value)} />
+                      <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t("Narx", "Цена")} <span className="text-error-500">*</span></label>
+                      <Input type="number" min="0" placeholder={t("so'm", "сум")} value={row.price} onChange={(e) => update(v.id, "price", e.target.value)} />
                     </div>
                     <div>
-                      <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Skidka narxi</label>
+                      <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t("Skidka narxi", "Цена со скидкой")}</label>
                       <Input type="number" min="0" placeholder="ixtiyoriy" value={row.bonus_price} onChange={(e) => update(v.id, "bonus_price", e.target.value)} />
                     </div>
                   </div>

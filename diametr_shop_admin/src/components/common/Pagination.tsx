@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import Button from "../ui/button/Button";
 
+import { useLang } from "../../context/LangContext";
 /**
  * Ideal pagination for our admin tables.
  *
@@ -55,6 +56,7 @@ export default function Pagination({
   onChange,
   scrollTargetRef,
 }: PaginationProps) {
+  const { t } = useLang();
   const go = (p: number) => {
     const clamped = Math.min(Math.max(1, p), maxPage);
     if (clamped === currentPage) return;
@@ -87,12 +89,12 @@ export default function Pagination({
         )}
         <span className="text-gray-300 dark:text-white/20">•</span>
         <span className="tabular-nums">
-          Sahifa <span className="font-semibold text-gray-700 dark:text-gray-200">{currentPage}</span> / {maxPage}
+          {t("Sahifa", "Страница")} <span className="font-semibold text-gray-700 dark:text-gray-200">{currentPage}</span> / {maxPage}
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <Button size="sm" variant="outline" disabled={!hasPrev} onClick={() => go(currentPage - 1)}>
-          Oldingi
+          {t("Oldingi", "Назад")}
         </Button>
         {tokens.map((t, i) =>
           t === "…" ? (
@@ -114,7 +116,7 @@ export default function Pagination({
           ),
         )}
         <Button size="sm" variant="outline" disabled={!hasNext} onClick={() => go(currentPage + 1)}>
-          Keyingi
+          {t("Keyingi", "Далее")}
         </Button>
       </div>
     </div>

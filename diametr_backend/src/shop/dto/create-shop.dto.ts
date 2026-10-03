@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { ShopInfoDto } from './shop-info.dto';
 import {
   IsInt,
   IsNotEmpty,
@@ -12,7 +13,7 @@ import {
   MinLength,
 } from 'class-validator';
 
-export class CreateShopDto {
+export class CreateShopDto extends ShopInfoDto {
   @ApiProperty({
     example: 'Mega Market',
     description: 'Do’kon nomi',
