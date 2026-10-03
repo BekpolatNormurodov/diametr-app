@@ -44,9 +44,9 @@ class VerifyBloc extends Cubit<VerifyState> {
                   : body['message']?.toString())
               : null) ??
           DioExceptions.fromDioError(e).message;
-      emit(VerifyErrorState(title: 'Xatolik', message: message));
+      emit(VerifyErrorState(title: 'error_title'.tr(), message: message));
     } catch (e) {
-      emit(VerifyErrorState(title: 'Xatolik', message: e.toString()));
+      emit(VerifyErrorState(title: 'error_title'.tr(), message: e.toString()));
     }
   }
 }

@@ -30,9 +30,9 @@ class SendSmsBloc extends Cubit<SendSmsState> {
                   : body['message']?.toString())
               : null) ??
           DioExceptions.fromDioError(e).message;
-      emit(SendSmsErrorState(title: 'Xatolik', message: message));
+      emit(SendSmsErrorState(title: 'error_title'.tr(), message: message));
     } catch (e) {
-      emit(SendSmsErrorState(title: 'Xatolik', message: e.toString()));
+      emit(SendSmsErrorState(title: 'error_title'.tr(), message: e.toString()));
     }
   }
 }

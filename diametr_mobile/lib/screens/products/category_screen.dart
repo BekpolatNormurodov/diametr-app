@@ -151,7 +151,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                               ? 'category_empty'.tr()
                               : 'search_empty'.tr(),
                           subtitle: _query.isEmpty
-                              ? "Kategoriyalar tez orada qo'shiladi."
+                              ? 'categories_soon_sub'.tr()
                               : null,
                         ),
                       );
@@ -164,7 +164,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     child: EmptyState(
                       icon: Iconsax.category,
                       title: 'category_empty'.tr(),
-                      subtitle: "Kategoriyalar tez orada qo'shiladi.",
+                      subtitle: 'categories_soon_sub'.tr(),
                     ),
                   );
                 },

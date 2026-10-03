@@ -51,7 +51,7 @@ class _ServiceAllScreenState extends State<ServiceAllScreen> {
   Widget _buildEmpty(BuildContext context) => EmptyState(
         icon: Iconsax.briefcase,
         title: 'services_empty'.tr(),
-        subtitle: "Tez orada yangi xizmatlar qo'shiladi.",
+        subtitle: 'services_soon_sub'.tr(),
       );
 
   Widget _buildShimmer(BuildContext context) => ListView.builder(

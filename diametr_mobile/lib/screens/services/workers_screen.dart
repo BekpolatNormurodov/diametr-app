@@ -66,7 +66,7 @@ class _WorkersScreenState extends State<WorkersScreen> {
   Widget _buildEmpty(BuildContext context) => EmptyState(
         icon: Iconsax.people,
         title: 'workers_empty'.tr(),
-        subtitle: "Hozircha bu yerda ustalar ro'yxati yo'q.",
+        subtitle: 'workers_empty_sub'.tr(),
       );
 
   Widget _buildShimmer(BuildContext context) => GridView.builder(

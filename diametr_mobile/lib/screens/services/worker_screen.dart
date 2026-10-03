@@ -68,7 +68,7 @@ class _WorkerScreenState extends State<WorkerScreen> {
   Widget _buildEmpty(BuildContext context) => EmptyState(
         icon: Iconsax.user_remove,
         title: 'worker_not_found'.tr(),
-        subtitle: "Bu usta haqida ma'lumot topilmadi.",
+        subtitle: 'worker_not_found_sub'.tr(),
       );
 
   Widget _buildBody(BuildContext context, dynamic data) {
@@ -122,7 +122,7 @@ class _WorkerScreenState extends State<WorkerScreen> {
         SizedBox(height: 12.h),
         _InfoTile(
           icon: Iconsax.dollar_circle,
-          text: '$amount so\'m / $period',
+          text: '$amount ${'currency'.tr()} / $period',
           accent: true,
         ),
         if (desc.isNotEmpty) ...[

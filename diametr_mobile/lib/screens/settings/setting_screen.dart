@@ -60,7 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _LangTile(
                   flag: '🇺🇿',
                   label: "O'zbek",
-                  sublabel: "Uzbek tili",
+                  sublabel: 'lang_uz_sub'.tr(),
                   isSelected: currentLang == 'uz',
                   onTap: () {
                     context.setLocale(const Locale('uz', 'UZ'));
@@ -72,7 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _LangTile(
                   flag: '🇷🇺',
                   label: 'Русский',
-                  sublabel: "Rus tili",
+                  sublabel: 'lang_ru_sub'.tr(),
                   isSelected: currentLang == 'ru',
                   onTap: () {
                     context.setLocale(const Locale('ru', 'RU'));
@@ -99,7 +99,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _ThemeTile(
                   icon: Iconsax.sun_1,
                   label: 'light_theme'.tr(),
-                  sublabel: "Yorug' rejim",
+                  sublabel: 'light_theme_sub'.tr(),
                   isSelected: !isDark,
                   onTap: () => context.read<ThemeCubit>().setLight(),
                 ),
@@ -107,7 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _ThemeTile(
                   icon: Iconsax.moon,
                   label: 'dark_theme'.tr(),
-                  sublabel: "Qorong'u rejim",
+                  sublabel: 'dark_theme_sub'.tr(),
                   isSelected: isDark,
                   onTap: () => context.read<ThemeCubit>().setDark(),
                 ),

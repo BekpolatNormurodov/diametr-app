@@ -772,7 +772,7 @@ class _ProductsTabState extends State<_ProductsTab> {
   Widget _empty(BuildContext context) => EmptyState(
         icon: Iconsax.search_normal_1,
         title: 'search_empty'.tr(),
-        subtitle: "Boshqa kalit so'z bilan qidirib ko'ring.",
+        subtitle: 'search_try_other_word'.tr(),
       );
 }
 
@@ -1389,7 +1389,7 @@ class _CategoriesTab extends StatelessWidget {
   Widget _empty(BuildContext context) => EmptyState(
         icon: Iconsax.category,
         title: 'search_empty'.tr(),
-        subtitle: "Boshqa kategoriya bilan urinib ko'ring.",
+        subtitle: 'search_try_other_category'.tr(),
       );
 }
 
@@ -1678,7 +1678,7 @@ class _ShopsTabState extends State<_ShopsTab> {
   Widget _empty(BuildContext context) => EmptyState(
         icon: Iconsax.shop,
         title: 'search_empty'.tr(),
-        subtitle: "Bu nom bilan do'kon topilmadi.",
+        subtitle: 'search_no_shop_name'.tr(),
       );
 }
 

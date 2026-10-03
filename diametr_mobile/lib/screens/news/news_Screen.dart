@@ -51,7 +51,7 @@ class _NewsScreenState extends State<NewsScreen> {
   Widget _buildEmpty(BuildContext context) => EmptyState(
         icon: Iconsax.document_text,
         title: 'news_empty'.tr(),
-        subtitle: "Yangi maqolalar paydo bo'lganda shu yerda ko'rasiz.",
+        subtitle: 'news_empty_sub'.tr(),
       );
 
   Widget _buildShimmer(BuildContext context) => ListView.builder(

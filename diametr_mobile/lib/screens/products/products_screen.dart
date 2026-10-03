@@ -91,7 +91,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 child: EmptyState(
                   icon: Iconsax.box,
                   title: 'products_empty'.tr(),
-                  subtitle: "Bu bo'limda hozircha mahsulotlar yo'q.",
+                  subtitle: 'section_empty_sub'.tr(),
                 ),
               );
             }
@@ -104,7 +104,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               child: EmptyState(
                 icon: Iconsax.box,
                 title: 'products_empty'.tr(),
-                subtitle: "Bu bo'limda hozircha mahsulotlar yo'q.",
+                subtitle: 'section_empty_sub'.tr(),
               ),
             );
           }

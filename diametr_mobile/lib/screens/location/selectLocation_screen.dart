@@ -83,7 +83,7 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
                 height: 48.h,
                 width: 270.w,
                 alignment: Alignment.center,
-                child: Text("Tasdiqlash"),
+                child: Text('confirm'.tr()),
                 decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16.r),
                     color: AppConstant.primaryColor,

@@ -354,7 +354,7 @@ class _CartScreenState extends State<CartScreen> {
       return EmptyState(
         icon: Iconsax.shopping_cart,
         title: 'empty_cart'.tr(),
-        subtitle: "Savatchaga mahsulot qo'shing va buyurtmani rasmiylashtiring.",
+        subtitle: 'cart_empty_sub'.tr(),
       );
     }
     if (isLoading) {
@@ -463,7 +463,7 @@ class _CartScreenState extends State<CartScreen> {
                         fontWeight: FontWeight.w500,
                         letterSpacing: 0.3)),
                 SizedBox(height: 2.h),
-                Text("${total.toString().toMoney()} so'm",
+                Text("${total.toString().toMoney()} ${'currency'.tr()}",
                     style: TextStyle(
                         color: primary,
                         fontSize: 18.sp,
@@ -895,7 +895,7 @@ class _CartScreenState extends State<CartScreen> {
                                   SizedBox(width: 6.w),
                                   Expanded(
                                     child: Text(
-                                      "${item['price'].toString().toMoney()} so'm",
+                                      "${item['price'].toString().toMoney()} ${'currency'.tr()}",
                                       style: TextStyle(
                                           color: context.tSub,
                                           fontSize: 11.sp,
@@ -910,7 +910,7 @@ class _CartScreenState extends State<CartScreen> {
                         ),
                         SizedBox(width: 8.w),
                         Text(
-                          "${(((item['price'] as num?) ?? 0) * ((item['count'] as num?) ?? 0)).toString().toMoney()} so'm",
+                          "${(((item['price'] as num?) ?? 0) * ((item['count'] as num?) ?? 0)).toString().toMoney()} ${'currency'.tr()}",
                           style: TextStyle(
                               color: primary,
                               fontSize: 13.sp,
@@ -1237,7 +1237,7 @@ class _CartScreenState extends State<CartScreen> {
           ]),
           SizedBox(height: 14.h),
           _summaryRow('cart_items'.tr(),
-              "${_itemsTotal().toString().toMoney()} so'm",
+              "${_itemsTotal().toString().toMoney()} ${'currency'.tr()}",
               subdued: false),
           ..._grouped.keys.map((sid) {
             final type = selectedTypes[sid] ?? "";
@@ -1251,7 +1251,7 @@ class _CartScreenState extends State<CartScreen> {
                 '${'cart_delivery_row'.tr()} ($shopName)',
                 type == "YANDEX"
                     ? 'Yandex'
-                    : "${delivery.toString().toMoney()} so'm",
+                    : "${delivery.toString().toMoney()} ${'currency'.tr()}",
                 subdued: true,
               ),
             );
@@ -1275,7 +1275,7 @@ class _CartScreenState extends State<CartScreen> {
                     color: context.tText,
                     fontSize: 15.sp,
                     fontWeight: FontWeight.w700)),
-            Text("${_grandTotal().toString().toMoney()} so'm",
+            Text("${_grandTotal().toString().toMoney()} ${'currency'.tr()}",
                 style: TextStyle(
                     color: primary,
                     fontSize: 18.sp,

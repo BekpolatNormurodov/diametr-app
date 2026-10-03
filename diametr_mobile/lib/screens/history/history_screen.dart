@@ -122,7 +122,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               ? 'history_empty'.tr()
                               : 'search_empty'.tr(),
                           subtitle: _query.isEmpty
-                              ? "Bu yerda buyurtmalaringiz tarixi ko'rinadi."
+                              ? 'history_empty_sub'.tr()
                               : null,
                         ),
                       );
@@ -157,7 +157,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       EmptyState(
                         icon: Iconsax.receipt_1,
                         title: 'history_empty'.tr(),
-                        subtitle: "Bu yerda buyurtmalaringiz tarixi ko'rinadi.",
+                        subtitle: 'history_empty_sub'.tr(),
                       ),
                     ],
                   );
@@ -284,7 +284,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     Expanded(
                       child: _infoTile(
                         context,
-                        label: 'UMUMIY QIYMAT',
+                        label: 'history_total_value'.tr(),
                         value: '${(order['amount'] ?? 0).toString().toMoney()} so\'m',
                       ),
                     ),
@@ -292,7 +292,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     Expanded(
                       child: _infoTile(
                         context,
-                        label: 'MAHSULOTLAR',
+                        label: 'history_products'.tr(),
                         value: '${order['products']?.length ?? 0} ta',
                       ),
                     ),

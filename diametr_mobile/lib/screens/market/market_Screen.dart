@@ -6,6 +6,8 @@ import 'package:stroymarket/bloc/shop/shop_bloc.dart';
 import 'package:stroymarket/bloc/shop/shop_state.dart';
 import 'package:stroymarket/core/extensions/str.dart';
 import 'package:stroymarket/core/utils/search_key.dart';
+import 'package:stroymarket/core/utils/variant.dart' show decodeEntities;
+import 'package:stroymarket/core/utils/work_hours.dart';
 import 'package:stroymarket/manager/8_shop_manager.dart';
 
 import '../../export_files.dart';
@@ -194,8 +196,17 @@ class _MarketScreenState extends State<MarketScreen> {
     final String imageUrl = imgPath != null
         ? Endpoints.img('shops', imgPath)
         : AppConstant.defaultImage;
-    final String name = data['name']?.toString() ?? '';
-    final String address = data['address']?.toString() ?? '';
+    final bool ru = context.locale.languageCode == 'ru';
+    // uz/ru columns in the app language, legacy `name`/`address` as fallback.
+    String pick(dynamic uz, dynamic ruV, [dynamic legacy]) {
+      final a = decodeEntities(uz).trim(), b = decodeEntities(ruV).trim();
+      final first = ru ? b : a, second = ru ? a : b;
+      return first.isNotEmpty ? first : second.isNotEmpty ? second : decodeEntities(legacy).trim();
+    }
+    final String name = pick(data['name_uz'], data['name_ru'], data['name']);
+    final String address = pick(data['address'], data['address_ru']);
+    final String about = pick(data['description'], data['description_ru']);
+    final WorkHours? hours = parseWorkHours(data['work_hours']);
     final String? phone = admin?['phone']?.toString();
     final double lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
     final double lon = (data['lon'] as num?)?.toDouble() ?? 0.0;
@@ -250,6 +261,7 @@ class _MarketScreenState extends State<MarketScreen> {
               imageUrl: imageUrl,
               name: name,
               address: address,
+              hours: hours,
               lat: lat,
               lon: lon,
             ),
@@ -324,8 +336,22 @@ class _MarketScreenState extends State<MarketScreen> {
                     child: _InfoCard(
                       icon: Iconsax.money,
                       iconColor: const Color(0xFFFFAA00),
-                      label: deliveryAmount.toMoney() + " so'm",
+                      label: '${deliveryAmount.toMoney()} ${'currency'.tr()}',
                     ),
+                  ),
+                  SizedBox(height: 8.h),
+                ],
+                if (hours != null) ...[
+                  FadeUpWidget(
+                    delay: const Duration(milliseconds: 180),
+                    child: _WorkHoursCard(hours: hours),
+                  ),
+                  SizedBox(height: 8.h),
+                ],
+                if (about.isNotEmpty) ...[
+                  FadeUpWidget(
+                    delay: const Duration(milliseconds: 200),
+                    child: _AboutCard(text: about),
                   ),
                   SizedBox(height: 8.h),
                 ],
@@ -588,10 +614,12 @@ class _HeroBanner extends StatelessWidget {
   final String address;
   final double lat;
   final double lon;
+  final WorkHours? hours;
   const _HeroBanner(
       {required this.imageUrl,
       required this.name,
       required this.address,
+      this.hours,
       required this.lat,
       required this.lon});
 
@@ -661,6 +689,10 @@ class _HeroBanner extends StatelessWidget {
                     ),
                   ],
                 ),
+              ],
+              if (hours != null) ...[
+                SizedBox(height: 8.h),
+                _OpenPill(hours: hours!),
               ],
             ],
           ),
@@ -788,6 +820,289 @@ class _InfoCard extends StatelessWidget {
             if (trailing != null) trailing!,
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── "Open now" pill on the hero image ───────────────────────────────────────
+class _OpenPill extends StatelessWidget {
+  final WorkHours hours;
+  const _OpenPill({required this.hours});
+
+  @override
+  Widget build(BuildContext context) {
+    final lang = context.locale.languageCode == 'ru' ? 'ru' : 'uz';
+    final s = openStatus(hours);
+    final color = s.open ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(20.r),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 10)],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6.w,
+            height: 6.w,
+            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          ),
+          SizedBox(width: 6.w),
+          Flexible(
+            child: Text(
+              statusText(s, lang),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.white, fontSize: 11.sp, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Weekly hours: status line, tap to see the week ──────────────────────────
+class _WorkHoursCard extends StatefulWidget {
+  final WorkHours hours;
+  const _WorkHoursCard({required this.hours});
+
+  @override
+  State<_WorkHoursCard> createState() => _WorkHoursCardState();
+}
+
+class _WorkHoursCardState extends State<_WorkHoursCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final lang = context.locale.languageCode == 'ru' ? 'ru' : 'uz';
+    final s = openStatus(widget.hours);
+    final statusColor = s.open ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    const tileColor = Color(0xFF14B8A6);
+    final today = todayIndex();
+    final names = lang == 'ru' ? dayNamesRu : dayNamesUz;
+    return Container(
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        color: context.tCard,
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(color: context.tDivider, width: 0.5),
+      ),
+      child: Column(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Row(
+              children: [
+                Container(
+                  width: 36.w,
+                  height: 36.w,
+                  decoration: BoxDecoration(
+                    color: tileColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                  child: Icon(Iconsax.clock, color: tileColor, size: 18.sp),
+                ),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('work_hours'.tr(),
+                          style: TextStyle(color: context.tSub, fontSize: 12.sp)),
+                      SizedBox(height: 2.h),
+                      Row(
+                        children: [
+                          Container(
+                            width: 7.w,
+                            height: 7.w,
+                            decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                          ),
+                          SizedBox(width: 6.w),
+                          Flexible(
+                            child: Text(
+                              statusText(s, lang),
+                              style: TextStyle(
+                                  color: statusColor, fontSize: 14.sp, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                AnimatedRotation(
+                  turns: _expanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(Iconsax.arrow_down_1, size: 16.sp, color: context.tSub),
+                ),
+              ],
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: !_expanded
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: EdgeInsets.only(top: 10.h),
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < 7; i++)
+                          Container(
+                            margin: EdgeInsets.only(top: 2.h),
+                            padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
+                            decoration: BoxDecoration(
+                              color: i == today
+                                  ? AppConstant.primaryColor.withValues(alpha: 0.09)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10.r),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 6.w,
+                                  height: 6.w,
+                                  decoration: BoxDecoration(
+                                    color: widget.hours[i] != null
+                                        ? const Color(0xFF10B981)
+                                        : context.tDivider,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                SizedBox(width: 10.w),
+                                Text(
+                                  names[i],
+                                  style: TextStyle(
+                                    color: context.tText,
+                                    fontSize: 13.sp,
+                                    fontWeight: i == today ? FontWeight.w700 : FontWeight.w400,
+                                  ),
+                                ),
+                                if (i == today) ...[
+                                  SizedBox(width: 6.w),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                                    decoration: BoxDecoration(
+                                      color: AppConstant.primaryColor.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6.r),
+                                    ),
+                                    child: Text(
+                                      'today'.tr(),
+                                      style: TextStyle(
+                                        color: AppConstant.primaryColor,
+                                        fontSize: 9.sp,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                const Spacer(),
+                                Text(
+                                  dayText(widget.hours[i], lang),
+                                  style: TextStyle(
+                                    color: widget.hours[i] == null ? context.tSub : context.tText,
+                                    fontSize: 13.sp,
+                                    fontWeight: i == today ? FontWeight.w700 : FontWeight.w500,
+                                    fontFeatures: const [FontFeature.tabularFigures()],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Padding(
+                          padding: EdgeInsets.only(top: 8.h, left: 10.w),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('tashkent_time'.tr(),
+                                style: TextStyle(color: context.tSub, fontSize: 11.sp)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── About the shop (owner's text) ───────────────────────────────────────────
+class _AboutCard extends StatefulWidget {
+  final String text;
+  const _AboutCard({required this.text});
+
+  @override
+  State<_AboutCard> createState() => _AboutCardState();
+}
+
+class _AboutCardState extends State<_AboutCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool long = widget.text.length > 180 || '\n'.allMatches(widget.text).length > 3;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        color: context.tCard,
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(color: context.tDivider, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36.w,
+                height: 36.w,
+                decoration: BoxDecoration(
+                  color: AppConstant.primaryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10.r),
+                ),
+                child: Icon(Iconsax.shop, color: AppConstant.primaryColor, size: 18.sp),
+              ),
+              SizedBox(width: 12.w),
+              Text('about_shop'.tr(),
+                  style: TextStyle(color: context.tText, fontSize: 15.sp, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          SizedBox(height: 10.h),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            alignment: Alignment.topCenter,
+            child: Text(
+              widget.text,
+              maxLines: _expanded || !long ? null : 4,
+              overflow: _expanded || !long ? TextOverflow.visible : TextOverflow.ellipsis,
+              style: TextStyle(color: context.tText, fontSize: 14.sp, height: 1.5),
+            ),
+          ),
+          if (long)
+            GestureDetector(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: EdgeInsets.only(top: 6.h),
+                child: Text(
+                  (_expanded ? 'read_less' : 'read_more').tr(),
+                  style: TextStyle(
+                    color: AppConstant.primaryColor,
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

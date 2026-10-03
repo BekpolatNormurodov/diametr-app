@@ -420,7 +420,7 @@ class _ProductScreenState extends State<ProductScreen> {
               return EmptyState(
                 height: 480.h,
                 icon: Iconsax.box_remove,
-                title: "Mahsulot mavjud emas",
+                title: 'product_unavailable'.tr(),
                 subtitle:
                     "Bu mahsulot olib tashlangan yoki vaqtincha sotuvda yo'q.",
               );
@@ -708,7 +708,7 @@ class _ProductScreenState extends State<ProductScreen> {
             return EmptyState(
               height: 480.h,
               icon: Iconsax.box_remove,
-              title: "Mahsulot topilmadi",
+              title: 'product_not_found'.tr(),
               subtitle:
                   "Mahsulot olib tashlangan bo'lishi mumkin. Qayta yuklash uchun pastga torting.",
             );
@@ -1054,7 +1054,7 @@ class _ProductScreenState extends State<ProductScreen> {
                               Text(
                                 fromPrice
                                     ? 'price_from'.tr(args: [offerPrice.toString().toMoney()])
-                                    : '${offerPrice.toString().toMoney()} ${context.locale.languageCode == 'ru' ? 'сум' : "so'm"}',
+                                    : '${offerPrice.toString().toMoney()} ${'currency'.tr()}',
                                 maxLines: 1,
                                 style: TextStyle(
                                   color: AppConstant.primaryColor,

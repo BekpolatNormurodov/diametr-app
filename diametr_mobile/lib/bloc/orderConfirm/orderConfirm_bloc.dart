@@ -46,9 +46,9 @@ class OrderConfirmBloc extends Cubit<OrderConfirmState> {
       return response.data;
     } on dio.DioError catch (e) {
       emit(OrderConfirmErrorState(
-          title: 'Xatolik', message: _errorMessage(e)));
+          title: 'error_title'.tr(), message: _errorMessage(e)));
     } catch (e) {
-      emit(OrderConfirmErrorState(title: 'Xatolik', message: e.toString()));
+      emit(OrderConfirmErrorState(title: 'error_title'.tr(), message: e.toString()));
     }
   }
 

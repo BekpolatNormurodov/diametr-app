@@ -79,7 +79,7 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
                       SizedBox(height: 120.h),
                       EmptyState(
                         icon: Iconsax.star,
-                        title: "Hozircha eng ko'p sotilgan mahsulot yo'q",
+                        title: 'popular_empty'.tr(),
                         subtitle:
                             "Sotuvlar boshlanganidan so'ng shu yerda ko'rasiz.",
                       ),

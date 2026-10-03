@@ -78,7 +78,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
               child: PullToRefreshFill(
                 child: EmptyState(
                   icon: Iconsax.shop,
-                  title: "Do'kon hozircha mavjud emas",
+                  title: 'shop_unavailable'.tr(),
                   subtitle:
                       "Hozircha bu mahsulot biror do'konda topilmadi. Keyinroq qayta urinib ko'ring.",
                 ),
@@ -656,7 +656,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                       if (discounted)
                         Text(
                           (itemCount * regularPrice).toString().toMoney() +
-                              " so'm",
+                              ' ${'currency'.tr()}',
                           style: TextStyle(
                             color: context.tSub,
                             fontSize: 14.sp,
@@ -666,7 +666,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                         ),
                       Text(
                         (itemCount * (payPrice ?? 0)).toString().toMoney() +
-                            " so'm",
+                            ' ${'currency'.tr()}',
                         style: TextStyle(
                           color: context.tText,
                           fontSize: 24.sp,
@@ -742,16 +742,16 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                     final bool? clear = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        title: const Text("Boshqa do'kon"),
+                        title: Text('other_shop_title'.tr()),
                         content: const Text(
                             "Savatchada boshqa do'kon mahsuloti bor. Savatchani tozalab, shu do'kondan davom etasizmi?"),
                         actions: [
                           TextButton(
                               onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text("Yo'q")),
+                              child: Text('no'.tr())),
                           TextButton(
                               onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text("Ha, tozalash")),
+                              child: Text('yes_clear'.tr())),
                         ],
                       ),
                     );
@@ -795,7 +795,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
 
                
                 },
-                text: "Savatchaga qo'shish",
+                text: 'add_to_cart'.tr(),
                 width: 1.sw,
                 color: payPrice != null && ((data[selectTypeIndex]["count"] as num?) ?? 0) >= itemCount ?   AppConstant.primaryColor  : AppConstant.greyColor,
               ),

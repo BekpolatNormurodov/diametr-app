@@ -47,9 +47,9 @@ class OrderCreateBloc extends Cubit<OrderCreateState> {
       return response.data;
     } on dio.DioError catch (e) {
       emit(OrderCreateErrorState(
-          title: 'Xatolik', message: _errorMessage(e)));
+          title: 'error_title'.tr(), message: _errorMessage(e)));
     } catch (e) {
-      emit(OrderCreateErrorState(title: 'Xatolik', message: e.toString()));
+      emit(OrderCreateErrorState(title: 'error_title'.tr(), message: e.toString()));
     }
   }
 

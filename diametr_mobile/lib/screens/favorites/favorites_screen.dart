@@ -286,7 +286,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   Widget _emptyState(BuildContext context, String label) => EmptyState(
         icon: Iconsax.heart,
         title: label,
-        subtitle: "Yoqtirgan narsalaringizni yurakcha tugmasi orqali saqlang.",
+        subtitle: 'favorites_empty_sub'.tr(),
       );
 
   Widget _shimmerGrid(BuildContext context) => GridView.builder(

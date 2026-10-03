@@ -88,7 +88,7 @@ class _StatusScreenState extends State<StatusScreen> {
                         return EmptyState(
                           height: 320.h,
                           icon: Iconsax.shop,
-                          title: "Do'kon ma'lumotlari topilmadi",
+                          title: 'shop_info_not_found'.tr(),
                           subtitle:
                               "Buyurtma qilingan do'kon hozircha mavjud emas.",
                         );
@@ -107,8 +107,8 @@ class _StatusScreenState extends State<StatusScreen> {
                         return EmptyState(
                           height: 240.h,
                           icon: Iconsax.receipt_1,
-                          title: "Buyurtma topilmadi",
-                          subtitle: "Bu buyurtma haqida ma'lumot mavjud emas.",
+                          title: 'order_not_found'.tr(),
+                          subtitle: 'order_not_found_sub'.tr(),
                         );
                       }
                       return _orderSection(context, state.data ?? []);
@@ -305,7 +305,7 @@ class _StatusScreenState extends State<StatusScreen> {
       },
       {
         'label': 'Narxi',
-        'value': "${data["amount"] ?? ""}".toMoney() + " so'm"
+        'value': "${data["amount"] ?? ""}".toMoney() + ' ${'currency'.tr()}'
       },
       {
         'label': 'Xarid turi',
