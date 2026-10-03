@@ -583,7 +583,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
               {/* Promo code */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Promokod
+                  {lang === 'uz' ? 'Promokod' : 'Промокод'}
                 </label>
                 {promoCode ? (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
@@ -617,7 +617,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                     >
                       {promoLoading
                         ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                        : "Qo'llash"}
+                        : (lang === 'uz' ? "Qo'llash" : 'Применить')}
                     </button>
                   </div>
                 )}
@@ -655,7 +655,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                 <textarea
                   value={address}
                   onChange={e => setAddress(e.target.value)}
-                  placeholder="Ko'cha, uy, kvartira..."
+                  placeholder={lang === 'uz' ? "Ko'cha, uy, kvartira..." : 'Улица, дом, квартира...'}
                   rows={2}
                   className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"
                 />
@@ -669,14 +669,14 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                   {locLoading ? (
                     <>
                       <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                      Aniqlanmoqda...
+                      {lang === 'uz' ? 'Aniqlanmoqda...' : 'Определяем...'}
                     </>
                   ) : (
                     <>
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                         <path fillRule="evenodd" d="m11.54 22.351.07.04.028.016a.76.76 0 0 0 .723 0l.028-.015.071-.041a16.975 16.975 0 0 0 1.144-.742 19.58 19.58 0 0 0 2.683-2.282c1.944-2.079 3.43-4.795 3.43-8.077 0-4.5-3.694-8.25-8.25-8.25S3.75 5.5 3.75 10c0 3.282 1.487 5.998 3.43 8.077a19.58 19.58 0 0 0 2.683 2.282c.328.228.665.442 1.144.742ZM12 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" clipRule="evenodd" />
                       </svg>
-                      {coords ? "Joylashuvni yangilash" : "Joylashuvni aniqlash"}
+                      {coords ? (lang === 'uz' ? 'Joylashuvni yangilash' : 'Обновить местоположение') : (lang === 'uz' ? 'Joylashuvni aniqlash' : 'Определить местоположение')}
                     </>
                   )}
                 </button>
@@ -697,7 +697,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                       <path fillRule="evenodd" d="M1.5 4.875C1.5 3.839 2.34 3 3.375 3h17.25c1.035 0 1.875.84 1.875 1.875v9.75c0 1.036-.84 1.875-1.875 1.875H3.375A1.875 1.875 0 0 1 1.5 14.625v-9.75ZM8.25 9.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0Z" clipRule="evenodd" />
                       <path d="M2.25 18a.75.75 0 0 0 0 1.5c5.4 0 10.63.722 15.6 2.075 1.19.324 2.4-.558 2.4-1.82V18.75a.75.75 0 0 0-.75-.75H2.25Z" />
                     </svg>
-                    Naqd
+                    {lang === 'uz' ? 'Naqd' : 'Наличные'}
                   </button>
                   <button
                     onClick={() => setPayMode('online')}
@@ -707,7 +707,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                       <path d="M4.5 3.75a3 3 0 0 0-3 3v.75h21v-.75a3 3 0 0 0-3-3h-15Z" />
                       <path fillRule="evenodd" d="M22.5 9.75h-21v7.5a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3v-7.5Zm-18 3.75a.75.75 0 0 1 .75-.75h6a.75.75 0 0 1 0 1.5h-6a.75.75 0 0 1-.75-.75Zm.75 2.25a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z" clipRule="evenodd" />
                     </svg>
-                    Online
+                    {lang === 'uz' ? 'Online' : 'Онлайн'}
                   </button>
                 </div>
 
@@ -717,7 +717,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                       <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clipRule="evenodd" />
                     </svg>
                     <p className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">
-                      Yetkazib beruvchiga naqd to'lanadi
+                      {lang === 'uz' ? "Yetkazib beruvchiga naqd to'lanadi" : 'Оплата наличными курьеру'}
                     </p>
                   </div>
                 )}
@@ -906,7 +906,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
               {loading ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  Yuborilmoqda...
+                  {lang === 'uz' ? 'Yuborilmoqda...' : 'Отправка...'}
                 </>
               ) : checkoutLabel()}
             </button>
@@ -914,7 +914,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
               onClick={() => { setStep('cart'); setError('') }}
               className="w-full py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-sm hover:border-primary hover:text-primary transition-all"
             >
-              Orqaga
+              {lang === 'uz' ? 'Orqaga' : 'Назад'}
             </button>
           </div>
         )}
@@ -1007,7 +1007,7 @@ export default function CartDrawer({ open, onClose, onAuthRequired, user }: Prop
                 <textarea
                   value={modalAddress}
                   onChange={e => setModalAddress(e.target.value)}
-                  placeholder="Ko'cha, uy, kvartira..."
+                  placeholder={lang === 'uz' ? "Ko'cha, uy, kvartira..." : 'Улица, дом, квартира...'}
                   rows={2}
                   className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"
                 />

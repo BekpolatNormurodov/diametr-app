@@ -39,15 +39,19 @@ const STATUS_CONFIG: Record<string, { labelUz: string; labelRu: string; color: s
   CANCELED:  { labelUz: 'Bekor qilindi', labelRu: 'Отменён',   color: 'text-red-500 dark:text-red-400',       bg: 'bg-red-50 dark:bg-red-900/20' },
 }
 
-function fmtPrice(n?: number | null) {
-  if (!n) return '0 so\'m'
-  return n.toLocaleString('uz-UZ') + ' so\'m'
+function fmtPrice(n?: number | null, lang: 'uz' | 'ru' = 'uz') {
+  const sum = lang === 'ru' ? ' сум' : " so'm"
+  if (!n) return '0' + sum
+  return n.toLocaleString('uz-UZ') + sum
 }
 
 function fmtDate(iso: string, lang: string) {
   const d = new Date(iso)
   if (lang === 'uz') {
-    return d.toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    // Browsers lack Uzbek month names (they print "M05"): spell them out.
+    const p2 = (n: number) => String(n).padStart(2, '0')
+    const mon = ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek'][d.getMonth()]
+    return `${p2(d.getDate())} ${mon} ${d.getFullYear()}, ${p2(d.getHours())}:${p2(d.getMinutes())}`
   }
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
@@ -119,7 +123,7 @@ export default function OrdersDrawer({ open, onClose }: Props) {
                 {lang === 'uz' ? 'Mening buyurtmalarim' : 'Мои заказы'}
               </h2>
               {orders.length > 0 && (
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{orders.length} ta buyurtma</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{orders.length} {lang === 'uz' ? 'ta buyurtma' : 'заказов'}</p>
               )}
             </div>
           </div>
@@ -212,11 +216,11 @@ export default function OrdersDrawer({ open, onClose }: Props) {
                         </div>
                         <div className="flex items-center justify-between mt-1">
                           <span className="text-xs text-slate-400 dark:text-slate-500">{fmtDate(order.createdAt ?? (order as any).createdt ?? '', lang)}</span>
-                          <span className="text-xs font-bold text-primary">{fmtPrice(order.amount)}</span>
+                          <span className="text-xs font-bold text-primary">{fmtPrice(order.amount, lang)}</span>
                         </div>
                         {order.discount_amount ? (
                           <span className="text-[10px] text-emerald-500 font-semibold">
-                            -{fmtPrice(order.discount_amount)} chegirma ({order.discount_percent}%)
+                            -{fmtPrice(order.discount_amount, lang)} {lang === 'uz' ? 'chegirma' : 'скидка'} ({order.discount_percent}%)
                           </span>
                         ) : null}
                       </div>
@@ -256,14 +260,14 @@ export default function OrdersDrawer({ open, onClose }: Props) {
                                 {name}{itemName ? ` · ${itemName}` : ''} × {p.count}
                               </span>
                               <span className="font-semibold text-slate-700 dark:text-slate-200 flex-shrink-0">
-                                {fmtPrice(p.amount * p.count)}
+                                {fmtPrice(p.amount * p.count, lang)}
                               </span>
                             </div>
                           )
                         })}
                         <div className="border-t border-slate-100 dark:border-slate-700 mt-2 pt-2 flex justify-between text-xs font-bold text-slate-800 dark:text-white">
                           <span>{lang === 'uz' ? "Jami to'landi" : 'Итого'}</span>
-                          <span className="text-primary">{fmtPrice(order.amount)}</span>
+                          <span className="text-primary">{fmtPrice(order.amount, lang)}</span>
                         </div>
                       </div>
                     )}

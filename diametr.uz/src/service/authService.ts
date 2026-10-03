@@ -9,6 +9,12 @@ export interface AuthUser {
 }
 
 const TOKEN_KEY = 'diametr_token'
+
+/** Site language for messages built here and for the API's Accept-Language. */
+function siteLang(): 'uz' | 'ru' {
+  try { return localStorage.getItem('diametr_lang') === 'ru' ? 'ru' : 'uz' } catch { return 'uz' }
+}
+const msg = (uz: string, ru: string) => (siteLang() === 'ru' ? ru : uz)
 const USER_KEY = 'diametr_user'
 
 /** Decodes a JWT payload without verifying it (the server does that). */
@@ -184,22 +190,22 @@ export const authService = {
   sendSms: async (phone: string): Promise<{ id: string; phone: string }> => {
     const res = await fetch(`${API}/sms/send`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept-Language': siteLang() },
       body: JSON.stringify({ phone }),
-    }).catch(() => { throw new Error('Serverga ulanib bo\'lmadi. Internet aloqasini tekshiring') })
+    }).catch(() => { throw new Error(msg("Serverga ulanib bo'lmadi. Internet aloqasini tekshiring", 'Не удалось подключиться к серверу. Проверьте интернет')) })
     const data = await (res as Response).json()
-    if (!(res as Response).ok) throw new Error(data.message || 'SMS yuborishda xatolik yuz berdi')
+    if (!(res as Response).ok) throw new Error(data.message || msg('SMS yuborishda xatolik yuz berdi', 'Ошибка при отправке SMS'))
     return data
   },
 
   verifySms: async (id: string, code: string): Promise<{ user: AuthUser; access_token: string }> => {
     const res = await fetch(`${API}/sms/verify`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept-Language': siteLang() },
       body: JSON.stringify({ id, code }),
-    }).catch(() => { throw new Error('Serverga ulanib bo\'lmadi. Internet aloqasini tekshiring') })
+    }).catch(() => { throw new Error(msg("Serverga ulanib bo'lmadi. Internet aloqasini tekshiring", 'Не удалось подключиться к серверу. Проверьте интернет')) })
     const data = await (res as Response).json()
-    if (!(res as Response).ok) throw new Error(data.message || 'Kod noto\'g\'ri yoki muddati o\'tgan')
+    if (!(res as Response).ok) throw new Error(data.message || msg("Kod noto'g'ri yoki muddati o'tgan", 'Неверный или просроченный код'))
     return data
   },
 
@@ -250,6 +256,7 @@ export const authService = {
     const token = getStoredToken()
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string> || {}),
+      'Accept-Language': siteLang(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     }
     const res = await fetch(url, { ...options, headers })

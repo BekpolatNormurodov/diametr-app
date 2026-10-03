@@ -232,7 +232,7 @@ export default function Navbar({ onAuthClick, user, onLogout, onCartClick }: {
           <button
             onClick={toggleTheme}
             className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary dark:hover:border-primary bg-white dark:bg-slate-800 hover:bg-primary/5 dark:hover:bg-primary/10 text-slate-500 dark:text-slate-300 hover:text-primary transition-all duration-200 shadow-sm"
-            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            title={theme === 'dark' ? (lang === 'uz' ? 'Yorug‘ rejim' : 'Светлая тема') : (lang === 'uz' ? 'Tungi rejim' : 'Тёмная тема')}
           >
             {theme === 'dark' ? (
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">

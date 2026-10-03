@@ -149,7 +149,7 @@ export default function SplashScreen({ onDone }: { onDone: () => void }) {
       }}>
         <p className="text-[11px] font-semibold uppercase"
           style={{ color: 'rgba(0,196,140,0.72)', letterSpacing: '0.20em' }}>
-          Qurilish materiallari platformasi
+          {(() => { try { return localStorage.getItem('diametr_lang') === 'ru' } catch { return false } })() ? 'Платформа стройматериалов' : 'Qurilish materiallari platformasi'}
         </p>
       </div>
 

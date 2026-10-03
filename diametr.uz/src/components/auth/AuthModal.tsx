@@ -101,7 +101,7 @@ export default function AuthModal({ open, onClose, onAuth, lang = 'uz' }: Props)
       setCountdown(60)
       setTimeout(() => codeRefs[0].current?.focus(), 150)
     } catch (e) {
-      setError((e as any).message || 'Xatolik yuz berdi')
+      setError((e as any).message || (lang === 'uz' ? 'Xatolik yuz berdi' : 'Произошла ошибка'))
     } finally {
       setLoading(false)
     }
@@ -149,7 +149,7 @@ export default function AuthModal({ open, onClose, onAuth, lang = 'uz' }: Props)
       onClose()
     } catch (e) {
       verifyingRef.current = false
-      setError((e as any).message || "Kod noto'g'ri")
+      setError((e as any).message || (lang === 'uz' ? "Kod noto'g'ri" : 'Неверный код'))
       setCodeDigits(['', '', '', '', '', ''])
       setTimeout(() => codeRefs[0].current?.focus(), 50)
     } finally {

@@ -14,6 +14,9 @@ import AuthModal from '../components/auth/AuthModal'
 import CartDrawer from '../components/cart/CartDrawer'
 import { authService } from '../service/authService'
 import { searchKey, buildSearchKeys, matchesSearch } from '../utils/searchKey'
+import { parseWorkHours } from '../utils/workHours'
+import type { WorkHours } from '../utils/workHours'
+import { OpenStatusPill, ShopAboutCard, WorkHoursCard } from '../components/shops/ShopInfo'
 
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:8888'
 const API_URL = `${BASE_URL}/api/v1`
@@ -23,6 +26,12 @@ const SKELETON = Array.from({ length: 8 })
 interface Shop {
   id: number
   name?: string
+  name_uz?: string
+  name_ru?: string
+  address_ru?: string
+  description?: string
+  description_ru?: string
+  work_hours?: WorkHours | null
   image?: string
   address?: string
   lat?: number
@@ -35,12 +44,16 @@ interface Shop {
   created_at?: string
 }
 
+const UZ_MONTHS = ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr']
+
 function formatJoinDate(iso?: string, lang?: string) {
   if (!iso) return null
   try {
     const d = new Date(iso)
     if (isNaN(d.getTime())) return null
-    return d.toLocaleDateString(lang === 'uz' ? 'uz-Latn-UZ' : 'ru-RU', { year: 'numeric', month: 'long' })
+    // Browsers lack Uzbek month names ("2026 M05"), so they are spelled out here.
+    if (lang === 'uz') return `${UZ_MONTHS[d.getMonth()]} ${d.getFullYear()}`
+    return d.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' })
   } catch { return null }
 }
 
@@ -114,7 +127,19 @@ export default function ShopDetailPage() {
   const { lang } = useLang()
   const { addItem, items } = useCart()
 
-  const [shop, setShop] = useState<Shop | null>(null)
+  const [shopRaw, setShop] = useState<Shop | null>(null)
+  // Name, address and about text in the page language (uz/ru columns, legacy `name` last).
+  const shop = useMemo<Shop | null>(() => {
+    if (!shopRaw) return null
+    const ru = lang === 'ru'
+    const pick = (a?: string, b?: string) => decodeEntities(((ru ? b : a) || a || b || '').trim())
+    return {
+      ...shopRaw,
+      name: pick(shopRaw.name_uz, shopRaw.name_ru) || shopRaw.name,
+      address: pick(shopRaw.address, shopRaw.address_ru) || undefined,
+      description: pick(shopRaw.description, shopRaw.description_ru) || undefined,
+    }
+  }, [shopRaw, lang])
   const [products, setProducts] = useState<EnrichedProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -167,15 +192,21 @@ export default function ShopDetailPage() {
           setShop({
             id: data.id,
             name: data.name,
+            name_uz: data.name_uz,
+            name_ru: data.name_ru,
             image: data.image,
             address: data.address,
+            address_ru: data.address_ru,
+            description: data.description,
+            description_ru: data.description_ru,
+            work_hours: parseWorkHours(data.work_hours),
             lat: data.lat,
             lon: data.lon,
             region_id: data.region_id,
             delivery_amount: data.delivery_amount,
             yandex_delivery: data.yandex_delivery,
             market_delivery: data.market_delivery,
-            created_at: data.created_at || data.createdAt,
+            created_at: data.created_at || data.createdAt || data.createdt,
           })
 
           // Fetch region name if available
@@ -415,6 +446,12 @@ export default function ShopDetailPage() {
                     {shop.name || (lang === 'uz' ? "Do'kon" : 'Магазин')}
                   </h1>
 
+                  {shop.work_hours && (
+                    <div className="mb-3">
+                      <OpenStatusPill hours={shop.work_hours} lang={lang} />
+                    </div>
+                  )}
+
                   {shop.address && (
                     <p className="flex items-start gap-1.5 text-sm text-slate-500 dark:text-slate-400 mb-3">
                       <svg className="w-4 h-4 text-primary mt-0.5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -541,6 +578,14 @@ export default function ShopDetailPage() {
                 </div>
               </div>
             </div>
+
+            {/* About + weekly hours (written by the shop owner) */}
+            {(shop.description || shop.work_hours) && (
+              <div className={`grid items-start gap-4 mb-6 ${shop.description && shop.work_hours ? 'lg:grid-cols-[minmax(0,1fr)_360px]' : ''}`}>
+                {shop.description && <ShopAboutCard text={shop.description} lang={lang} />}
+                {shop.work_hours && <WorkHoursCard hours={shop.work_hours} lang={lang} />}
+              </div>
+            )}
 
             {/* Yandex map embed */}
             {shop.lat && shop.lon && (

@@ -120,9 +120,9 @@ export default function Footer() {
             &copy; {year} Diametr. {lang === "uz" ? "Barcha huquqlar himoyalangan." : "Все права защищены."}
           </p>
           <div className="flex items-center gap-4">
-            <a href="/diametr-mobile.privacy-policy.md" className="text-slate-500 dark:text-slate-500 hover:text-primary text-xs transition-colors">Privacy Policy</a>
+            <a href="/diametr-mobile.privacy-policy.md" className="text-slate-500 dark:text-slate-500 hover:text-primary text-xs transition-colors">{lang === 'uz' ? 'Maxfiylik siyosati' : 'Политика конфиденциальности'}</a>
             <span className="text-slate-400 dark:text-slate-700">|</span>
-            <a href="/diametr-admin.privacy-policy.md" className="text-slate-500 dark:text-slate-500 hover:text-primary text-xs transition-colors">Admin Policy</a>
+            <a href="/diametr-admin.privacy-policy.md" className="text-slate-500 dark:text-slate-500 hover:text-primary text-xs transition-colors">{lang === 'uz' ? 'Do‘konlar uchun siyosat' : 'Политика для магазинов'}</a>
           </div>
         </div>
       </div>
