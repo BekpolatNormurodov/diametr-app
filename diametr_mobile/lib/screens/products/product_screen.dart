@@ -944,6 +944,11 @@ class _ProductScreenState extends State<ProductScreen> {
                 "name": widget.name,
                 "product_id": widget.product_id,
                 "shop_id": data[index]["id"],
+                "shop_name": decodeEntities(((context.locale.languageCode == 'ru'
+                            ? data[index]["name_ru"]
+                            : data[index]["name_uz"]) ??
+                        data[index]["name"]) ??
+                    ''),
                 "image": product?["image"],
                 "desc": product?["desc"],
                 // Preselect the variant in that shop only when one is chosen

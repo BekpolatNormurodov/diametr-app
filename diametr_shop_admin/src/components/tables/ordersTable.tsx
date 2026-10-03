@@ -72,7 +72,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 const customerPhone = (o: OrderItemProps) => o.user?.phone || o.phone || "";
 
 const payLabel: Record<string, string> = { cash: "Naqd", payme: "Payme", click: "Click", uzum: "Uzum" };
-const deliveryLabel: Record<string, string> = { get MARKET() { return tr("Olib ketish", "Самовывоз"); }, YANDEX: "Yandex", FIXED: "Yetkazish" };
+const deliveryLabel: Record<string, string> = { get MARKET() { return tr("Olib ketish", "Самовывоз"); }, YANDEX: "Yandex", get FIXED() { return tr("Yetkazib berish", "Доставка"); } };
 
 export default function OrdersTable({
   data,

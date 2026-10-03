@@ -606,9 +606,9 @@ class _SplashScreenState extends State<SplashScreen>
           opacity: v,
           child: Transform.translate(
             offset: Offset(0, (1.0 - v) * 12.0),
-            child: const Text(
-              'QURILISH · DIZAYN · YETKAZIB BERISH',
-              style: TextStyle(
+            child: Text(
+              'splash_tagline'.tr(),
+              style: const TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
                 color: Color.fromRGBO(0, 196, 140, 0.72),

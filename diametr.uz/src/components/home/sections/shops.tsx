@@ -18,6 +18,7 @@ interface Shop {
   delivery_amount?: number
   yandex_delivery?: boolean
   market_delivery?: boolean
+  fixed_delivery?: boolean
 }
 
 function openYandexMap(lat?: number, lon?: number, name?: string) {
@@ -196,14 +197,19 @@ export default function Shops() {
                   </h3>
 
                   {/* Delivery badges */}
-                  {(shop.yandex_delivery || shop.market_delivery) && (
+                  {(shop.yandex_delivery || shop.market_delivery || shop.fixed_delivery) && (
                     <div className="flex flex-wrap gap-1.5">
+                      {shop.fixed_delivery && (
+                        <span className="bg-primary/10 text-primary text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-primary/20">
+                          {lang === 'uz' ? "Yetkazib berish" : "Доставка"}
+                        </span>
+                      )}
                       {shop.yandex_delivery && (
                         <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-yellow-200 dark:border-yellow-700/40">Yandex Delivery</span>
                       )}
                       {shop.market_delivery && (
-                        <span className="bg-primary/10 text-primary text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-primary/20">
-                          {lang === 'uz' ? "Yetkazib berish" : "Доставка"}
+                        <span className="bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-600">
+                          {lang === 'uz' ? "Olib ketish" : "Самовывоз"}
                         </span>
                       )}
                     </div>

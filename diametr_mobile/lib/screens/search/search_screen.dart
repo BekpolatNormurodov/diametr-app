@@ -1293,7 +1293,7 @@ class _ProductCardState extends State<_ProductCard> {
                   if (price != null) ...[
                     SizedBox(height: 4.h),
                     Text(
-                      '${price.toString().toMoney()} so\'m',
+                      '${price.toString().toMoney()} ${'currency'.tr()}',
                       style: TextStyle(
                           color: AppConstant.primaryColor,
                           fontSize: 12.sp,

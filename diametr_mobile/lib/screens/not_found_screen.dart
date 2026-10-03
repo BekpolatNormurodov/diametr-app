@@ -20,7 +20,7 @@ class _NotFoundScreenState extends State<NotFoundScreen> {
     return Scaffold(
       body: Center(
         child: Text(
-          "PAGE NOT FOUND",
+          'page_not_found'.tr(),
           style: TextStyle(
             color: AppConstant.darkColor,
             fontSize: 25.sp,

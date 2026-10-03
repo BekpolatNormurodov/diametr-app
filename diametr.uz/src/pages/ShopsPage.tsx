@@ -30,6 +30,7 @@ interface Shop {
   delivery_amount?: number
   yandex_delivery?: boolean
   market_delivery?: boolean
+  fixed_delivery?: boolean
 }
 
 function openYandexMap(lat?: number, lon?: number, name?: string) {
@@ -334,9 +335,14 @@ export default function ShopsPage() {
                     {shop.yandex_delivery && (
                       <span className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">Yandex</span>
                     )}
-                    {shop.market_delivery && (
+                    {shop.fixed_delivery && (
                       <span className="bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
                         {lang === 'uz' ? "Yetkazib berish" : "Доставка"}
+                      </span>
+                    )}
+                    {shop.market_delivery && (
+                      <span className="bg-white/90 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                        {lang === 'uz' ? "Olib ketish" : "Самовывоз"}
                       </span>
                     )}
                   </div>

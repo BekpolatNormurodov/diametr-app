@@ -1016,19 +1016,35 @@ class _CartScreenState extends State<CartScreen> {
                                               color: context.tText,
                                               fontWeight:
                                                   FontWeight.w700)),
-                                      if (typeName == "FIXED")
-                                        Padding(
-                                          padding: EdgeInsets.only(
-                                              top: 2.h),
+                                      // What this option costs: pickup is free, the
+                                      // shop's own delivery has its fixed price, Yandex
+                                      // is paid by its tariff (not added to the total).
+                                      Builder(builder: (_) {
+                                        final int fixedPrice = (double.tryParse(shop["delivery_amount"]?.toString() ?? "0") ?? 0).toInt();
+                                        final bool free = typeName == "MARKET" ||
+                                            (typeName == "FIXED" && fixedPrice <= 0);
+                                        final String note = free
+                                            ? 'free'.tr()
+                                            : typeName == "FIXED"
+                                                ? '${fixedPrice.toString().toMoney()} ${'currency'.tr()}'
+                                                : 'delivery_yandex_price'.tr();
+                                        return Padding(
+                                          padding: EdgeInsets.only(top: 2.h),
                                           child: Text(
-                                            '${(double.tryParse(shop["delivery_amount"]?.toString() ?? "0") ?? 0).toInt().toString().toMoney()} so\'m',
+                                            note,
                                             style: TextStyle(
-                                                color: context.tSub,
-                                                fontSize: 11.sp,
-                                                fontWeight:
-                                                    FontWeight.w500),
+                                                color: free
+                                                    ? const Color(0xFF10B981)
+                                                    : typeName == "FIXED"
+                                                        ? context.tText
+                                                        : context.tSub,
+                                                fontSize: 12.sp,
+                                                fontWeight: typeName == "YANDEX"
+                                                    ? FontWeight.w500
+                                                    : FontWeight.w700),
                                           ),
-                                        ),
+                                        );
+                                      }),
                                     ],
                                   ),
                                 ),
@@ -1443,7 +1459,7 @@ class _CartScreenState extends State<CartScreen> {
       } else {
         setState(() {});
         AppToast.show(context,
-            message: "$msg\n${errorMessage ?? 'Buyurtma yuborishda xatolik'}",
+            message: "$msg\n${errorMessage ?? 'order_send_error'.tr()}",
             type: ToastType.warning,
             duration: const Duration(seconds: 6));
       }

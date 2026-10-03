@@ -313,30 +313,11 @@ class _MarketScreenState extends State<MarketScreen> {
                 if (yandex || fixed || market) ...[
                   FadeUpWidget(
                     delay: const Duration(milliseconds: 140),
-                    child: _InfoCard(
-                      icon: Iconsax.truck,
-                      iconColor: const Color(0xFF6C63FF),
-                      label: '',
-                      child: Wrap(
-                        spacing: 6.w,
-                        runSpacing: 4.h,
-                        children: [
-                          if (market) _DeliveryChip(label: 'delivery_market'.tr()),
-                          if (fixed)  _DeliveryChip(label: 'delivery_fixed'.tr()),
-                          if (yandex) _DeliveryChip(label: 'delivery_yandex'.tr()),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 8.h),
-                ],
-                if (deliveryAmount != null && deliveryAmount != '0' && fixed) ...[
-                  FadeUpWidget(
-                    delay: const Duration(milliseconds: 160),
-                    child: _InfoCard(
-                      icon: Iconsax.money,
-                      iconColor: const Color(0xFFFFAA00),
-                      label: '${deliveryAmount.toMoney()} ${'currency'.tr()}',
+                    child: _DeliveryCard(
+                      pickup: market,
+                      fixed: fixed,
+                      yandex: yandex,
+                      fixedPrice: int.tryParse(deliveryAmount ?? '') ?? 0,
                     ),
                   ),
                   SizedBox(height: 8.h),
@@ -776,14 +757,12 @@ class _InfoCard extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
   final Widget? trailing;
-  final Widget? child;
   const _InfoCard(
       {required this.icon,
       required this.iconColor,
       required this.label,
       this.onTap,
-      this.trailing,
-      this.child});
+      this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -810,8 +789,7 @@ class _InfoCard extends StatelessWidget {
             ),
             SizedBox(width: 12.w),
             Expanded(
-              child: child ??
-                  Text(label,
+              child: Text(label,
                       style: TextStyle(
                           color: context.tText,
                           fontSize: 14.sp,
@@ -1108,27 +1086,88 @@ class _AboutCardState extends State<_AboutCard> {
   }
 }
 
-// ─── Delivery chip ────────────────────────────────────────────────────────────
-class _DeliveryChip extends StatelessWidget {
-  final String label;
-  const _DeliveryChip({required this.label});
+// ─── How the order can reach the customer, each with its price ──────────────
+class _DeliveryCard extends StatelessWidget {
+  final bool pickup;
+  final bool fixed;
+  final bool yandex;
+  final int fixedPrice;
+  const _DeliveryCard({
+    required this.pickup,
+    required this.fixed,
+    required this.yandex,
+    required this.fixedPrice,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-      decoration: BoxDecoration(
-        color: AppConstant.primaryColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: AppConstant.primaryColor.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: AppConstant.primaryColor,
-          fontSize: 12.sp,
-          fontWeight: FontWeight.w600,
+    const green = Color(0xFF10B981);
+    const violet = Color(0xFF6C63FF);
+    final rows = <(IconData, String, String, Color)>[
+      if (pickup) (Iconsax.shop, 'delivery_market'.tr(), 'free'.tr(), green),
+      if (fixed)
+        (
+          Iconsax.truck_fast,
+          'delivery_fixed'.tr(),
+          fixedPrice > 0 ? '${fixedPrice.toString().toMoney()} ${'currency'.tr()}' : 'free'.tr(),
+          fixedPrice > 0 ? context.tText : green,
         ),
+      if (yandex) (Iconsax.routing_2, 'delivery_yandex'.tr(), 'delivery_yandex_price'.tr(), context.tSub),
+    ];
+    return Container(
+      padding: EdgeInsets.fromLTRB(12.w, 12.w, 12.w, 4.w),
+      decoration: BoxDecoration(
+        color: context.tCard,
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(color: context.tDivider, width: 0.5),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36.w,
+                height: 36.w,
+                decoration: BoxDecoration(
+                  color: violet.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10.r),
+                ),
+                child: Icon(Iconsax.truck, color: violet, size: 18.sp),
+              ),
+              SizedBox(width: 12.w),
+              Text('delivery_methods'.tr(),
+                  style: TextStyle(color: context.tText, fontSize: 15.sp, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          SizedBox(height: 6.h),
+          for (var i = 0; i < rows.length; i++)
+            Container(
+              padding: EdgeInsets.symmetric(vertical: 10.h),
+              decoration: BoxDecoration(
+                border: i == 0 ? null : Border(top: BorderSide(color: context.tDivider, width: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(width: 8.w),
+                  Icon(rows[i].$1, size: 18.sp, color: context.tSub),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Text(rows[i].$2,
+                        style: TextStyle(color: context.tText, fontSize: 14.sp, fontWeight: FontWeight.w500)),
+                  ),
+                  SizedBox(width: 8.w),
+                  Text(
+                    rows[i].$3,
+                    style: TextStyle(
+                      color: rows[i].$4,
+                      fontSize: rows[i].$4 == context.tSub ? 12.sp : 14.sp,
+                      fontWeight: rows[i].$4 == context.tSub ? FontWeight.w500 : FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

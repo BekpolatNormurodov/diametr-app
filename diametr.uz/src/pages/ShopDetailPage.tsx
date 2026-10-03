@@ -41,6 +41,7 @@ interface Shop {
   delivery_amount?: number
   yandex_delivery?: boolean
   market_delivery?: boolean
+  fixed_delivery?: boolean
   created_at?: string
 }
 
@@ -206,6 +207,7 @@ export default function ShopDetailPage() {
             delivery_amount: data.delivery_amount,
             yandex_delivery: data.yandex_delivery,
             market_delivery: data.market_delivery,
+            fixed_delivery: data.fixed_delivery,
             created_at: data.created_at || data.createdAt || data.createdt,
           })
 
@@ -473,14 +475,23 @@ export default function ShopDetailPage() {
                   {/* Delivery + Yandex badges */}
                   <div className="flex flex-wrap gap-2">
                     {shop.market_delivery && (
+                      <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-bold px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600">
+                        <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72" />
+                        </svg>
+                        {lang === 'uz' ? 'Olib ketish' : 'Самовывоз'}
+                        <span className="text-emerald-600 dark:text-emerald-400">· {lang === 'uz' ? 'bepul' : 'бесплатно'}</span>
+                      </span>
+                    )}
+                    {shop.fixed_delivery && (
                       <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-3 py-1.5 rounded-full border border-primary/20">
                         <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
                         </svg>
-                        {lang === 'uz' ? 'Yetkazib berish' : 'Есть доставка'}
-                        {shop.delivery_amount ? (
-                          <span className="opacity-80">· {shop.delivery_amount.toLocaleString()} {lang === 'uz' ? "so'm" : 'сум'}</span>
-                        ) : null}
+                        {lang === 'uz' ? 'Yetkazib berish' : 'Доставка'}
+                        <span className="opacity-80">
+                          · {shop.delivery_amount ? `${shop.delivery_amount.toLocaleString('ru-RU')} ${lang === 'uz' ? "so'm" : 'сум'}` : (lang === 'uz' ? 'bepul' : 'бесплатно')}
+                        </span>
                       </span>
                     )}
                     {shop.yandex_delivery && (
@@ -489,6 +500,7 @@ export default function ShopDetailPage() {
                           <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                         </svg>
                         Yandex Delivery
+                        <span className="opacity-70 font-semibold">· {lang === 'uz' ? "Yandex tarifi bo'yicha" : 'по тарифу Яндекса'}</span>
                       </span>
                     )}
                   </div>

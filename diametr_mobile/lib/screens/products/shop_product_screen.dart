@@ -16,6 +16,8 @@ class ShopProductScreen extends StatefulWidget {
   String? name;
   String? product_id;
   String? shop_id;
+  /// Name of the shop, shown (and tappable) above the product.
+  String? shopName;
   String? desc;
   String? image;
   /// Stock row (shop product id) to preselect: the variant already chosen
@@ -27,6 +29,7 @@ class ShopProductScreen extends StatefulWidget {
       required this.name,
       required this.product_id,
       required this.shop_id,
+      this.shopName,
       required this.desc,
       required this.image,
       this.shopProductId});
@@ -125,7 +128,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
               SizedBox(
                 width: 365.w,
                 child: Text(
-                  "Ma\'lumot yuklanmoqda...",
+                  'data_loading'.tr(),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: context.tText,
@@ -552,27 +555,43 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GestureDetector(
-                onTap: () {},
-                child: Row(
-                  children: [
-                    Image.asset(
-                      'assets/icons/home.png',
-                      scale: 3.sp,
-                      color: context.tIconTint,
-                    ),
-                    SizedBox(width: 10.w),
-                    Text(
-                      'Stroymarket',
-                      style: TextStyle(
-                        color: context.tText,
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w400,
+              // The shop selling it (was a hardcoded old brand name): opens the shop page.
+              if ((widget.shopName ?? '').trim().isNotEmpty)
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(context).pushNamed(
+                    RouteNames.marketScreen,
+                    arguments: {'id': widget.shop_id, 'name': widget.shopName},
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32.w,
+                        height: 32.w,
+                        decoration: BoxDecoration(
+                          color: AppConstant.primaryColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(9.r),
+                        ),
+                        child: Icon(Iconsax.shop, size: 16.sp, color: AppConstant.primaryColor),
                       ),
-                    ),
-                  ],
+                      SizedBox(width: 10.w),
+                      Flexible(
+                        child: Text(
+                          widget.shopName!.trim(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: context.tText,
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 4.w),
+                      Icon(Iconsax.arrow_right_3, size: 14.sp, color: context.tSub),
+                    ],
+                  ),
                 ),
-              ),
               SizedBox(height: 16.h),
               Text(
                 widget.desc ?? "",
@@ -584,7 +603,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
               ),
               SizedBox(height: 16.h),
               Text(
-                'Turini tanlang',
+                'choose_type'.tr(),
                 style: TextStyle(
                   color: context.tText,
                   fontSize: 15.sp,
@@ -596,7 +615,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
               _buildVariantSelector(data),
              SizedBox(height: 16.h),
                 Text(
-               ((data[selectTypeIndex]["count"] as num?) ?? 0) > 0 ?  'Bu turdagi mahsulot ${data[selectTypeIndex]["count"]} ta mavjud' : "Bu turdagi mahsulot tugagan",
+               ((data[selectTypeIndex]["count"] as num?) ?? 0) > 0 ? 'type_in_stock'.tr(args: ['${data[selectTypeIndex]["count"]}']) : 'type_out_of_stock'.tr(),
                 style: TextStyle(
                   color: ((data[selectTypeIndex]["count"] as num?) ?? 0) > 0 ?  AppConstant.primaryColor : Color.fromARGB(255, 253, 104, 104),
                   fontSize: 16.sp,
@@ -743,8 +762,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
                       context: context,
                       builder: (ctx) => AlertDialog(
                         title: Text('other_shop_title'.tr()),
-                        content: const Text(
-                            "Savatchada boshqa do'kon mahsuloti bor. Savatchani tozalab, shu do'kondan davom etasizmi?"),
+                        content: Text('other_shop_body'.tr()),
                         actions: [
                           TextButton(
                               onPressed: () => Navigator.pop(ctx, false),
@@ -823,7 +841,7 @@ class _ShopProductScreenState extends State<ShopProductScreen> {
               child: Row(
                 children: [
                   Text(
-                    "Siz uchun tavsiyalar",
+                    'for_you'.tr(),
                     style: TextStyle(
                       color: context.tText,
                       fontSize: 16.sp,

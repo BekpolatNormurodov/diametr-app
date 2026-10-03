@@ -604,9 +604,9 @@ export class TelegramService implements OnModuleInit {
 
   private deliveryLabel(type?: string | null) {
     const map: Record<string, string> = {
-      MARKET: '🛒 Market yetkazma',
-      YANDEX: '🚕 Yandex Deliver',
-      FIXED: '📦 Belgilangan narx',
+      MARKET: "🏬 Olib ketish (mijoz o'zi oladi)",
+      YANDEX: '🚕 Yandex orqali yetkazish',
+      FIXED: "📦 Do'kon yetkazadi (belgilangan narx)",
     };
     return map[type ?? ''] ?? type ?? '—';
   }

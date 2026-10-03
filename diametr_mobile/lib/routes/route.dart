@@ -86,6 +86,7 @@ class FullRoutes {
             name: args != null ? args["name"] : null,
             product_id: args != null ? args["product_id"]?.toString() : null,
             shop_id: args != null ? args["shop_id"]?.toString() : null,
+            shopName: args != null ? args["shop_name"]?.toString() : null,
             desc: args != null ? args["desc"] : null,
             image: args != null ? args["image"] : null,
             shopProductId:

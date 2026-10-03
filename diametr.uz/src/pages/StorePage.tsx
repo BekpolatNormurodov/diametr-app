@@ -34,6 +34,7 @@ interface Shop {
   delivery_amount?: number
   yandex_delivery?: boolean
   market_delivery?: boolean
+  fixed_delivery?: boolean
 }
 
 // /product/all: the catalogue only — no prices, no shops
@@ -783,13 +784,18 @@ export default function StorePage() {
                           </span>
                         )}
                         {shop.market_delivery && (
+                          <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-600">
+                            {lang === 'ru' ? 'Самовывоз' : 'Olib ketish'}
+                          </span>
+                        )}
+                        {shop.fixed_delivery && (
                           <span className="text-[10px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full border border-primary/20">
                             {lang === 'ru' ? 'Доставка' : 'Yetkazish'}
                           </span>
                         )}
-                        {shop.delivery_amount != null && shop.delivery_amount > 0 && (
+                        {shop.fixed_delivery && shop.delivery_amount != null && shop.delivery_amount > 0 && (
                           <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                            {shop.delivery_amount.toLocaleString()} {lang === 'ru' ? 'сум' : "so'm"}
+                            {shop.delivery_amount.toLocaleString('ru-RU')} {lang === 'ru' ? 'сум' : "so'm"}
                           </span>
                         )}
                       </div>

@@ -268,7 +268,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     Icon(Iconsax.receipt_1, color: AppConstant.primaryColor, size: 16.sp),
                     SizedBox(width: 8.w),
                     Text(
-                      'Buyurtma #${order['id']}',
+                      'order_number'.tr(args: ['${order['id']}']),
                       style: TextStyle(
                         fontSize: 15.sp,
                         color: AppConstant.primaryColor,
@@ -285,7 +285,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       child: _infoTile(
                         context,
                         label: 'history_total_value'.tr(),
-                        value: '${(order['amount'] ?? 0).toString().toMoney()} so\'m',
+                        value: '${(order['amount'] ?? 0).toString().toMoney()} ${'currency'.tr()}',
                       ),
                     ),
                     SizedBox(width: 10.w),

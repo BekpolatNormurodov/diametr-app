@@ -221,5 +221,18 @@
   "worker_not_found_sub": "Bu usta haqida ma'lumot topilmadi.",
   "services_soon_sub": "Tez orada yangi xizmatlar qo'shiladi.",
   "workers_empty_sub": "Hozircha bu yerda ustalar ro'yxati yo'q.",
-  "error_title": "Xatolik"
+  "error_title": "Xatolik",
+  "delivery_methods": "Yetkazib berish usullari",
+  "free": "Bepul",
+  "delivery_yandex_price": "Yandex tarifi bo'yicha",
+  "data_loading": "Ma'lumot yuklanmoqda...",
+  "choose_type": "Turini tanlang",
+  "type_in_stock": "Bu turdagi mahsulot {} ta mavjud",
+  "type_out_of_stock": "Bu turdagi mahsulot tugagan",
+  "other_shop_body": "Savatchada boshqa do'kon mahsuloti bor. Savatchani tozalab, shu do'kondan davom etasizmi?",
+  "for_you": "Siz uchun tavsiyalar",
+  "order_send_error": "Buyurtma yuborishda xatolik",
+  "splash_tagline": "QURILISH · DIZAYN · YETKAZIB BERISH",
+  "order_number": "Buyurtma #{}",
+  "page_not_found": "Sahifa topilmadi"
 }

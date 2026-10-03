@@ -293,9 +293,9 @@ class _StatusScreenState extends State<StatusScreen> {
 
   Widget _orderSection(BuildContext context, data) {
     final deliveryTexts = {
-      "MARKET": "Do'kondan olib ketish",
-      "YANDEX": "Yandex orqali yetkazish",
-      "FIXED": "Standart yetkazish",
+      "MARKET": 'delivery_market'.tr(),
+      "YANDEX": 'delivery_yandex'.tr(),
+      "FIXED": 'delivery_fixed'.tr(),
     };
 
     final rows = [
@@ -431,7 +431,7 @@ class _StatusScreenState extends State<StatusScreen> {
                   ),
                   SizedBox(width: 8.w),
                   Text(
-                    '${((e["amount"] ?? 0) * (e["count"] ?? 0)).toString().toMoney()} so\'m',
+                    '${((e["amount"] ?? 0) * (e["count"] ?? 0)).toString().toMoney()} ${'currency'.tr()}',
                     style: TextStyle(
                       color: AppConstant.primaryColor,
                       fontSize: 12.sp,
